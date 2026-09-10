@@ -1,0 +1,4 @@
+# The platform-specific optional packages already provide these binaries.
+allowBuilds:
+  esbuild: false
+  fsevents: false
