@@ -6,6 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { createSoundscape } from './scene/soundscape';
+import { createSceneTransition } from './scene-transition';
 import { DEFAULT_WEATHER, WEATHER_PRESETS, type WeatherSettings } from './scene/weather-state';
 import type { SceneHandle } from './scene/scene';
 import { ROOM_VIEWS, OUTDOOR_VIEWS, PLACE_VIEWS, type PlaceId, type TimeOfDay, type ViewMode } from './scene/config';
@@ -21,8 +22,16 @@ const chapters = [
 export default function Experience() {
  const mount = useRef<HTMLDivElement>(null);
  const engine = useRef<SceneHandle | null>(null);
+ const transitionOverlay = useRef<HTMLDivElement>(null);
+ const sceneTransition = useRef<ReturnType<typeof createSceneTransition> | null>(null);
+ const requestedPlace = useRef<{view:ViewMode;place:PlaceId;panorama:boolean}>({view:'walk',place:'courtyard',panorama:false});
+ const committedPlace = useRef({view:'walk' as ViewMode,place:'courtyard' as PlaceId});
+ const pendingNavigation = useRef<{revision:number;run:()=>void}|undefined>(undefined);
+ const navigationCounter = useRef(0);
+ const [navigationRevision,setNavigationRevision] = useState(0);
  const [chapter, setChapter] = useState(0);
- const [progress, setProgress] = useState(0);
+ const progressLabel = useRef<HTMLDivElement>(null);
+ const progressBar = useRef<HTMLElement>(null);
  const [paused, setPaused] = useState(false);
  const [reduced, setReduced] = useState(false);
  const [loading, setLoading] = useState<{state:string; progress:number | null}>({state:'正在走进竹林…',progress:null});
@@ -32,10 +41,11 @@ export default function Experience() {
  const [attempt,setAttempt] = useState(0);
  const [view,setView] = useState<ViewMode>('walk');
  const [place,setPlace] = useState<PlaceId>('courtyard');
+ const [selectedDestination,setSelectedDestination] = useState({view:'walk' as ViewMode,place:'courtyard' as PlaceId});
  const inside=Object.hasOwn(ROOM_VIEWS,place);
  const [timeOfDay,setTimeOfDay] = useState<TimeOfDay>('dusk');
  const [panorama,setPanorama] = useState(false);
- const [bearing,setBearing] = useState(0);
+ const bearingLabel = useRef<HTMLSpanElement>(null);
  const soundscape = useRef<ReturnType<typeof createSoundscape> | null>(null);
  const [soundEnabled,setSoundEnabled] = useState(false);
  const [soundBusy,setSoundBusy] = useState(false);
@@ -53,20 +63,44 @@ export default function Experience() {
  const [volume,setVolume] = useState(.55);
  const soundRequest = useRef(0);
  const panoramaButton = useRef<HTMLButtonElement>(null);
+ useEffect(()=>{
+   if(!transitionOverlay.current)return;
+   const transition=createSceneTransition(transitionOverlay.current);sceneTransition.current=transition;
+   const visibility=()=>{if(document.hidden)transition.finish();};
+   const media=matchMedia('(prefers-reduced-motion: reduce)');
+   const change=()=>{if(media.matches)transition.finish();};
+   document.addEventListener('visibilitychange',visibility);media.addEventListener('change',change);
+   return()=>{transition.dispose();sceneTransition.current=null;pendingNavigation.current=undefined;document.removeEventListener('visibilitychange',visibility);media.removeEventListener('change',change);};
+ },[]);
+ useEffect(()=>{if(!ready||staticMode)sceneTransition.current?.finish();},[ready,staticMode]);
  useEffect(() => {
    const media=matchMedia('(prefers-reduced-motion: reduce)');
    const change=()=>setReduced(media.matches); change(); media.addEventListener('change',change);
-   const scroll=()=>{const p=Math.min(1,Math.max(0,window.scrollY/Math.max(1,document.documentElement.scrollHeight-innerHeight))); setProgress(p); setChapter(Math.min(4,Math.floor(p*4+.5)));};
-   scroll(); window.addEventListener('scroll',scroll,{passive:true}); window.addEventListener('resize',scroll);
-   return ()=>{media.removeEventListener('change',change);window.removeEventListener('scroll',scroll);window.removeEventListener('resize',scroll);};
+   return ()=>media.removeEventListener('change',change);
  },[]);
+ useEffect(() => {
+   let frame=0,previousChapter=-1;
+   const update=()=>{
+     frame=0;
+     const p=Math.min(1,Math.max(0,window.scrollY/Math.max(1,document.documentElement.scrollHeight-innerHeight)));
+     const nextChapter=Math.min(4,Math.floor(p*4+.5));
+     // Continuous input only updates the small HUD, not the whole control tree.
+     if(nextChapter!==previousChapter){previousChapter=nextChapter;setChapter(nextChapter);}
+     progressLabel.current?.setAttribute('aria-label',`探索进度 ${Math.round(p*100)}%`);
+     if(progressBar.current)progressBar.current.style.transform=`scaleX(${Math.max(.02,p)})`;
+     if(mount.current)mount.current.style.transition=p>0?'none':'';
+   };
+   const schedule=()=>{if(!frame)frame=requestAnimationFrame(update);};
+   update();window.addEventListener('scroll',schedule,{passive:true});window.addEventListener('resize',schedule);
+   return()=>{cancelAnimationFrame(frame);window.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);};
+ },[view]);
  useEffect(()=>{ let disposed=false,failed=false;const controller=new AbortController();
    const resetRoof=()=>{roofRunoff.current=0;soundscape.current?.setRoofRunoff(0);};
    resetRoof();
    const start=async()=>{ try {
      const { createScene } = await import('./scene/scene');
      if(disposed || !mount.current)return;
-     const scene=await createScene(mount.current,{onProgress:(state,value)=>{if(!disposed)setLoading({state,progress:value});},onPanorama:(value)=>{if(!disposed){setPanorama(value);if(!value)panoramaButton.current?.focus({preventScroll:true});}},onGust:(strength)=>{if(!disposed&&!failed)soundscape.current?.setGust(strength);},onRunoff:(flow)=>{if(disposed||failed)return;roofRunoff.current=flow;soundscape.current?.setRoofRunoff(flow);},onBearing:(value)=>{if(!disposed)setBearing(value);},onFailure:()=>{if(!disposed){failed=true;resetRoof();soundRequest.current++;weatherRequest.current++;void soundscape.current?.setEnabled(false);setSoundEnabled(false);setSoundBusy(false);setWeatherBusy(false);setSettingsPanel(null);setReady(false);setError(true);setStaticMode(true);setPanorama(false);setLoading({state:"实时画面已暂停，可重新载入。",progress:null});}}},controller.signal);
+     const scene=await createScene(mount.current,{onProgress:(state,value)=>{if(!disposed)setLoading({state,progress:value});},onPanorama:(value)=>{if(!disposed){requestedPlace.current={...requestedPlace.current,panorama:value};setPanorama(value);if(!value)panoramaButton.current?.focus({preventScroll:true});}},onGust:(strength)=>{if(!disposed&&!failed)soundscape.current?.setGust(strength);},onRunoff:(flow)=>{if(disposed||failed)return;roofRunoff.current=flow;soundscape.current?.setRoofRunoff(flow);},onBearing:(value)=>{if(!disposed&&bearingLabel.current){const label=`${String(value).padStart(3,'0')}°`;if(bearingLabel.current.textContent!==label)bearingLabel.current.textContent=label;}},onFailure:()=>{if(!disposed){failed=true;resetRoof();soundRequest.current++;weatherRequest.current++;void soundscape.current?.setEnabled(false);setSoundEnabled(false);setSoundBusy(false);setWeatherBusy(false);setSettingsPanel(null);setReady(false);setError(true);setStaticMode(true);setPanorama(false);setLoading({state:"实时画面已暂停，可重新载入。",progress:null});}}},controller.signal);
      if(disposed||failed){scene.dispose();return;}
      engine.current=scene; setReady(true);setLoading({state:'',progress:100});
    } catch(e){ if(!disposed){console.error('Scene failed:',e);setError(true);setStaticMode(true);setLoading({state:e instanceof Error && e.message==='WEBGL_UNAVAILABLE'?'此设备使用静态观看模式。':'竹林暂时没有载入，仍可继续阅读。',progress:null});} } };
@@ -126,7 +160,7 @@ export default function Experience() {
    finally{if(request===soundRequest.current)setSoundBusy(false);}
  };
  const toggleSound=()=>{void playSound(soundBusy?false:!soundEnabled);};
- const chooseTime=(next:TimeOfDay)=>{setTimeOfDay(next);if(view==='moon'&&next!=='night')chooseView('walk');};
+ const chooseTime=(next:TimeOfDay)=>{setTimeOfDay(next);if(requestedPlace.current.view==='moon'&&next!=='night')chooseView('walk');};
  const watchMoon=()=>{setSettingsPanel(null);setTimeOfDay('night');chooseWeather({...DEFAULT_WEATHER});chooseView('moon');};
  const listenInGrove=()=>{
    const nextWeather={...WEATHER_PRESETS.autumn};
@@ -148,22 +182,47 @@ export default function Experience() {
    if(view!=='walk'||panorama)document.body.style.overflow='hidden';
    return()=>{document.body.style.overflow=previous;};
  },[view,panorama]);
- const chooseView=(next:ViewMode)=>{soundscape.current?.setSheltered(inside);soundscape.current?.setView(next);setPanorama(next==='free');setView(next);engine.current?.setView(next);};
+ useEffect(()=>{
+   // This runs after React commits the destination and the overflow effect
+   // above restores walking. A frame callback alone can precede that commit.
+   const navigate=pendingNavigation.current;
+   if(!navigate||navigate.revision!==navigationRevision)return;
+   pendingNavigation.current=undefined;navigate.run();
+ },[navigationRevision]);
+ const commitPlace=()=>{
+   const next=requestedPlace.current;
+   committedPlace.current={view:next.view,place:next.place};
+   soundscape.current?.setSheltered(Object.hasOwn(ROOM_VIEWS,next.place));soundscape.current?.setView(next.view);
+   setView(next.view);setPlace(next.place);setPanorama(next.panorama);
+   engine.current?.setView(next.view);engine.current?.setPlace(next.place);engine.current?.setPanorama(next.panorama);
+ };
+ const changePlace=(next:typeof requestedPlace.current,afterCommit?:()=>void)=>{
+   const previous=requestedPlace.current;requestedPlace.current=next;
+   setSelectedDestination({view:next.view,place:next.place});
+   pendingNavigation.current=undefined;
+   const apply=()=>{commitPlace();if(afterCommit){const revision=++navigationCounter.current;pendingNavigation.current={revision,run:afterCommit};setNavigationRevision(revision);}};
+   if(previous.view===next.view&&previous.place===next.place&&committedPlace.current.view===next.view&&committedPlace.current.place===next.place&&!sceneTransition.current?.covering) {apply();return;}
+   const animate=ready&&!staticMode&&!document.hidden&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
+   if(sceneTransition.current)sceneTransition.current.request(apply,animate);else apply();
+ };
+ const chooseView=(next:ViewMode,afterCommit?:()=>void)=>changePlace({...requestedPlace.current,view:next,panorama:next==='free'},afterCommit);
  const placeArea=!inside?'屋外':place==='hall'||place==='kitchen'?'楼下':'楼上';
- const choosePlace=(next:PlaceId)=>{soundscape.current?.setSheltered(Object.hasOwn(ROOM_VIEWS,next));setPlace(next);setPanorama(true);engine.current?.setPlace(next);engine.current?.setPanorama(true);};
+ const choosePlace=(next:PlaceId)=>changePlace({view:'free',place:next,panorama:true});
+ const choosePanorama=()=>{const value=!requestedPlace.current.panorama;requestedPlace.current={...requestedPlace.current,panorama:value};setPanorama(value);engine.current?.setPanorama(value);};
  const returnHome=useCallback(()=>{engine.current?.reset();window.scrollTo({top:0,behavior:reduced?'instant':'smooth'});setChapter(0);},[reduced]);
  const navigate=(index:number)=>{window.scrollTo({top:(document.documentElement.scrollHeight-innerHeight)*index/4,behavior:reduced?'instant':'smooth'});};
  const weatherLabel=weather.rain>.7?'暴雨':weather.rain>0?'细雨':(weather.autumn??0)>.5?'大风':weather.wind===0?'无风':'晴风';
  const listeningCopy=weather.rain>.7?'雨落屋檐 · 一场夏日大雨':weather.rain>0?(view==='well-rain'?'井边细雨 · 檐下滴答':'细雨轻落 · 叶间滴答'):(weather.autumn??0)>.5?'风起竹海 · 带一点秋凉':view==='breeze'?'风从身旁经过 · 叶片轻轻响':{dawn:'晨鸟初醒 · 叶间微风',day:'风过竹叶 · 远处鸟鸣',noon:'竹荫正浓 · 远处夏声',dusk:'晚风渐柔 · 虫声初起',night:'月下虫鸣 · 风过竹梢'}[timeOfDay];
  return <div className={`experience is-${view} ${panorama?'is-panorama':''} ${staticMode?'is-static':''} ${soundEnabled?'is-listening':''} ${settingsPanel?'settings-open':''}`} data-time={timeOfDay}>
-  <a className="skip-link" href="#return" onClick={(e)=>{e.preventDefault();chooseView('walk');requestAnimationFrame(()=>navigate(4));}}>跳到结束</a>
+  <a className="skip-link" href="#return" onClick={(e)=>{e.preventDefault();chooseView('walk',()=>navigate(4));}}>跳到结束</a>
   <div className="scene-shell" aria-hidden={!panorama}>
    <picture><source media="(max-width:700px)" srcSet="/scene-poster-mobile.webp"/><img className="fallback-view" src="/scene-poster.webp" alt="" /></picture>
-   <div ref={mount} className={`scene-mount ${ready?'ready':''}`} style={{transition:progress>0?'none':undefined}} />
+   <div ref={mount} className={`scene-mount ${ready?'ready':''}`} />
+   <div ref={transitionOverlay} className="scene-transition" aria-hidden="true" />
   </div>
   <div className="scene-shade" />
   <header className="site-header">
-   <a className="wordmark" href="#bamboo" onClick={(e)=>{e.preventDefault();chooseView('walk');returnHome();}} aria-label="竹林里的老屋，回到竹林"><svg className="wordmark-icon" data-icon="bamboo-house" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m2 13 9-6 9 6M5 12v12h12V12M9 24v-7h4v7"/><path d="M24 3v21m-1.5-13h3m-3 7h3M24 8c-3.4 0-5-1.7-5-4 3.1.2 5 1.7 5 4Z"/></svg><span>竹林老屋</span></a>
+   <a className="wordmark" href="#bamboo" onClick={(e)=>{e.preventDefault();chooseView('walk',returnHome);}} aria-label="竹林里的老屋，回到竹林"><svg className="wordmark-icon" data-icon="bamboo-house" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m2 13 9-6 9 6M5 12v12h12V12M9 24v-7h4v7"/><path d="M24 3v21m-1.5-13h3m-3 7h3M24 8c-3.4 0-5-1.7-5-4 3.1.2 5 1.7 5 4Z"/></svg><span>竹林老屋</span></a>
    <div className="header-aside"><span className="memory-label">一处老屋 · 四时竹声</span>
    <ToggleGroup className="day-switch" value={[timeOfDay]} onValueChange={(values)=>{if(values[0]==='dawn'||values[0]==='day'||values[0]==='noon'||values[0]==='dusk'||values[0]==='night')chooseTime(values[0]);}} aria-label="选择清晨、白天、正午、傍晚或夜晚" disabled={!ready||staticMode}>
     <ToggleGroupItem value="dawn" aria-label="清晨"><Sunrise size={15} strokeWidth={1.5}/><span>清晨</span></ToggleGroupItem>
@@ -206,11 +265,11 @@ export default function Experience() {
   {view==='free'&&<main className="interior-story" aria-label="自由看看">
    <aside id="free-viewpoints" className="room-panel" inert={settingsPanel!==null} aria-label="选择停留位置">
     <div className="room-heading"><Compass size={15} strokeWidth={1.3}/><span>自由看看 · {placeArea}</span></div>
-    <Select value={place} disabled={!ready||staticMode} onValueChange={(value)=>{if(value&&Object.hasOwn(PLACE_VIEWS,value))choosePlace(value as PlaceId);}}>
-     <SelectTrigger className="room-selector" aria-label="选择停留位置"><SelectValue>{PLACE_VIEWS[place].label}</SelectValue></SelectTrigger>
+    <Select value={selectedDestination.place} disabled={!ready||staticMode} onValueChange={(value)=>{if(value&&Object.hasOwn(PLACE_VIEWS,value))choosePlace(value as PlaceId);}}>
+     <SelectTrigger className="room-selector" aria-label="选择停留位置"><SelectValue>{PLACE_VIEWS[selectedDestination.place].label}</SelectValue></SelectTrigger>
      <SelectContent className="room-options" alignItemWithTrigger={false} onKeyDown={event=>event.stopPropagation()}>
-      <SelectGroup><SelectLabel>屋外</SelectLabel>{Object.entries(OUTDOOR_VIEWS).map(([id,item])=><SelectItem key={id} value={id}>{item.label}</SelectItem>)}</SelectGroup>
-      <SelectGroup><SelectLabel>屋内</SelectLabel>{Object.entries(ROOM_VIEWS).map(([id,item])=><SelectItem key={id} value={id}>{item.label}</SelectItem>)}</SelectGroup>
+      <SelectGroup><SelectLabel>屋外</SelectLabel>{Object.entries(OUTDOOR_VIEWS).map(([id,item])=><SelectItem key={id} value={id} onClick={()=>choosePlace(id as PlaceId)}>{item.label}</SelectItem>)}</SelectGroup>
+      <SelectGroup><SelectLabel>屋内</SelectLabel>{Object.entries(ROOM_VIEWS).map(([id,item])=><SelectItem key={id} value={id} onClick={()=>choosePlace(id as PlaceId)}>{item.label}</SelectItem>)}</SelectGroup>
      </SelectContent>
     </Select>
     <p className="room-note">选个屋内或屋外的位置，拖动看看四周。</p>
@@ -223,29 +282,29 @@ export default function Experience() {
      <p className="chapter-kicker">0{index+1} / {item.eyebrow}</p>
      {index===0?<h1 id={`${item.id}-heading`}>{item.title}</h1>:<h2 id={`${item.id}-heading`}>{item.title.split('\n').map((line,i)=><span key={line}>{i>0&&<br/>}{line}</span>)}</h2>}
      {item.copy&&<p>{item.copy}</p>}
-     {index===4&&<button className="return-button" onClick={returnHome} tabIndex={chapter===4?0:-1}>回到竹林 <ArrowUpRight size={18} strokeWidth={1.2}/></button>}
+     {index===4&&<button className="return-button" onClick={()=>chooseView('walk',returnHome)} tabIndex={chapter===4?0:-1}>回到竹林 <ArrowUpRight size={18} strokeWidth={1.2}/></button>}
     </div>
    </section>)}
   </main>
-  {view==='walk'&&!panorama&&<nav className="exploration-nav" aria-label="探索章节">{chapters.map((item,i)=><a key={item.id} href={`#${item.id}`} className="chapter-link" aria-current={chapter===i?'step':undefined} onClick={(e)=>{e.preventDefault();navigate(i);}}><span>{item.name}</span><i className="dot"/></a>)}</nav>}
-  {panorama&&<div className="panorama-info"><span className="view-bearing"><Scan size={15}/>{String(bearing).padStart(3,'0')}°</span><span className="panorama-help"><span className="desktop-help">拖动环顾 · 滚轮或双指缩放</span><span className="touch-help">拖动环顾 · 双指缩放</span></span><Button className="reset-view" variant="ghost" onClick={()=>engine.current?.reset()} aria-label="复位环顾视角"><RotateCcw size={15}/><span>复位</span></Button></div>}
+  {view==='walk'&&!panorama&&<nav className="exploration-nav" aria-label="探索章节">{chapters.map((item,i)=><a key={item.id} href={`#${item.id}`} className="chapter-link" aria-current={chapter===i?'step':undefined} onClick={(e)=>{e.preventDefault();chooseView('walk',()=>navigate(i));}}><span>{item.name}</span><i className="dot"/></a>)}</nav>}
+  {panorama&&<div className="panorama-info"><span className="view-bearing"><Scan size={15}/><span ref={bearingLabel}>000°</span></span><span className="panorama-help"><span className="desktop-help">双指滑动或拖动环顾 · 捏合缩放</span><span className="touch-help">拖动环顾 · 双指缩放</span></span><Button className="reset-view" variant="ghost" onClick={()=>engine.current?.reset()} aria-label="复位环顾视角"><RotateCcw size={15}/><span>复位</span></Button></div>}
   <fieldset className="view-toolbar" aria-label="观看方式">
    <div className="view-modes">
-    <ToggleGroup className="view-switch" value={[view]} onValueChange={(values)=>{if(values[0]==='porch'||values[0]==='walk'||values[0]==='free')chooseView(values[0]);}} aria-label="观看模式">
-     <ToggleGroupItem value="walk">沿路走走</ToggleGroupItem>
-     <ToggleGroupItem value="porch">廊下望竹</ToggleGroupItem>
-     <ToggleGroupItem value="free" className="free-toggle" aria-expanded={view==='free'} aria-controls={view==='free'?'free-viewpoints':undefined} disabled={!ready||staticMode}><Compass size={15}/><span>自由看看</span></ToggleGroupItem>
+    <ToggleGroup className="view-switch" value={[selectedDestination.view]} onValueChange={(values)=>{if(values[0]==='porch'||values[0]==='walk'||values[0]==='free')chooseView(values[0]);}} aria-label="观看模式">
+     <ToggleGroupItem value="walk" onClick={()=>chooseView('walk')}>沿路走走</ToggleGroupItem>
+     <ToggleGroupItem value="porch" onClick={()=>chooseView('porch')}>廊下望竹</ToggleGroupItem>
+     <ToggleGroupItem value="free" onClick={()=>chooseView('free')} className="free-toggle" aria-expanded={view==='free'} aria-controls={view==='free'?'free-viewpoints':undefined} disabled={!ready||staticMode}><Compass size={15}/><span>自由看看</span></ToggleGroupItem>
     </ToggleGroup>
    </div>
    <span className="toolbar-divider"/>
-   <div className="view-actions"><Button className="moon-toggle" variant="ghost" aria-pressed={view==='moon'} disabled={!ready||staticMode} onClick={watchMoon}><Moon size={16}/><span>竹林望月</span></Button>
-   <Button className="breeze-toggle" variant="ghost" aria-pressed={view==='breeze'} disabled={!ready||staticMode} onClick={listenInGrove}><Wind size={16}/><span>林间的风</span></Button>
-   <Button className="well-toggle" variant="ghost" aria-pressed={view==='well-rain'} disabled={!ready||staticMode} onClick={listenByWell}><Droplets size={16}/><span>井旁听雨</span></Button>
-   <Button ref={panoramaButton} className="panorama-toggle" variant="ghost" aria-pressed={panorama} disabled={!ready||staticMode} onClick={()=>setPanorama(!panorama)}>{panorama?<X size={16}/>:<Scan size={16}/>}<span>{panorama?'退出环顾':'360° 环顾'}</span></Button></div>
+   <div className="view-actions"><Button className="moon-toggle" variant="ghost" aria-pressed={selectedDestination.view==='moon'} disabled={!ready||staticMode} onClick={watchMoon}><Moon size={16}/><span>竹林望月</span></Button>
+   <Button className="breeze-toggle" variant="ghost" aria-pressed={selectedDestination.view==='breeze'} disabled={!ready||staticMode} onClick={listenInGrove}><Wind size={16}/><span>林间的风</span></Button>
+   <Button className="well-toggle" variant="ghost" aria-pressed={selectedDestination.view==='well-rain'} disabled={!ready||staticMode} onClick={listenByWell}><Droplets size={16}/><span>井旁听雨</span></Button>
+   <Button ref={panoramaButton} className="panorama-toggle" variant="ghost" aria-pressed={panorama} disabled={!ready||staticMode} onClick={choosePanorama}>{panorama?<X size={16}/>:<Scan size={16}/>}<span>{panorama?'退出环顾':'360° 环顾'}</span></Button></div>
   </fieldset>
   <footer className="site-footer">
    <div><div className="scroll-hint">{view==='walk'?<ArrowDown size={18} strokeWidth={1.2}/>:<span className="living-dot"/>}<span>{panorama?'换个方向，也是一处风景':view==='well-rain'?'坐在井边，雨声还是小时候的雨声':view==='breeze'?'清风过竹叶，把心放轻一点':view==='moon'?'月光穿过竹梢，风从身旁走过':view==='porch'?'望向竹林，让时间慢一点':chapter===4?'在竹林里，多停留一会儿':'慢慢向下，走进这段记忆'}</span></div><div className="footer-note">{panorama?'方向键环顾 · Home 复位 · Esc 退出':'竹影 · 旧木 · 家乡'}</div></div>
-   {view==='walk'&&<div className="footer-progress" aria-label={`探索进度 ${Math.round(progress*100)}%`}><span>0{chapter+1}</span><span className="progress-track"><i style={{transform:`scaleX(${Math.max(.02,progress)})`}}/></span><span>05</span></div>}
+   {view==='walk'&&<div ref={progressLabel} className="footer-progress" aria-label="探索进度 0%"><span>0{chapter+1}</span><span className="progress-track"><i ref={progressBar} style={{transform:'scaleX(.02)'}}/></span><span>05</span></div>}
   </footer>
  </div>;
 }

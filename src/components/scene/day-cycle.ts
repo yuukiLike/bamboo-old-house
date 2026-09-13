@@ -26,8 +26,14 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
     // remainder looked like a second moon during the last part of the fade.
     .replace('L0 += ( vSunE * 19000.0 * Fex ) * sundisc;',
       'L0 += ( vSunE * 19000.0 * Fex ) * sundisc * (1.0 - smoothstep(0.0, 0.15, uNight));')
+    // Fully moonlit or rain-covered skies replace the daylight cloud layer.
+    // Retain it throughout every transition where it can still contribute.
+    .replace('if ( direction.y > 0.0 && cloudCoverage > 0.0 ) {',
+      'if ( direction.y > 0.0 && cloudCoverage > 0.0 && uNight < 1.0 && uWeatherRain < 0.32 ) {')
     .replace('gl_FragColor = vec4( texColor, 1.0 );', `
       vec3 nightDirection = normalize(vWorldPosition - cameraPosition);
+      vec3 clearSky = texColor;
+      if (uNight > 0.0) {
       float elevation = max(nightDirection.y, 0.0);
       vec3 nightColor = mix(vec3(.018, .033, .050), vec3(.003, .009, .024), pow(elevation, .45));
       vec3 moonDirection = normalize(vec3(-14., 27., 22.));
@@ -52,14 +58,18 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
       vec2 starCell = floor(nightDirection.xz / max(.15, nightDirection.y + 1.0) * 820.0);
       float star = fract(sin(dot(starCell, vec2(127.1, 311.7))) * 43758.5453);
       nightColor += vec3(.38, .46, .58) * step(.9991, star) * smoothstep(.12, .55, elevation);
-      vec3 clearSky = mix(texColor, nightColor, uNight);
+      clearSky = mix(texColor, nightColor, uNight);
+      }
+      if (uWeatherRain > 0.0) {
       vec2 cloudUV=nightDirection.xz/max(.16,nightDirection.y+.22)*2.4;
       cloudUV+=vec2(uWeatherTime*.018,uWeatherTime*.007);
       float cloudForm=lunarNoise(cloudUV)*.65+lunarNoise(cloudUV*2.31)*.25+lunarNoise(cloudUV*5.17)*.10;
       float cover=smoothstep(0.,.32,uWeatherRain);
       vec3 rainSky=mix(vec3(.31,.37,.39),vec3(.105,.145,.16),uWeatherRain);
       rainSky*=mix(.74,1.18,cloudForm)*mix(1.,.035,uNight);
-      gl_FragColor = vec4(mix(clearSky,rainSky,cover), 1.0);
+      clearSky = mix(clearSky,rainSky,cover);
+      }
+      gl_FragColor = vec4(clearSky, 1.0);
     `);
   sky.material.needsUpdate = true;
 

@@ -14,6 +14,9 @@ float fbm(vec2 p){return noise(p)*.5+noise(p*2.13)*.25+noise(p*4.07)*.125+noise(
 `;
 export function addEnvironment(scene:T.Scene,renderer:T.WebGLRenderer,mobile:boolean,time:{value:number},night:{value:number},noon={value:0},dawn={value:0},dusk={value:0},weather?:WeatherUniforms) {
  const sky=new Sky(); sky.scale.setScalar(450000);
+ // Opaque surfaces write their depth first, so hidden sky fragments never
+ // run the cloud shader. The sky still precedes transparent glass and rain.
+ sky.renderOrder=1000;
  sky.material.uniforms.turbidity.value=2.8; sky.material.uniforms.rayleigh.value=1.25;
  sky.material.uniforms.mieCoefficient.value=.002;
  sky.material.uniforms.mieDirectionalG.value=.77;

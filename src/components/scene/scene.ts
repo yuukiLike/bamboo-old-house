@@ -18,6 +18,8 @@ import { ViewControls } from './view-controls';
 import { createInteriorContact } from './interior-contact';
 import { shadeWindowRecesses } from './window-light';
 import { excludeUnreachablePointLights } from './local-lights';
+import { stabilizeDoorSurfaces } from './door-surfaces';
+import { stabilizeRoomSurfaces } from './room-surfaces';
 import { BUILD_ID, PORCH_VIEW, MOON_VIEW, BREEZE_VIEW, WELL_RAIN_VIEW, ROOM_VIEWS, PLACE_VIEWS, groundHeight, pathClearance, treePositions, cameraProgress, positionPath, targetPath, type ViewMode, type TimeOfDay, type PlaceId } from './config';
 export interface SceneHandle { dispose:()=>void;setWeather:(value:WeatherSettings)=>void;setPaused:(value:boolean)=>void;reset:()=>void;setView:(view:ViewMode)=>void;setTimeOfDay:(value:TimeOfDay)=>void;setPanorama:(value:boolean)=>void;setPlace:(value:PlaceId)=>void; }
 interface Hooks {onProgress:(state:string,value:number|null)=>void;onFailure:()=>void;onPanorama:(value:boolean)=>void;onBearing:(value:number)=>void;onGust?:(strength:number)=>void;onRunoff?:(flow:number)=>void;}
@@ -69,6 +71,8 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   await yieldLoading('正在铺开竹林…');
   const environment=addEnvironment(scene,renderer,mobile,time,night,noon,dawn,dusk,weather);cleanEnvironment=environment.dispose;
   const [house,bamboo,understory,foliage,porchBamboo,fuel]=await models;
+  stabilizeDoorSurfaces(house);
+  stabilizeRoomSurfaces(house);
   await yieldLoading('正在安放老屋…');
   house.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;const materials=Array.isArray(o.material)?o.material:[o.material];for(const material of materials){if(material instanceof T.MeshStandardMaterial){material.envMapIntensity=.45;for(const tex of [material.map,material.normalMap,material.roughnessMap])if(tex)tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
    // glTF packs roughness and metalness together. With a zero metalness
@@ -122,15 +126,16 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const controls=new ViewControls(renderer.domElement,()=>setPanorama(false));
   let progress=0,displayProgress=0,lastScroll=0,paused=matchMedia('(prefers-reduced-motion:reduce)').matches,dragging=false,dragX=0,dragY=0,pointerX=0,pointerY=0,previousX=0,previousY=0;
   const media=matchMedia('(prefers-reduced-motion:reduce)');let reduced=media.matches;
-  const scroll=()=>{if(controls.active||viewMode!=='walk')return;progress=T.MathUtils.clamp(scrollY/Math.max(1,document.documentElement.scrollHeight-innerHeight),0,1);lastScroll=performance.now();dragging=false;};
+  const syncWalkScroll=()=>{if(!controls.active&&viewMode==='walk')progress=T.MathUtils.clamp(scrollY/Math.max(1,document.documentElement.scrollHeight-innerHeight),0,1);};
+  const scroll=()=>{if(controls.active||viewMode!=='walk')return;lastScroll=performance.now();dragging=false;};
   const resize=()=>{camera.aspect=innerWidth/innerHeight;renderer.setPixelRatio(Math.min(devicePixelRatio,mobile?1.25:1.6));renderer.setSize(innerWidth,innerHeight);camera.updateProjectionMatrix();interiorContact.resize();};
   const change=()=>{reduced=media.matches;};
   const release=()=>{dragging=false;pointerX=0;pointerY=0;};
   const pointerdown=(e:PointerEvent)=>{if(controls.active||e.pointerType!=='mouse'||e.button!==0||reduced)return;dragging=true;previousX=e.clientX;previousY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);};
-  const pointermove=(e:PointerEvent)=>{if(controls.active||e.pointerType!=='mouse'||reduced)return;pointerX=(e.clientX/innerWidth-.5);pointerY=(e.clientY/innerHeight-.5);if(dragging){dragX=T.MathUtils.clamp(dragX+(e.clientX-previousX)*.002,-.18,.18);dragY=T.MathUtils.clamp(dragY+(e.clientY-previousY)*.0015,-.095,.095);previousX=e.clientX;previousY=e.clientY;}};
+  const pointermove=(e:PointerEvent)=>{if(controls.active||e.pointerType!=='mouse'||reduced)return;pointerX=(e.clientX/innerWidth-.5);pointerY=(e.clientY/innerHeight-.5);if(dragging){dragX=T.MathUtils.clamp(dragX-(e.clientX-previousX)*.002,-.18,.18);dragY=T.MathUtils.clamp(dragY+(e.clientY-previousY)*.0015,-.095,.095);previousX=e.clientX;previousY=e.clientY;}};
   const reset=()=>{dragX=dragY=pointerX=pointerY=0;dragging=false;controls.reset();};
   const setPanorama=(value:boolean)=>{if(controls.active===value)return;reset();controls.setActive(value);hooks.onPanorama(value);};
-  const setView=(value:ViewMode)=>{if(viewMode===value)return;viewMode=value;setPanorama(value==='free');reset();scroll();displayProgress=progress;};
+  const setView=(value:ViewMode)=>{if(viewMode===value)return;viewMode=value;setPanorama(value==='free');reset();syncWalkScroll();displayProgress=progress;};
   const setPlace=(value:PlaceId)=>{if(!Object.hasOwn(PLACE_VIEWS,value)||place===value)return;place=value;reset();if(viewMode==='free')setPanorama(true);};
   let last=performance.now(),hidden=document.hidden;const visibility=()=>{hidden=document.hidden;last=performance.now();release();controls.cancelInput();};
   const contextLost=(e:Event)=>{e.preventDefault();hooks.onFailure();mount.classList.remove('ready');};
@@ -140,30 +145,33 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');
   const renderFrame=(delta=0)=>{renderer.info.reset();if(viewMode==='free'&&Object.hasOwn(ROOM_VIEWS,place))interiorContact.render(delta);else renderer.render(scene,camera);};
   const diagnostics:Diagnostics={startupMs:0,pixelRatio:renderer.getPixelRatio(),windGust:0,weather:{wind:weather.wind.value,rain:0,wetness:0,mud:0,autumn:0},fallingLeaves:{},rainEffects:{},build:BUILD_ID,quality:mobile?'mobile':'desktop',gpu:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'unavailable',viewport:[],drawSize:[],progress:0,camera:[],target:[],drawCalls:0,triangles:0,textures:0,geometries:0,frames:[],windTime:0,paused,bambooCount:field.count,viewMode,place,timeOfDay,nightMix:0,noonMix:0,dawnMix:0,duskMix:1,panorama:false,yaw:0,pitch:0,fov:70,getPoster:()=>{renderFrame();return renderer.domElement.toDataURL('image/webp',.9);},reset};window.__BAMBOO__=diagnostics;
-  scroll();displayProgress=progress;
+  syncWalkScroll();displayProgress=progress;
   const updateCamera=()=>{
    const effectiveProgress=reduced?0:displayProgress;
-   const p=cameraProgress(effectiveProgress);positionPath.getPoint(p,basePos);targetPath.getPoint(p,baseTarget);
-   camera.fov=54;
+   let fov=54;
    if(viewMode==='well-rain'){
     basePos.fromArray(WELL_RAIN_VIEW.p);
-    baseTarget.copy(basePos).add(new T.Vector3(...WELL_RAIN_VIEW.direction as [number,number,number]));camera.fov=innerWidth/innerHeight<1?76:WELL_RAIN_VIEW.fov;
+    baseTarget.fromArray(WELL_RAIN_VIEW.direction).add(basePos);fov=innerWidth/innerHeight<1?76:WELL_RAIN_VIEW.fov;
    }else if(viewMode==='moon'||viewMode==='breeze'){
     const view=viewMode==='moon'?MOON_VIEW:BREEZE_VIEW;
     basePos.fromArray(view.p);basePos.y=groundHeight(basePos.x,basePos.z)+1.70;
-    baseTarget.copy(basePos).add(new T.Vector3(...view.direction as [number,number,number]));camera.fov=innerWidth/innerHeight<1?72:view.fov;
+    baseTarget.fromArray(view.direction).add(basePos);fov=innerWidth/innerHeight<1?72:view.fov;
    }else if(viewMode==='porch'){
-    basePos.set(...PORCH_VIEW.p as [number,number,number]);baseTarget.set(...PORCH_VIEW.t as [number,number,number]);camera.fov=innerWidth/innerHeight<1?78:PORCH_VIEW.fov;
+    basePos.set(...PORCH_VIEW.p as [number,number,number]);baseTarget.set(...PORCH_VIEW.t as [number,number,number]);fov=innerWidth/innerHeight<1?78:PORCH_VIEW.fov;
    }else if(viewMode==='free'){
-    const view=PLACE_VIEWS[place];basePos.fromArray(view.p);baseTarget.fromArray(view.t);camera.fov=innerWidth/innerHeight<1?80:view.fov;
-   }else if(innerWidth/innerHeight<1){
+    const view=PLACE_VIEWS[place];basePos.fromArray(view.p);baseTarget.fromArray(view.t);fov=innerWidth/innerHeight<1?80:view.fov;
+   }else {
+    const p=cameraProgress(effectiveProgress);positionPath.getPoint(p,basePos);targetPath.getPoint(p,baseTarget);
+    if(innerWidth/innerHeight<1){
     const focus=mobileOffset.copy(basePos).sub(baseTarget);const factor=1.08;
     basePos.x=baseTarget.x+focus.x*factor; basePos.z=baseTarget.z+focus.z*factor;
-    basePos.y=groundHeight(basePos.x,basePos.z)+1.65;camera.fov=70;
+    basePos.y=groundHeight(basePos.x,basePos.z)+1.65;fov=70;
+    }
    }
    if(viewMode==='walk')basePos.y=groundHeight(basePos.x,basePos.z)+1.70;
-   if(controls.active)camera.fov=T.MathUtils.clamp(camera.fov+controls.zoom,35,90);
-   camera.updateProjectionMatrix();pos.copy(basePos);target.copy(baseTarget);
+   if(controls.active)fov=T.MathUtils.clamp(fov+controls.zoom,35,90);
+   if(camera.fov!==fov){camera.fov=fov;camera.updateProjectionMatrix();}
+   pos.copy(basePos);target.copy(baseTarget);
    if(controls.active)controls.apply(pos,target);
    else if(!reduced){const distance=pos.distanceTo(target);target.x+=Math.sin(dragX)*distance+pointerX*.22;target.y+=Math.sin(dragY)*distance-pointerY*.12;}
    camera.position.copy(pos);camera.lookAt(target);vegetationVisibility.update(camera);
@@ -196,8 +204,12 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
    if(!paused&&!reduced)time.value+=delta;
    if(!dragging){const decay=Math.exp(-delta*(now-lastScroll<180?9:2));dragX*=decay;dragY*=decay;}
    const mud=mudResistance(camera.position.x,camera.position.z,weather.wetness.value,pathClearance(camera.position.x,camera.position.z));
-   if(!controls.active)displayProgress=T.MathUtils.damp(displayProgress,progress,12*(1-mud),delta);
-   if(Math.abs(displayProgress-progress)<.00001)displayProgress=progress;
+   // Native scrolling already carries trackpad acceleration and momentum.
+   // Extra camera damping (especially the old wet-ground delay) fights it.
+   // A smooth scroll can finish while panorama mode ignores wheel events, and
+   // React can restore the page height after setView. Sample the real page each
+   // walking frame, including at scroll limits where no new event will arrive.
+   if(!controls.active&&viewMode==='walk'){syncWalkScroll();displayProgress=progress;}
    for(const [mix,period] of [[night,'night'],[noon,'noon'],[dawn,'dawn'],[dusk,'dusk']] as const){
     const goal=Number(timeOfDay===period);mix.value=reduced?goal:T.MathUtils.damp(mix.value,goal,2.4,delta);
     if(Math.abs(mix.value-goal)<.001)mix.value=goal;
