@@ -28,9 +28,13 @@ pnpm dev
 ```sh
 pnpm typecheck
 pnpm lint
+pnpm test
+node scripts/generate-bamboo-lod.mjs --check
 pnpm build
 pnpm preview
 ```
+
+提交到 `main` 的 PR，以及合并后的 `main` 更新，都会运行 [GitHub Actions CI](.github/workflows/ci.yml)。工作流按上述顺序执行类型检查、lint、测试、竹子 LOD 数据校验和构建，结果显示为 `Checks`；点击失败的检查可以查看对应步骤日志。CI 使用 `.nvmrc` 的 Node.js 版本、`package.json` 的 pnpm 版本和锁文件安装依赖。涉及画面的修改还需通过预览检查手机和桌面的实际效果。
 
 预览地址默认为 `http://localhost:4175/`，以终端输出为准。部署时上传 **`dist/client/` 内的全部内容**，无需压缩。在线构建的安装命令为 `pnpm install --frozen-lockfile`，构建命令为 `pnpm build`，发布目录为 `dist/client`；Netlify 配置已包含这些设置。
 
@@ -60,6 +64,8 @@ pnpm sync
 | 新代码引入新的依赖或组件 | 只补充实际使用的依赖和文件，再运行类型检查与构建 |
 
 GLB 不包含网页的全部效果，所以 `pnpm sync` 明确只同步资源。代码更新需要按上表合并，避免覆盖网页项目自己的改动，或把未使用的模板组件重新带回来。不要用原项目的 `package.json`、锁文件、构建配置覆盖这里的配置。
+
+更新 `public/models/bamboo.glb` 后，执行 `node scripts/generate-bamboo-lod.mjs`，将生成的 `src/components/scene/generated/bamboo-lod.json` 与模型一起提交。CI 的 `--check` 模式会验证模型与 LOD 数据一致，不会修改文件。
 
 ## 保留内容与验证
 
