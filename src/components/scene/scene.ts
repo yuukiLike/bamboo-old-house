@@ -77,7 +77,7 @@ function excludeUnreachablePointLights(scene:T.Scene){
 export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:AbortSignal):Promise<SceneHandle>{
  signal?.throwIfAborted();
  const started=performance.now();
- const mobile=matchMedia('(max-width:700px)').matches;
+ const mobile=matchMedia('(max-width:700px), (hover:none) and (pointer:coarse)').matches;
  let renderer:T.WebGLRenderer;
  try{renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});}catch{throw new Error('WEBGL_UNAVAILABLE');}
  renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
@@ -102,6 +102,25 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
  try{
   hooks.onProgress('正在载入老屋与竹林…',null);
   const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);const completed=Array(6).fill(0),totals=Array(6).fill(0);let lastProgress=0;
+  // The house alone embeds 116 images. Avoid parallel ImageBitmap decoding
+  // on mobile WebKit; share one image queue across all six model parsers.
+  if(mobile){
+   let decoded=Promise.resolve();
+   loader.register(parser=>{
+    parser.textureLoader=new T.TextureLoader(parser.options.manager).setCrossOrigin(parser.options.crossOrigin);
+    return {name:'BAMBOO_mobile_images',loadTexture:index=>{
+     const pending=decoded.then(async()=>{
+      controller.signal.throwIfAborted();
+      const texture=await parser.loadTexture(index);
+      if(!texture)throw new Error(`模型贴图未能载入 (${index})`);
+      textureSet.add(texture);
+      if(disposed){releaseResources();throw new Error('SCENE_DISPOSED');}
+      return texture;
+     });
+     decoded=pending.then(()=>{},()=>{});return pending;
+    }};
+   });
+  }
   const fetchModel=async(url:string,index:number)=>{
    const response=await fetch(`${url}?v=${encodeURIComponent(BUILD_ID)}`,{signal:controller.signal});if(!response.ok)throw new Error(`资源未能载入 (${response.status})`);
    totals[index]=Number(response.headers.get('content-length'))||0;
@@ -186,13 +205,14 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const setView=(value:ViewMode)=>{if(viewMode===value)return;viewMode=value;resyncWalkCamera=true;interiorContact.resetForViewChange();setPanorama(value==='free');reset();syncWalkScroll();displayProgress=progress;};
   const setPlace=(value:PlaceId)=>{if(!Object.hasOwn(PLACE_VIEWS,value)||place===value)return;place=value;interiorContact.resetForViewChange();reset();if(viewMode==='free')setPanorama(true);};
   let last=performance.now(),hidden=document.hidden;const visibility=()=>{hidden=document.hidden;last=performance.now();resyncWalkCamera=true;release();controls.cancelInput();};
-  const contextLost=(e:Event)=>{e.preventDefault();hooks.onFailure();mount.classList.remove('ready');};
+  const contextLost=(e:Event)=>{e.preventDefault();cleanup();hooks.onFailure();mount.classList.remove('ready');};
   window.addEventListener('scroll',scroll,{passive:true});window.addEventListener('resize',resize);window.addEventListener('blur',release);document.addEventListener('visibilitychange',visibility);media.addEventListener('change',change);
   renderer.domElement.addEventListener('pointerdown',pointerdown);renderer.domElement.addEventListener('pointermove',pointermove);renderer.domElement.addEventListener('pointerup',release);renderer.domElement.addEventListener('pointerleave',release);renderer.domElement.addEventListener('pointercancel',release);renderer.domElement.addEventListener('lostpointercapture',release);renderer.domElement.addEventListener('webglcontextlost',contextLost);
   removeEvents=()=>{controls.dispose();window.removeEventListener('scroll',scroll);window.removeEventListener('resize',resize);window.removeEventListener('blur',release);document.removeEventListener('visibilitychange',visibility);media.removeEventListener('change',change);renderer.domElement.removeEventListener('pointerdown',pointerdown);renderer.domElement.removeEventListener('pointermove',pointermove);for(const name of ['pointerup','pointerleave','pointercancel','lostpointercapture'])renderer.domElement.removeEventListener(name,release);renderer.domElement.removeEventListener('webglcontextlost',contextLost);};
   const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');
   const renderFrame=(delta=0)=>{renderer.info.reset();if(viewMode==='free'&&Object.hasOwn(ROOM_VIEWS,place))interiorContact.render(delta);else renderer.render(scene,camera);viewTransition.render(performance.now());};
   const diagnostics:Diagnostics={startupMs:0,pixelRatio:renderer.getPixelRatio(),windGust:0,weather:{wind:weather.wind.value,rain:0,wetness:0,mud:0,autumn:0},fallingLeaves:{},rainEffects:{},build:BUILD_ID,quality:mobile?'mobile':'desktop',gpu:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'unavailable',viewport:[],drawSize:[],progress:0,camera:[],target:[],drawCalls:0,triangles:0,textures:0,geometries:0,frames:[],windTime:0,paused,bambooCount:field.count,viewMode,place,timeOfDay,nightMix:0,noonMix:0,dawnMix:0,duskMix:1,panorama:false,yaw:0,pitch:0,fov:70,getPoster:()=>{renderFrame();return renderer.domElement.toDataURL('image/webp',.9);},reset};window.__BAMBOO__=diagnostics;
+
   syncWalkScroll();displayProgress=progress;
   const updateCamera=()=>{
    const effectiveProgress=reduced?0:displayProgress;
@@ -228,12 +248,14 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   // Three polls program readiness asynchronously; retain its material properties until that settles.
   try{
    await viewTransition.prepare();
-   // Day/night use different light counts; indoor HDR is another variant.
-   // Warm all four before controls become active, including fixed lamp maps.
-   for(const mix of [0,1]){
+   // Phones need the opening view first. Eager night shadows and indoor
+   // HDR/MSAA passes add a large GPU allocation/draw burst after model loading.
+   // Keep desktop prewarming; mobile builds the room pipeline on first entry.
+   for(const mix of mobile?[0]:[0,1]){
     night.value=mix;environment.update();
     hooks.onProgress(mix?'正在点亮屋内灯火…':'正在准备日光与阴影…',100);
     await renderer.compileAsync(scene,camera);if(disposed)break;
+    if(mobile)continue;
     await interiorContact.prepare();if(disposed)break;
     renderFrame();
     // Drivers can defer HDR/MSAA and postprocessing pipeline creation until
