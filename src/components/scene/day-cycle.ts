@@ -147,6 +147,7 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
   const interiorBulbs = new Set<T.MeshStandardMaterial>();
   return {
     update() {
+      material.uniforms.uPixelRatio.value=renderer.getPixelRatio();
       const n = night.value, h = noon.value, a = dawn.value, e = dusk.value;
       if (!interiorBulbs.size) scene.traverse(object => {
         if (!(object instanceof T.Mesh)) return;

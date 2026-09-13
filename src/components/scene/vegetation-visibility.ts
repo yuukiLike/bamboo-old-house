@@ -1,5 +1,12 @@
 import * as T from 'three';
 
+const groundDetails=new Set([
+ 'Fallen_bamboo_leaves','Curled_bamboo_leaf_litter','Small_margin_rosettes','Embedded_angular_bank_stones',
+ 'Flattened_rotten_logs_with_splintered_ends','Fine_bent_dry_grass_tufts',
+ 'Sparse_curled_dead_leaves_on_brittle_stems','Dense_interlaced_dry_grass_mat','Low_brittle_leafless_scrub',
+ 'Pine_needle_duff_along_descending_lane',
+]);
+
 // Global instance batches defeat Three's object frustum culling. Compact only
 // non-shadow casters; real shadow casters use spatial batches so offscreen
 // bamboo can still cast its shadow into the courtyard.
@@ -7,11 +14,18 @@ export function createVegetationVisibility(scene:T.Scene) {
  const vegetation:T.InstancedMesh[]=[];
  scene.updateMatrixWorld(true);
  scene.traverse(object=>{
-  if(object instanceof T.InstancedMesh && /^(Stalk_|Leaves_|Bank_|Hillside_|Background_)/.test(object.name))vegetation.push(object);
+  if(!(object instanceof T.InstancedMesh))return;
+  if(!groundDetails.has(object.name)&&!/^(Stalk_|Leaves_|Bank_|Hillside_|Background_|Meadow_grass_beside_house_)/.test(object.name))return;
+  // These static placements only use instance matrices/colors. Do not reorder
+  // bound branches, particles or future batches with their own instance data.
+  if(object.morphTexture||Object.values(object.geometry.attributes).some(attribute=>
+   attribute instanceof T.InstancedBufferAttribute||
+   (attribute instanceof T.InterleavedBufferAttribute&&attribute.data instanceof T.InstancedInterleavedBuffer)))return;
+  vegetation.push(object);
  });
  const compactors:ReturnType<typeof compactInstances>[]=[];
  for(const mesh of vegetation) {
-  const windMargin=/^(Stalk_|Leaves_)/.test(mesh.name)?2.6:mesh.name.startsWith('Porch_draping_')?.95:.55;
+  const windMargin=/^(Stalk_|Leaves_)/.test(mesh.name)?2.6:groundDetails.has(mesh.name)?.05:.55;
   if(mesh.castShadow)splitShadowBatches(mesh,16,windMargin);
   else compactors.push(compactInstances(mesh,windMargin));
  }
@@ -43,6 +57,7 @@ function compactInstances(mesh:T.InstancedMesh,margin:number) {
  }
  // Visibility is now exact per instance; the old whole-field sphere is unused.
  mesh.frustumCulled=false;
+ mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.instanceColor?.setUsage(T.DynamicDrawUsage);
  let previousCount=-1;
  return (frustum:T.Frustum)=>{
   let visible=0;

@@ -110,6 +110,16 @@ function terrainHeight(x:number,z:number){
   *MathUtils.smoothstep(z,-15.8,-14.1)*(1-MathUtils.smoothstep(z,-2.9,-2.10));
  return -.10+(hill-drop+rough+hummocks-forestFall)*(1-rearFooting);
 }
+// The terrain is fixed. Keep its vertex heights at double precision so the
+// thousands of plant/contact samples only interpolate the rendered triangles.
+const terrainVertexHeights=(()=>{
+ const g=TERRAIN_GRID,dx=g.width/g.columns,dz=g.depth/g.rows;
+ const heights=new Float64Array((g.columns+1)*(g.rows+1));
+ for(let row=0;row<=g.rows;row++)for(let column=0;column<=g.columns;column++){
+  heights[row*(g.columns+1)+column]=terrainHeight(g.x0+column*dx,g.z0+row*dz);
+ }
+ return heights;
+})();
 // Every object samples the triangles the GPU actually draws. Sampling the
 // smooth function between coarse terrain vertices made the path disappear
 // through the hillside and left some plants hovering above it.
@@ -117,6 +127,13 @@ export function groundHeight(x:number,z:number){
  const g=TERRAIN_GRID,dx=g.width/g.columns,dz=g.depth/g.rows;
  const ix=Math.floor((x-g.x0)/dx),iz=Math.floor((z-g.z0)/dz);
  const x0=g.x0+ix*dx,z0=g.z0+iz*dz,u=(x-x0)/dx,v=(z-z0)/dz;
+ if(ix>=0&&ix<g.columns&&iz>=0&&iz<g.rows){
+  const stride=g.columns+1,index=iz*stride+ix;
+  const a=terrainVertexHeights[index],b=terrainVertexHeights[index+stride],d=terrainVertexHeights[index+1];
+  if(u+v<=1)return a+(d-a)*u+(b-a)*v;
+  const c=terrainVertexHeights[index+stride+1];return c+(b-c)*(1-u)+(d-c)*(1-v);
+ }
+ // Preserve height sampling outside the finite mesh for distant effects.
  const a=terrainHeight(x0,z0),b=terrainHeight(x0,z0+dz),d=terrainHeight(x0+dx,z0);
  if(u+v<=1)return a+(d-a)*u+(b-a)*v;
  const c=terrainHeight(x0+dx,z0+dz);return c+(b-c)*(1-u)+(d-c)*(1-v);

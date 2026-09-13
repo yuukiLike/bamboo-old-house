@@ -15,21 +15,23 @@ import { createWeather } from './weather';
 import { createFallingLeaves } from './falling-leaves';
 import { createVegetationVisibility } from './vegetation-visibility';
 import { ViewControls } from './view-controls';
+import { createRenderBudget } from './render-budget';
 import { createInteriorContact } from './interior-contact';
 import { shadeWindowRecesses } from './window-light';
 import { BUILD_ID, PORCH_VIEW, MOON_VIEW, BREEZE_VIEW, WELL_RAIN_VIEW, ROOM_VIEWS, PLACE_VIEWS, groundHeight, pathClearance, treePositions, cameraProgress, positionPath, targetPath, type ViewMode, type TimeOfDay, type PlaceId } from './config';
 export interface SceneHandle { dispose:()=>void;setWeather:(value:WeatherSettings)=>void;setPaused:(value:boolean)=>void;reset:()=>void;setView:(view:ViewMode)=>void;setTimeOfDay:(value:TimeOfDay)=>void;setPanorama:(value:boolean)=>void;setPlace:(value:PlaceId)=>void; }
 interface Hooks {onProgress:(state:string,value:number|null)=>void;onFailure:()=>void;onPanorama:(value:boolean)=>void;onBearing:(value:number)=>void;onGust?:(strength:number)=>void;onRunoff?:(flow:number)=>void;}
-interface Diagnostics {windGust:number;weather:{wind:number;rain:number;wetness:number;mud:number;autumn:number};fallingLeaves:Record<string,number>;rainEffects:Record<string,unknown>;build:string;quality:string;gpu:string;viewport:number[];drawSize:number[];progress:number;camera:number[];target:number[];drawCalls:number;triangles:number;textures:number;geometries:number;frames:number[];windTime:number;paused:boolean;bambooCount:number;viewMode:ViewMode;place:PlaceId;timeOfDay:TimeOfDay;nightMix:number;noonMix:number;dawnMix:number;duskMix:number;panorama:boolean;yaw:number;pitch:number;fov:number;getPoster:()=>string;reset:()=>void;}
+interface Diagnostics {startupMs:number;pixelRatio:number;windGust:number;weather:{wind:number;rain:number;wetness:number;mud:number;autumn:number};fallingLeaves:Record<string,number>;rainEffects:Record<string,unknown>;build:string;quality:string;gpu:string;viewport:number[];drawSize:number[];progress:number;camera:number[];target:number[];drawCalls:number;triangles:number;textures:number;geometries:number;frames:number[];windTime:number;paused:boolean;bambooCount:number;viewMode:ViewMode;place:PlaceId;timeOfDay:TimeOfDay;nightMix:number;noonMix:number;dawnMix:number;duskMix:number;panorama:boolean;yaw:number;pitch:number;fov:number;getPoster:()=>string;reset:()=>void;}
 declare global { interface Window { __BAMBOO__?:Diagnostics; } }
 
 export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:AbortSignal):Promise<SceneHandle>{
  signal?.throwIfAborted();
+ const started=performance.now(),renderBudget=createRenderBudget();
  const mobile=matchMedia('(max-width:700px)').matches;
  let renderer:T.WebGLRenderer;
  try{renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});}catch{throw new Error('WEBGL_UNAVAILABLE');}
  renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
- renderer.setPixelRatio(Math.min(devicePixelRatio,mobile?1.25:1.6));renderer.setSize(innerWidth,innerHeight);
+ renderer.setPixelRatio(renderBudget.resize(innerWidth,innerHeight,devicePixelRatio,mobile));renderer.setSize(innerWidth,innerHeight);
  renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
  renderer.info.autoReset=false;
  mount.appendChild(renderer.domElement);
@@ -45,20 +47,27 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
  let removeEvents=()=>{};
  signal?.addEventListener('abort',cleanup,{once:true});
  try{
-  const environment=addEnvironment(scene,renderer,mobile,time,night,noon,dawn,dusk,weather);cleanEnvironment=environment.dispose;
   hooks.onProgress('正在载入老屋与竹林…',null);
-  const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);const completed=Array(6).fill(0),totals=Array(6).fill(0);
+  const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);const completed=Array(6).fill(0),totals=Array(6).fill(0);let lastProgress=0;
   const fetchModel=async(url:string,index:number)=>{
    const response=await fetch(`${url}?v=${encodeURIComponent(BUILD_ID)}`,{signal:controller.signal});if(!response.ok)throw new Error(`资源未能载入 (${response.status})`);
    totals[index]=Number(response.headers.get('content-length'))||0;
    if(!response.body)throw new Error('资源为空');const reader=response.body.getReader(),chunks:Uint8Array[]=[];
    while(true){const {value,done}=await reader.read();if(done)break;chunks.push(value);completed[index]+=value.length;
-    const progress=totals.every(n=>n>0)?Math.min(100,completed.reduce((a,b)=>a+b,0)/totals.reduce((a,b)=>a+b,0)*100):null;hooks.onProgress('正在载入老屋与竹林…',progress);
+    const progress=totals.every(n=>n>0)?Math.min(100,completed.reduce((a,b)=>a+b,0)/totals.reduce((a,b)=>a+b,0)*100):null;if(performance.now()-lastProgress>100){lastProgress=performance.now();hooks.onProgress('正在载入老屋与竹林…',progress);}
    }
    const buffer=new Uint8Array(completed[index]);let offset=0;for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.length;}
    const gltf=await loader.parseAsync(buffer.buffer,'/models/');if(disposed){disposeObjects(gltf.scene);releaseResources();throw new Error('SCENE_DISPOSED');}loadedGroups.push(gltf.scene);return gltf.scene;
   };
-  const [house,bamboo,understory,foliage,porchBamboo,fuel]=await Promise.all([fetchModel('/models/architecture.glb',0),fetchModel('/models/bamboo.glb',1),fetchModel('/models/understory.glb',2),fetchModel('/models/background-foliage.glb',3),fetchModel('/models/porch-bamboo.glb',4),fetchModel('/models/dry-fuel.glb',5)]);
+  const models=Promise.all([fetchModel('/models/architecture.glb',0),fetchModel('/models/bamboo.glb',1),fetchModel('/models/understory.glb',2),fetchModel('/models/background-foliage.glb',3),fetchModel('/models/porch-bamboo.glb',4),fetchModel('/models/dry-fuel.glb',5)]);
+  // Begin downloads before generating terrain and textures on the main thread.
+  // Attach a rejection handler while construction yields to avoid an unhandled rejection.
+  void models.catch(()=>{});
+  const yieldLoading=async(state:string)=>{hooks.onProgress(state,null);await new Promise<void>(resolve=>setTimeout(resolve,0));if(disposed)throw new Error('SCENE_DISPOSED');};
+  await yieldLoading('正在铺开竹林…');
+  const environment=addEnvironment(scene,renderer,mobile,time,night,noon,dawn,dusk,weather);cleanEnvironment=environment.dispose;
+  const [house,bamboo,understory,foliage,porchBamboo,fuel]=await models;
+  await yieldLoading('正在安放老屋…');
   house.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;const materials=Array.isArray(o.material)?o.material:[o.material];for(const material of materials){if(material instanceof T.MeshStandardMaterial){material.envMapIntensity=.45;for(const tex of [material.map,material.normalMap,material.roughnessMap])if(tex)tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
    // glTF packs roughness and metalness together. With a zero metalness
    // factor this second texture read cannot affect the surface, but can push
@@ -81,11 +90,13 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   }}}});
   scene.add(house);addBackgroundFoliage(scene,foliage,weather);addUnderstoryAssets(scene,understory,mobile,weather);bamboo.updateMatrixWorld(true);const field=addBamboo(scene,bamboo,time,mobile,night,weather);
   addPorchBamboo(scene,porchBamboo,time,night,bamboo,weather);
+  await yieldLoading('正在铺开林下草地…');
   addDryFuel(scene,fuel);
   addForestFloor(scene,mobile);
   addForestRemains(scene);
   addWoodlandFinish(scene,mobile,groundHeight,pathClearance,treePositions());
   addPineBank(scene,mobile,weather);
+  await yieldLoading('正在准备风雨…');
   const weatherEffects=createWeather(scene,house,camera,mobile,weather);cleanWeather=()=>weatherEffects.dispose();
   const fallingLeaves=createFallingLeaves(scene,camera,mobile,weather,(x,z)=>weatherEffects.surfaceHeightAt(x,z));cleanLeaves=()=>fallingLeaves.dispose();
   stabilizeShadowSampling(scene);
@@ -98,7 +109,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   let progress=0,displayProgress=0,lastScroll=0,paused=matchMedia('(prefers-reduced-motion:reduce)').matches,dragging=false,dragX=0,dragY=0,pointerX=0,pointerY=0,previousX=0,previousY=0;
   const media=matchMedia('(prefers-reduced-motion:reduce)');let reduced=media.matches;
   const scroll=()=>{if(controls.active||viewMode!=='walk')return;progress=T.MathUtils.clamp(scrollY/Math.max(1,document.documentElement.scrollHeight-innerHeight),0,1);lastScroll=performance.now();dragging=false;};
-  const resize=()=>{camera.aspect=innerWidth/innerHeight;renderer.setSize(innerWidth,innerHeight);camera.updateProjectionMatrix();interiorContact.resize();};
+  const resize=()=>{camera.aspect=innerWidth/innerHeight;renderer.setPixelRatio(renderBudget.resize(innerWidth,innerHeight,devicePixelRatio,matchMedia('(max-width:700px)').matches));renderer.setSize(innerWidth,innerHeight);camera.updateProjectionMatrix();interiorContact.resize();};
   const change=()=>{reduced=media.matches;};
   const release=()=>{dragging=false;pointerX=0;pointerY=0;};
   const pointerdown=(e:PointerEvent)=>{if(controls.active||e.pointerType!=='mouse'||e.button!==0||reduced)return;dragging=true;previousX=e.clientX;previousY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);};
@@ -107,14 +118,14 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const setPanorama=(value:boolean)=>{if(controls.active===value)return;reset();controls.setActive(value);hooks.onPanorama(value);};
   const setView=(value:ViewMode)=>{if(viewMode===value)return;viewMode=value;setPanorama(value==='free');reset();scroll();displayProgress=progress;};
   const setPlace=(value:PlaceId)=>{if(!Object.hasOwn(PLACE_VIEWS,value)||place===value)return;place=value;reset();if(viewMode==='free')setPanorama(true);};
-  let last=performance.now(),hidden=document.hidden;const visibility=()=>{hidden=document.hidden;last=performance.now();release();controls.cancelInput();};
+  let last=performance.now(),hidden=document.hidden;const visibility=()=>{hidden=document.hidden;last=performance.now();renderBudget.reset();release();controls.cancelInput();};
   const contextLost=(e:Event)=>{e.preventDefault();hooks.onFailure();mount.classList.remove('ready');};
   window.addEventListener('scroll',scroll,{passive:true});window.addEventListener('resize',resize);window.addEventListener('blur',release);document.addEventListener('visibilitychange',visibility);media.addEventListener('change',change);
   renderer.domElement.addEventListener('pointerdown',pointerdown);renderer.domElement.addEventListener('pointermove',pointermove);renderer.domElement.addEventListener('pointerup',release);renderer.domElement.addEventListener('pointerleave',release);renderer.domElement.addEventListener('pointercancel',release);renderer.domElement.addEventListener('lostpointercapture',release);renderer.domElement.addEventListener('webglcontextlost',contextLost);
   removeEvents=()=>{controls.dispose();window.removeEventListener('scroll',scroll);window.removeEventListener('resize',resize);window.removeEventListener('blur',release);document.removeEventListener('visibilitychange',visibility);media.removeEventListener('change',change);renderer.domElement.removeEventListener('pointerdown',pointerdown);renderer.domElement.removeEventListener('pointermove',pointermove);for(const name of ['pointerup','pointerleave','pointercancel','lostpointercapture'])renderer.domElement.removeEventListener(name,release);renderer.domElement.removeEventListener('webglcontextlost',contextLost);};
   const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');
   const renderFrame=(delta=0)=>{renderer.info.reset();if(viewMode==='free'&&Object.hasOwn(ROOM_VIEWS,place))interiorContact.render(delta);else renderer.render(scene,camera);};
-  const diagnostics:Diagnostics={windGust:0,weather:{wind:weather.wind.value,rain:0,wetness:0,mud:0,autumn:0},fallingLeaves:{},rainEffects:{},build:BUILD_ID,quality:mobile?'mobile':'desktop',gpu:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'unavailable',viewport:[],drawSize:[],progress:0,camera:[],target:[],drawCalls:0,triangles:0,textures:0,geometries:0,frames:[],windTime:0,paused,bambooCount:field.count,viewMode,place,timeOfDay,nightMix:0,noonMix:0,dawnMix:0,duskMix:1,panorama:false,yaw:0,pitch:0,fov:70,getPoster:()=>{renderFrame();return renderer.domElement.toDataURL('image/webp',.9);},reset};window.__BAMBOO__=diagnostics;
+  const diagnostics:Diagnostics={startupMs:0,pixelRatio:renderer.getPixelRatio(),windGust:0,weather:{wind:weather.wind.value,rain:0,wetness:0,mud:0,autumn:0},fallingLeaves:{},rainEffects:{},build:BUILD_ID,quality:mobile?'mobile':'desktop',gpu:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'unavailable',viewport:[],drawSize:[],progress:0,camera:[],target:[],drawCalls:0,triangles:0,textures:0,geometries:0,frames:[],windTime:0,paused,bambooCount:field.count,viewMode,place,timeOfDay,nightMix:0,noonMix:0,dawnMix:0,duskMix:1,panorama:false,yaw:0,pitch:0,fov:70,getPoster:()=>{renderFrame();return renderer.domElement.toDataURL('image/webp',.9);},reset};window.__BAMBOO__=diagnostics;
   scroll();displayProgress=progress;
   const updateCamera=()=>{
    const effectiveProgress=reduced?0:displayProgress;
@@ -145,13 +156,17 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   };
   updateCamera();environment.update();compiling=true;
   // Three polls program readiness asynchronously; retain its material properties until that settles.
-  try{await renderer.compileAsync(scene,camera);}finally{compiling=false;if(disposed)finalizeResources();}
+  try{await renderer.compileAsync(scene,camera);if(!disposed)await interiorContact.prepare();}finally{compiling=false;if(disposed)finalizeResources();}
   if(disposed)throw new Error('SCENE_DISPOSED');
   renderFrame();
+  diagnostics.startupMs=performance.now()-started;last=performance.now();
   let frame=0;
   const tick=(now:number)=>{
    if(disposed)return;raf=requestAnimationFrame(tick);if(hidden)return;
    const delta=Math.min((now-last)/1000,.075);const actual=now-last;last=now;
+   const pixelRatio=renderBudget.sample(actual);
+   if(Math.abs(pixelRatio-renderer.getPixelRatio())>.001){renderer.setPixelRatio(pixelRatio);interiorContact.resize();}
+   diagnostics.pixelRatio=renderer.getPixelRatio();
    if(!paused&&!reduced)time.value+=delta;
    if(!dragging){const decay=Math.exp(-delta*(now-lastScroll<180?9:2));dragX*=decay;dragY*=decay;}
    const mud=mudResistance(camera.position.x,camera.position.z,weather.wetness.value,pathClearance(camera.position.x,camera.position.z));

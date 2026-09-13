@@ -3,6 +3,7 @@ import * as T from 'three';
 // The three sectors span gusts around the prevailing wind. The same sectors
 // drive incoming rain and the retained water on open architectural edges.
 export const RAIN_SECTORS = [-.80, .38, 1.32] as const;
+const rainDirections=RAIN_SECTORS.map(angle=>({cos:Math.cos(angle),sin:Math.sin(angle)}));
 
 /** Conservative, static voxel shells of the actual walls, floors and roofs.
  * Unlike a highest-roof height field this preserves the air under a balcony,
@@ -60,24 +61,26 @@ export function createRainShelter(house:T.Group,roofAt:(x:number,z:number)=>numb
     // the conservative particle voxels alone would close those openings.
     if(roofAt(x,z)<y+.16||ny+.67*Math.hypot(nx,nz)<.01)return[0,0,0];
     const px=x+nx*.008,py=y+ny*.008,pz=z+nz*.008;
-    const key=[...([px,py,pz].map(v=>Math.round(v/.10))),Math.round(nx*4),Math.round(ny*4),Math.round(nz*4)].join(',');
+    const key=`${Math.round(px/.10)},${Math.round(py/.10)},${Math.round(pz/.10)},${Math.round(nx*4)},${Math.round(ny*4)},${Math.round(nz*4)}`;
     let reach=cache.get(key);
     if(!reach){
       reach=[0,0,0];
       for(let sector=0;sector<3;sector++){
-        const a=RAIN_SECTORS[sector],dx=-Math.cos(a)*.67,dy=1,dz=-Math.sin(a)*.67;
+        const direction=rainDirections[sector],dx=-direction.cos*.67,dy=1,dz=-direction.sin*.67;
         let open=-1;
         // Beyond 3.5 m horizontal penetration, a sheltered room stays dry.
         for(let distance=0;distance<6.0;distance+=.09){
           const qx=px+dx*distance,qy=py+dy*distance,qz=pz+dz*distance;
-          if(open<0&&roofAt(qx,qz)<qy+.12)open=distance*.67;
+          // Only the first opening contributes. The exact ray below still
+          // checks the complete route for a wall, pane or further roof.
+          if(roofAt(qx,qz)<qy+.12){open=distance*.67;break;}
           if(qy>bounds.max.y+.3)break;
         }
         if(open>=0&&open<3.2&&!exact.blocked(px,py,pz,dx,dy,dz))reach[sector]=Math.exp(-open/1.15);
       }
       cache.set(key,reach);
     }
-    return reach.map((value,i)=>T.MathUtils.clamp(value*Math.max(.12,ny-nx*Math.cos(RAIN_SECTORS[i])*.67-nz*Math.sin(RAIN_SECTORS[i])*.67),0,1)) as [number,number,number];
+    return reach.map((value,i)=>T.MathUtils.clamp(value*Math.max(.12,ny-nx*rainDirections[i].cos*.67-nz*rainDirections[i].sin*.67),0,1)) as [number,number,number];
   };
   return{solid,clip,exposure,stats:{step,triangles,solidCells,cells:cells.length,triangleBuildMs,voxelBuildMs},dispose(){cache.clear();cells.fill(0);exact.dispose();}};
 }
@@ -144,8 +147,13 @@ export function refineRainFloor(source:T.BufferGeometry,matrix:T.Matrix4,balcony
   for(const [name]of attributes)vertices[name]=[];
   const positions=source.attributes.position,index=source.index;
   const va=new T.Vector3(),vb=new T.Vector3(),vc=new T.Vector3();
-  const sample=(i:number)=>Object.fromEntries(attributes.map(([name,a])=>[name,Array.from({length:a.itemSize},(_,j)=>a.getComponent(i,j))]));
-  type Vertex=ReturnType<typeof sample>;
+  type Vertex=Record<string,number[]>;
+  const samples=new Map<number,Vertex>(),vertexIndices=new Map<Vertex,number>(),indices:number[]=[];
+  const sample=(i:number):Vertex=>{
+    let vertex=samples.get(i);
+    if(!vertex){vertex=Object.fromEntries(attributes.map(([name,a])=>[name,Array.from({length:a.itemSize},(_,j)=>a.getComponent(i,j))]));samples.set(i,vertex);}
+    return vertex;
+  };
   const midpoint=(a:Vertex,b:Vertex):Vertex=>Object.fromEntries(attributes.map(([name])=>[name,a[name].map((v,j)=>(v+b[name][j])*.5)]));
   const split=(a:Vertex,b:Vertex,c:Vertex,depth=0)=>{
     va.fromArray(a.position).applyMatrix4(matrix);vb.fromArray(b.position).applyMatrix4(matrix);vc.fromArray(c.position).applyMatrix4(matrix);
@@ -156,9 +164,22 @@ export function refineRainFloor(source:T.BufferGeometry,matrix:T.Matrix4,balcony
       else if(bc>=ca){const m=midpoint(b,c);split(a,b,m,depth+1);split(a,m,c,depth+1);}
       else{const m=midpoint(c,a);split(a,b,m,depth+1);split(m,b,c,depth+1);}return;
     }
-    for(const v of [a,b,c])for(const [name]of attributes)vertices[name].push(...v[name]);
+    // Sibling triangles share the same immutable endpoint/midpoint objects.
+    // Index those exact vertices rather than repeating their wetness raycasts.
+    for(const v of [a,b,c]){
+      let id=vertexIndices.get(v);
+      if(id===undefined){id=vertexIndices.size;vertexIndices.set(v,id);for(const [name]of attributes)vertices[name].push(...v[name]);}
+      indices.push(id);
+    }
   };
-  for(let i=0;i<(index?.count??positions.count);i+=3)split(sample(index?index.getX(i):i),sample(index?index.getX(i+1):i+1),sample(index?index.getX(i+2):i+2));
+  const count=index?.count??positions.count,offsets:number[]=[];
+  for(let i=0;i<count;i+=3){offsets.push(indices.length);split(sample(index?index.getX(i):i),sample(index?index.getX(i+1):i+1),sample(index?index.getX(i+2):i+2));}
+  offsets.push(indices.length);
   const geometry=new T.BufferGeometry();for(const [name,a]of attributes)geometry.setAttribute(name,new T.Float32BufferAttribute(vertices[name],a.itemSize));
+  geometry.setIndex(indices);
+  const boundary=(offset:number)=>offsets[Math.min(offsets.length-1,Math.max(0,Math.ceil(offset/3)))];
+  for(const group of source.groups)geometry.addGroup(boundary(group.start),boundary(group.start+group.count)-boundary(group.start),group.materialIndex);
+  const start=boundary(source.drawRange.start);
+  geometry.setDrawRange(start,source.drawRange.count===Infinity?Infinity:boundary(source.drawRange.start+source.drawRange.count)-start);
   geometry.computeBoundingBox();geometry.computeBoundingSphere();return geometry;
 }
