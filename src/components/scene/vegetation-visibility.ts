@@ -11,7 +11,7 @@ export function createVegetationVisibility(scene:T.Scene) {
  });
  const compactors:ReturnType<typeof compactInstances>[]=[];
  for(const mesh of vegetation) {
-  const windMargin=/^(Stalk_|Leaves_)/.test(mesh.name)?1.8:mesh.name.startsWith('Porch_draping_')?.20:.04;
+  const windMargin=/^(Stalk_|Leaves_)/.test(mesh.name)?2.6:mesh.name.startsWith('Porch_draping_')?.95:.55;
   if(mesh.castShadow)splitShadowBatches(mesh,16,windMargin);
   else compactors.push(compactInstances(mesh,windMargin));
  }

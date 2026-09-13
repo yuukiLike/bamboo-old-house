@@ -1,16 +1,18 @@
 import * as T from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
-import { groundHeight, pathCenter, pathClearance, pathWidth, seeded, SHORE, TERRAIN_GRID } from './config';
+import { groundHeight, pathClearance, seeded, SHORE, TERRAIN_GRID } from './config';
 import { addDayCycle } from './day-cycle';
+import type { WeatherUniforms } from './weather-state';
 import { addTerrainArt } from './terrain-art';
 import { addReservoirWater } from './water';
+import { createFootpathGeometry } from './footpath';
 
 const noise=`
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
 float fbm(vec2 p){return noise(p)*.5+noise(p*2.13)*.25+noise(p*4.07)*.125+noise(p*8.31)*.0625;}
 `;
-export function addEnvironment(scene:T.Scene,renderer:T.WebGLRenderer,mobile:boolean,time:{value:number},night:{value:number},noon={value:0}) {
+export function addEnvironment(scene:T.Scene,renderer:T.WebGLRenderer,mobile:boolean,time:{value:number},night:{value:number},noon={value:0},dawn={value:0},dusk={value:0},weather?:WeatherUniforms) {
  const sky=new Sky(); sky.scale.setScalar(450000);
  sky.material.uniforms.turbidity.value=2.8; sky.material.uniforms.rayleigh.value=1.25;
  sky.material.uniforms.mieCoefficient.value=.002;
@@ -39,20 +41,20 @@ export function addEnvironment(scene:T.Scene,renderer:T.WebGLRenderer,mobile:boo
   `);
  };
  const ground=new T.Mesh(terrain,mat);ground.name='Reservoir_bank_and_courtyard';ground.receiveShadow=true;scene.add(ground);
- const reservoirWater=addReservoirWater(scene,SHORE.waterY,time,night,sun);
- addFootpath(scene);
+ const reservoirWater=addReservoirWater(scene,SHORE.waterY,time,night,sun,weather);
+ addFootpath(scene,terrain);
  addUnderstory(scene,mobile);
  const terrainArt=addTerrainArt(scene,mobile,groundHeight,pathClearance);
- const cycle=addDayCycle(scene,renderer,sky,sun,ambient,night,time,mobile,noon);
+ const cycle=addDayCycle(scene,renderer,sky,sun,ambient,night,time,mobile,noon,dawn,dusk,weather);
  return {update:()=>{cycle.update();reservoirWater.update();},dispose:()=>{terrainArt.dispose();env.dispose();}};
 }
-function addUnderstory(scene:T.Scene,mobile:boolean){
+export function addUnderstory(scene:T.Scene,mobile:boolean){
  const rand=seeded(207),dummy=new T.Object3D();
  const leaf=new T.BufferGeometry();leaf.setAttribute('position',new T.Float32BufferAttribute([0,0,0,-.016,.012,.1,0,.025,.19,.018,.008,.095],3));leaf.setIndex([0,1,2,0,2,3]);leaf.computeVertexNormals();
  const fallen=new T.InstancedMesh(leaf,new T.MeshStandardMaterial({color:0x92713a,roughness:1,side:T.DoubleSide}),mobile?2500:5000);
  const c=new T.Color();let count=0;
  for(let i=0;i<fallen.count;i++){
-  const x=-32+rand()*56,z=-13+rand()*51;if(groundHeight(x,z)<-1.3||(pathClearance(x,z)<.06&&rand()>.06))continue;
+  const x=-32+rand()*56,z=-13+rand()*51;if((groundHeight(x,z)<-1.3&&!(x>10.5&&x<35&&z<14))||(pathClearance(x,z)<.06&&rand()>.06))continue;
   if(x>-8.5&&x<10.7&&z>-14.0&&z<-2.8)continue;
   const yard=x>-12&&x<9.8&&z<8.3&&z>-4.8;if(yard&&rand()>.07)continue;
   dummy.position.set(x,groundHeight(x,z)+.015,z);dummy.rotation.set((rand()-.5)*.3,rand()*Math.PI*2,(rand()-.5)*.2);dummy.scale.setScalar(.65+rand()*1.1);dummy.updateMatrix();fallen.setMatrixAt(count,dummy.matrix);c.setHSL(.10+rand()*.06,.25+rand()*.25,.2+rand()*.2);fallen.setColorAt(count,c);count++;
@@ -71,18 +73,8 @@ function addUnderstory(scene:T.Scene,mobile:boolean){
  }grass.count=count;grass.receiveShadow=true;grass.name='Bank_grasses';scene.add(grass);
 
 }
-function addFootpath(scene:T.Scene){
- const vertices:number[]=[],uvs:number[]=[],indices:number[]=[];
- const rows=240,cols=8;
- for(let i=0;i<=rows;i++){
-  const z=-12+i/rows*56,center=pathCenter(z),width=pathWidth(z);
-  for(let j=0;j<=cols;j++){
-   const u=j/cols,x=center+(u-.5)*width;
-   vertices.push(x,groundHeight(x,z)+.015+Math.sin(u*Math.PI)*.014,z);uvs.push(u,z*.25);
-   if(i<rows&&j<cols){const a=i*(cols+1)+j;indices.push(a,a+cols+1,a+1,a+1,a+cols+1,a+cols+2);}
-  }
- }
- const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));geometry.setIndex(indices);geometry.computeVertexNormals();
+function addFootpath(scene:T.Scene,terrain?:T.BufferGeometry){
+ const geometry=createFootpathGeometry(terrain);
  const mat=new T.MeshStandardMaterial({color:0x6b7262,roughness:.98,transparent:true,depthWrite:false});mat.onBeforeCompile=s=>{
   s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 vFootUV;').replace('#include <begin_vertex>','#include <begin_vertex>\nvFootUV=uv;');
   s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 vFootUV;\n'+noise).replace('#include <color_fragment>',`#include <color_fragment>
@@ -91,7 +83,8 @@ function addFootpath(scene:T.Scene){
    vec3 worn=mix(vec3(.12,.145,.129),vec3(.29,.31,.266),age*.8+grit*.12);
    diffuseColor.rgb=mix(worn,vec3(.066,.099,.038),edge*(.55+noise(p*9.)*.45));
    float pathZ=p.y*4.;
-   diffuseColor.a*=smoothstep(-12.,-8.6,pathZ)*(1.-smoothstep(40.,44.,pathZ));
+   float chippedEdge=min(p.x,1.-p.x)+(noise(vec2(p.x*7.,p.y*11.))-.5)*.018;
+   diffuseColor.a*=smoothstep(.008,.055,chippedEdge)*smoothstep(-9.,-2.5,pathZ)*(1.-smoothstep(40.,44.,pathZ));
   `);
  };const path=new T.Mesh(geometry,mat);path.name='Worn_footpath_from_courtyard';path.receiveShadow=true;scene.add(path);
 }

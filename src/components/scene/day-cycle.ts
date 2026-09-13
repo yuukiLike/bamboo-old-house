@@ -1,25 +1,65 @@
 import * as T from 'three';
+import type { WeatherUniforms } from './weather-state';
 import type { Sky } from 'three/addons/objects/Sky.js';
 import { groundHeight, seeded, SUN_PRESETS, ROOM_LIGHTS } from './config';
 
 export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
-  sun: T.DirectionalLight, ambient: T.HemisphereLight, night: { value: number }, time: { value: number }, mobile: boolean, noon = { value: 0 }) {
+  sun: T.DirectionalLight, ambient: T.HemisphereLight, night: { value: number }, time: { value: number }, mobile: boolean, noon = { value: 0 }, dawn = { value: 0 }, dusk = { value: 0 }, weather?:WeatherUniforms) {
   // Blend the physical daylight into a separate moonlit sky before tone mapping.
   sky.material.uniforms.uNight = night;
-  sky.material.fragmentShader = sky.material.fragmentShader.replace('uniform float time;', 'uniform float time;\nuniform float uNight;')
+  sky.material.uniforms.uWeatherRain = weather?.rain ?? {value:0};
+  sky.material.uniforms.uWeatherTime = time;
+  sky.material.fragmentShader = sky.material.fragmentShader.replace('uniform float time;', `uniform float time;
+    uniform float uNight;
+    uniform float uWeatherRain;
+    uniform float uWeatherTime;
+    float lunarNoise(vec2 p) {
+      vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+      vec4 h=fract(sin(vec4(dot(i,vec2(127.1,311.7)),dot(i+vec2(1.,0.),vec2(127.1,311.7)),dot(i+vec2(0.,1.),vec2(127.1,311.7)),dot(i+1.,vec2(127.1,311.7))))*43758.5453);
+      return mix(mix(h.x,h.y,f.x),mix(h.z,h.w,f.x),f.y);
+    }
+    float lunarSea(vec2 p,vec2 centre,vec2 size) {
+      return 1.-smoothstep(.58,1.15,length((p-centre)/size));
+    }
+  `)
+    // The physical sky's solar disc is HDR-bright; even a 0.1% daylight
+    // remainder looked like a second moon during the last part of the fade.
+    .replace('L0 += ( vSunE * 19000.0 * Fex ) * sundisc;',
+      'L0 += ( vSunE * 19000.0 * Fex ) * sundisc * (1.0 - smoothstep(0.0, 0.15, uNight));')
     .replace('gl_FragColor = vec4( texColor, 1.0 );', `
       vec3 nightDirection = normalize(vWorldPosition - cameraPosition);
       float elevation = max(nightDirection.y, 0.0);
       vec3 nightColor = mix(vec3(.018, .033, .050), vec3(.003, .009, .024), pow(elevation, .45));
       vec3 moonDirection = normalize(vec3(-14., 27., 22.));
       float moonDistance = distance(nightDirection, moonDirection);
-      float moonDisc = 1.0 - smoothstep(.011, .014, moonDistance);
-      float moonHalo = exp(-moonDistance * 24.0) * .07;
-      nightColor += vec3(.55, .68, .86) * (moonDisc * 1.8 + moonHalo);
+      float moonRadius=.014;
+      float moonDisc = 1.0 - smoothstep(moonRadius-.00035, moonRadius+.00035, moonDistance);
+      vec3 moonRight=normalize(cross(moonDirection,vec3(0.,1.,0.)));
+      vec3 moonUp=cross(moonRight,moonDirection);
+      vec2 lunarUV=vec2(dot(nightDirection,moonRight),dot(nightDirection,moonUp))/moonRadius;
+      // Broad basalt seas and fine crater variation belong to the disc, not
+      // its glow. Keep the highlights below clipping so this survives ACES.
+      float seas=lunarSea(lunarUV,vec2(-.28,.31),vec2(.44,.39))*.36
+        +lunarSea(lunarUV,vec2(.20,.24),vec2(.32,.40))*.29
+        +lunarSea(lunarUV,vec2(-.34,-.17),vec2(.36,.24))*.28
+        +lunarSea(lunarUV,vec2(.47,-.04),vec2(.19,.25))*.20;
+      float lunarDetail=lunarNoise(lunarUV*19.)*.055+lunarNoise(lunarUV*53.)*.025;
+      float limb=sqrt(max(0.,1.-dot(lunarUV,lunarUV)));
+      float lunarSurface=(.82-seas+lunarDetail)*(.74+.26*limb);
+      float moonHalo=exp(-moonDistance*38.)*.031+exp(-moonDistance*9.)*.009;
+      nightColor += vec3(.78,.83,.88)*lunarSurface*moonDisc*1.14;
+      nightColor += vec3(.43,.56,.76)*moonHalo;
       vec2 starCell = floor(nightDirection.xz / max(.15, nightDirection.y + 1.0) * 820.0);
       float star = fract(sin(dot(starCell, vec2(127.1, 311.7))) * 43758.5453);
       nightColor += vec3(.38, .46, .58) * step(.9991, star) * smoothstep(.12, .55, elevation);
-      gl_FragColor = vec4(mix(texColor, nightColor, uNight), 1.0);
+      vec3 clearSky = mix(texColor, nightColor, uNight);
+      vec2 cloudUV=nightDirection.xz/max(.16,nightDirection.y+.22)*2.4;
+      cloudUV+=vec2(uWeatherTime*.018,uWeatherTime*.007);
+      float cloudForm=lunarNoise(cloudUV)*.65+lunarNoise(cloudUV*2.31)*.25+lunarNoise(cloudUV*5.17)*.10;
+      float cover=smoothstep(0.,.32,uWeatherRain);
+      vec3 rainSky=mix(vec3(.31,.37,.39),vec3(.105,.145,.16),uWeatherRain);
+      rainSky*=mix(.74,1.18,cloudForm)*mix(1.,.035,uNight);
+      gl_FragColor = vec4(mix(clearSky,rainSky,cover), 1.0);
     `);
   sky.material.needsUpdate = true;
 
@@ -86,21 +126,28 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
   });
   const fireflies = new T.Points(geometry, material); fireflies.name = 'Fireflies_in_the_bamboo'; scene.add(fireflies);
 
-  const daySky = new T.Color(0xc6dbed), nightSky = new T.Color(0x57789f);
-  const dayGround = new T.Color(0x514733), nightGround = new T.Color(0x172825);
+  const daySky = new T.Color(0xb4d0ed), nightSky = new T.Color(0x57789f);
+  const dayGround = new T.Color(0x715946), nightGround = new T.Color(0x172825);
   const daySun = new T.Color(SUN_PRESETS.day.color), moon = new T.Color(SUN_PRESETS.night.color);
   const dayFog = new T.Color(0x8ba998), nightFog = new T.Color(0x0b1a27);
   const dayPosition = new T.Vector3(...SUN_PRESETS.day.position), moonPosition = new T.Vector3(...SUN_PRESETS.night.position);
   // A high sun and warm reflected courtyard light, with blue skylight in the
   // eaves. Noon has its own direction and luminance, not a screen tint.
   const noonPosition = new T.Vector3(...SUN_PRESETS.noon.position);
-  const noonSky = new T.Color(0xd3e1ef), noonGround = new T.Color(0xbc9974);
+  const noonSky = new T.Color(0xc9ddf5), noonGround = new T.Color(0x9d805e);
   const noonSun = new T.Color(SUN_PRESETS.noon.color), noonFog = new T.Color(0xc0ccc0);
+  const dawnPosition = new T.Vector3(...SUN_PRESETS.dawn.position), duskPosition = new T.Vector3(...SUN_PRESETS.dusk.position);
+  const dawnSky = new T.Color(0xb5cce1), duskSky = new T.Color(0x9ebee7);
+  const dawnGround = new T.Color(0x594b43), duskGround = new T.Color(0x8d6742);
+  const dawnSun = new T.Color(SUN_PRESETS.dawn.color), duskSun = new T.Color(SUN_PRESETS.dusk.color);
+  const dawnFog = new T.Color(0x99ada8), duskFog = new T.Color(0xb7b7a1);
   const skyDirection = new T.Vector3();
+  const stormSky=new T.Color(0xbac6cb),stormGround=new T.Color(0x43504b),stormFog=new T.Color(0x687d80),stormNightFog=new T.Color(0x0a151c),rainFog=new T.Color();
+  const autumnSky=new T.Color(0xa8cce5),autumnSun=new T.Color(0xfff4df),autumnFog=new T.Color(0xb6cbc9);
   const interiorBulbs = new Set<T.MeshStandardMaterial>();
   return {
     update() {
-      const n = night.value, h = noon.value;
+      const n = night.value, h = noon.value, a = dawn.value, e = dusk.value;
       if (!interiorBulbs.size) scene.traverse(object => {
         if (!(object instanceof T.Mesh)) return;
         for (const material of Array.isArray(object.material)?object.material:[object.material]) {
@@ -108,20 +155,53 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
         }
       });
       for (const bulb of interiorBulbs) { bulb.emissive.setHex(0xffbf79); bulb.emissiveIntensity=n*2.1; }
-      ambient.color.copy(daySky).lerp(noonSky, h).lerp(nightSky, n);
-      ambient.groundColor.copy(dayGround).lerp(noonGround, h).lerp(nightGround, n);
-      ambient.intensity = T.MathUtils.lerp(T.MathUtils.lerp(.9, 1.28, h), .5, n);
-      sun.color.copy(daySun).lerp(noonSun, h).lerp(moon, n);
-      sun.intensity = T.MathUtils.lerp(T.MathUtils.lerp(SUN_PRESETS.day.intensity, SUN_PRESETS.noon.intensity, h), SUN_PRESETS.night.intensity, n);
-      sun.position.copy(dayPosition).lerp(noonPosition, h).lerp(moonPosition, n);
+      // Sunlit plaster is warm while the covered gallery keeps blue skylight.
+      // A lower indirect/direct ratio preserves the photographed eave shadows.
+      ambient.color.copy(daySky).lerp(noonSky, h).lerp(dawnSky,a).lerp(duskSky,e).lerp(nightSky, n);
+      ambient.groundColor.copy(dayGround).lerp(noonGround, h).lerp(dawnGround,a).lerp(duskGround,e).lerp(nightGround, n);
+      const blend=(day:number,high:number,morning:number,evening:number,moonlit:number)=>
+        T.MathUtils.lerp(T.MathUtils.lerp(T.MathUtils.lerp(T.MathUtils.lerp(day,high,h),morning,a),evening,e),moonlit,n);
+      ambient.intensity = blend(.83,1.0,.72,.76,.5);
+      sun.color.copy(daySun).lerp(noonSun, h).lerp(dawnSun,a).lerp(duskSun,e).lerp(moon, n);
+      sun.intensity = blend(SUN_PRESETS.day.intensity,SUN_PRESETS.noon.intensity,SUN_PRESETS.dawn.intensity,SUN_PRESETS.dusk.intensity,SUN_PRESETS.night.intensity);
+      sun.position.copy(dayPosition).lerp(noonPosition, h).lerp(dawnPosition,a).lerp(duskPosition,e).lerp(moonPosition, n);
       skyDirection.copy(sun.position).sub(sun.target.position).normalize();
       sky.material.uniforms.sunPosition.value.copy(skyDirection);
-      sky.material.uniforms.turbidity.value = T.MathUtils.lerp(2.8, 2.2, h);
-      sky.material.uniforms.rayleigh.value = T.MathUtils.lerp(1.25, 2.2, h);
-      if (scene.fog) scene.fog.color.copy(dayFog).lerp(noonFog, h).lerp(nightFog, n);
-      if (scene.fog instanceof T.FogExp2) scene.fog.density = T.MathUtils.lerp(T.MathUtils.lerp(.0045, .0035, h), .010, n);
-      scene.environmentIntensity = T.MathUtils.lerp(T.MathUtils.lerp(.026, .075, h), .009, n);
-      renderer.toneMappingExposure = T.MathUtils.lerp(T.MathUtils.lerp(1.05, 1.12, h), 1.08, n);
+      sky.material.uniforms.turbidity.value = blend(2.8,2.2,3.5,2.1,2.8);
+      sky.material.uniforms.rayleigh.value = blend(1.5,2.2,1.7,1.8,1.25);
+      if (scene.fog) scene.fog.color.copy(dayFog).lerp(noonFog, h).lerp(dawnFog,a).lerp(duskFog,e).lerp(nightFog, n);
+      if (scene.fog instanceof T.FogExp2) scene.fog.density = blend(.0045,.0035,.0062,.0038,.010);
+      scene.environmentIntensity = blend(.026,.044,.021,.028,.009);
+      renderer.toneMappingExposure = blend(1.0,1.04,1.01,.98,1.08);
+      const rain=weather?.rain.value ?? 0, cover=Math.pow(rain,.44);
+      const autumn=T.MathUtils.clamp(weather?.autumn?.value ?? 0,0,1)*(1-cover)*(1-n);
+      if(autumn>0){
+        // Clear cool air and a slightly cleaner sun/shade distinction. Keep
+        // the plants' authored greens; the seasonal cue comes from the light.
+        ambient.color.lerp(autumnSky,autumn*.26);
+        ambient.intensity*=1-autumn*.045;
+        sun.color.lerp(autumnSun,autumn*.30);
+        sun.intensity*=1+autumn*.025;
+        sky.material.uniforms.turbidity.value=T.MathUtils.lerp(sky.material.uniforms.turbidity.value,1.65,autumn*.65);
+        sky.material.uniforms.rayleigh.value=T.MathUtils.lerp(sky.material.uniforms.rayleigh.value,1.95,autumn*.42);
+        if(scene.fog)scene.fog.color.lerp(autumnFog,autumn*.30);
+        if(scene.fog instanceof T.FogExp2)scene.fog.density*=1-autumn*.23;
+      }
+      sky.material.uniforms.cloudCoverage.value=.4+cover*.55;
+      sky.material.uniforms.cloudDensity.value=.4+cover*.46;
+      sky.material.uniforms.cloudCoverage.value*=1-autumn*.36;
+      sky.material.uniforms.cloudDensity.value*=1-autumn*.18;
+      sky.material.uniforms.time.value=time.value*(.3+(weather?.wind.value ?? .28)*.8);
+      ambient.color.lerp(stormSky,cover*(1-n));
+      ambient.groundColor.lerp(stormGround,cover);
+      // Diffuse overcast light remains readable; direct sun/moon and sharp
+      // shadows recede together, including all material shading, not a tint.
+      ambient.intensity=T.MathUtils.lerp(ambient.intensity,blend(1.45,1.5,1.24,1.28,.45),cover);
+      sun.intensity*=1-cover*.96;
+      if(scene.fog)scene.fog.color.lerp(rainFog.copy(stormFog).lerp(stormNightFog,n),cover*.82);
+      if(scene.fog instanceof T.FogExp2)scene.fog.density+=Math.pow(rain,2)*.04;
+      scene.environmentIntensity*=1-cover*.5;
+      renderer.toneMappingExposure*=1-cover*.035;
       warm.intensity = 34 * n;
       downstairs.intensity = 6.5 * n;
       // Fully extinguished fixtures must leave Three's light list: zero power
@@ -131,7 +211,7 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
       for (const {light,power} of roomLights) { light.intensity=power*n; light.visible=n>0; }
       downstairsBulbMaterial.emissiveIntensity = n * 1.5;
       bulbMaterial.emissiveIntensity = n * 4;
-      fireflies.visible = n > .005;
+      fireflies.visible = n > .005 && rain < .45;
     },
   };
 }

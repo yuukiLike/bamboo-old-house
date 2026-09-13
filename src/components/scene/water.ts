@@ -1,10 +1,14 @@
 import * as T from 'three';
+import { SHORE } from './config';
+import type { WeatherUniforms } from './weather-state';
 
 type ScalarUniform = { value: number };
 
 const WATER_GLSL = /* glsl */ `
 uniform float uWaterTime;
 uniform float uWaterNight;
+uniform float uWaterRain;
+uniform float uWaterWind;
 uniform vec3 uWaterSunDirection;
 varying vec3 vReservoirWorld;
 
@@ -35,7 +39,8 @@ vec3 reservoirNormal(vec2 p) {
   gradient += reservoirWave(p, vec2(0.4472,0.8944), 9.7, -0.82, 0.033, 4.1);
   gradient += reservoirWave(p, vec2(-0.6247,0.7809), 28.0, 1.17, 0.025, 0.8);
   gradient += reservoirWave(p, vec2(0.9487,0.3162), 47.0, -1.43, 0.019, 3.2);
-  gradient *= 0.70 + gust * 0.55;
+  gradient *= (0.70 + gust * 0.55) * (.48 + uWaterWind*1.85);
+  gradient += vec2(sin(p.x*62.+uWaterTime*14.),cos(p.y*57.-uWaterTime*11.))*uWaterRain*.07;
   return normalize(vec3(-gradient.x, 1.0, -gradient.y));
 }
 
@@ -49,6 +54,7 @@ vec3 reservoirReflection(vec3 surfaceNormal, vec3 viewToEye) {
   // Values remain HDR until the scene's existing ACES/exposure stage.
   float horizon = exp(-elevation * 3.8);
   vec3 daySky = mix(vec3(0.48,0.60,0.67), vec3(3.7,3.85,3.72), horizon);
+  daySky=mix(daySky,vec3(.20,.28,.30)*(1.+horizon*.42),pow(uWaterRain,.44));
   vec3 nightSky = mix(vec3(0.006,0.011,0.020), vec3(0.036,0.050,0.069), horizon);
   float reflectedSun = max(dot(reflectedView, uWaterSunDirection), 0.0);
   float sunVeil = pow(reflectedSun, 3.0);
@@ -63,7 +69,7 @@ vec3 reservoirReflection(vec3 surfaceNormal, vec3 viewToEye) {
   vec3 moonlight = vec3(0.42,0.57,0.77)
     * (pow(reflectedSun, 22.0) * 0.12 + pow(reflectedSun, 110.0) * 0.8);
   return fresnel * (mix(nightSky, daySky, day)
-    + sunlight * day + moonlight * uWaterNight);
+    + sunlight * day * (1.-uWaterRain*.99) + moonlight * uWaterNight * (1.-uWaterRain*.97));
 }
 `;
 
@@ -74,6 +80,7 @@ export function addReservoirWater(
   time: ScalarUniform,
   night: ScalarUniform,
   sun: T.DirectionalLight,
+  weather?:WeatherUniforms,
 ) {
   const lightDirection = { value: new T.Vector3().subVectors(sun.position, sun.target.position).normalize() };
   const material = new T.MeshPhysicalMaterial({
@@ -88,6 +95,8 @@ export function addReservoirWater(
   material.onBeforeCompile = shader => {
     shader.uniforms.uWaterTime = time;
     shader.uniforms.uWaterNight = night;
+    shader.uniforms.uWaterRain = weather?.rain ?? {value:0};
+    shader.uniforms.uWaterWind = weather?.wind ?? {value:.28};
     shader.uniforms.uWaterSunDirection = lightDirection;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vReservoirWorld;')
@@ -98,13 +107,18 @@ export function addReservoirWater(
         vec3 reservoirWorldNormal = reservoirNormal(vReservoirWorld.xz);
         normal = normalize(mat3(viewMatrix) * reservoirWorldNormal);
       `)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+        // Inland hollows are not connected to the distant reservoir.
+        if(vReservoirWorld.z<${SHORE.waterStartZ.toFixed(1)})discard;
+        if(vReservoirWorld.x<37. && vReservoirWorld.z<58.)discard;
+      `)
       .replace('#include <opaque_fragment>', `
         vec3 reservoirViewToEye = normalize(cameraPosition - vReservoirWorld);
         outgoingLight += reservoirReflection(reservoirWorldNormal, reservoirViewToEye);
         #include <opaque_fragment>
       `);
   };
-  material.customProgramCacheKey = () => 'reservoir-silver-ripples-1';
+  material.customProgramCacheKey = () => 'reservoir-weather-ripples-2';
   const water = new T.Mesh(new T.PlaneGeometry(1200, 1200), material);
   water.name = 'Reservoir_water';
   water.rotation.x = -Math.PI / 2;

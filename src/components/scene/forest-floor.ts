@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { DETAIL_VIEWS, groundHeight, pathClearance, positionPath, seeded } from './config';
+import { FOREST_SLOPE_VIEW, groundHeight, pathClearance, positionPath, seeded } from './config';
 
 // Copy beside config.ts when integrating. Fine, interlaced dead grass follows
 // the red-earth slope; low brittle scrub and rotten twigs interrupt the mat.
@@ -205,7 +205,7 @@ export function addForestFloor(scene: T.Scene, mobile: boolean) {
     if (x > -13 - radius && x < 10.5 + radius && z > -5 - radius && z < 9 + radius) return false;
     if (z < 13.1 + radius && z > 9 - radius && x > -3 - radius && x < 3 + radius) return false;
     if (cameraPath.some(p => (p.x - x) ** 2 + (p.z - z) ** 2 < (radius + .72) ** 2)) return false;
-    return !Object.values(DETAIL_VIEWS).some(v => (v.p[0] - x) ** 2 + (v.p[2] - z) ** 2 < (radius + .85) ** 2);
+    return ![FOREST_SLOPE_VIEW].some(v => (v.p[0] - x) ** 2 + (v.p[2] - z) ** 2 < (radius + .85) ** 2);
   };
   // Low dead grass is a walkable surface. Virtual camera routes and detail
   // viewpoints must not carve empty circles through it; only real concrete

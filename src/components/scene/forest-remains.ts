@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { DETAIL_VIEWS, groundHeight, pathClearance, positionPath, seeded } from './config';
+import { FOREST_SLOPE_VIEW, groundHeight, pathClearance, positionPath, seeded } from './config';
 
 type Point = [number, number, number];
 class Batch {
@@ -188,7 +188,7 @@ export function addForestRemains(scene:T.Scene){
   for(const mesh of meshes){const p=mesh.geometry.attributes.position;for(let i=0;i<p.count;i++){
     const x=p.getX(i),z=p.getZ(i);minPath=Math.min(minPath,pathClearance(x,z));
     for(const eye of route)minCamera=Math.min(minCamera,Math.hypot(x-eye.x,z-eye.z));
-    for(const view of Object.values(DETAIL_VIEWS))minDetail=Math.min(minDetail,Math.hypot(x-view.p[0],z-view.p[2]));
+    for(const view of [FOREST_SLOPE_VIEW])minDetail=Math.min(minDetail,Math.hypot(x-view.p[0],z-view.p[2]));
   }}
   const triangles=meshes.reduce((sum,m)=>sum+m.geometry.index!.count/3,0);
   group.userData={referenceNote:'Photo 2 + new net/wall close crop; inferred shed-side remnant behind existing old green net at Web(-12.8,+3).',

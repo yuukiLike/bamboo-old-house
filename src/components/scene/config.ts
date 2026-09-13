@@ -1,11 +1,13 @@
 import { Vector3, CatmullRomCurve3, MathUtils } from 'three';
-export const BUILD_ID = 'bamboo-2026-09-10-open-warm-home';
-export type ViewMode = 'porch' | 'walk' | 'interior' | 'detail';
-export type TimeOfDay = 'day' | 'noon' | 'night';
+export const BUILD_ID = 'bamboo-2026-09-13-grove-and-controls';
+export type ViewMode = 'porch' | 'walk' | 'free' | 'moon' | 'breeze' | 'well-rain';
+export type TimeOfDay = 'dawn' | 'day' | 'noon' | 'dusk' | 'night';
 // Shared with the editable Blender environment export (metres, web Y up).
 export const SUN_PRESETS = {
+ dawn: { position: [-30, 12, 24], color: 0xffe1b5, intensity: 2.8 },
  day: { position: [22, 20, 30], color: 0xffedcc, intensity: 4.2 },
  noon: { position: [-16, 48, 30], color: 0xffe7c2, intensity: 5.0 },
+ dusk: { position: [24, 10, 34], color: 0xffd393, intensity: 5.0 },
  night: { position: [-14, 27, 22], color: 0x8eb5e8, intensity: .72 },
 } as const;
 // Stand one step inside the open gallery: the eaves and end pier frame a
@@ -23,25 +25,32 @@ export const ROOM_LIGHTS = [
  { name:'Ground_hall_enamel_light', p:[.70,2.54,-1.70], power:4, range:4.2 },
 ] as const;
 export const PORCH_VIEW = { p: [-1.10, 4.85, -.70], t: [3.0, 4.25, 18], fov: 58 };
+// Stand 25 cm left of the path centre at a gap in the canopy. Aim slightly
+// below the celestial moon so it rests above centre, framed by bamboo.
+export const MOON_VIEW = { p: [11.060114400567672, 1.70, 31], direction: [-14, 20, 22], fov: 58 };
+// Stand within the central grove, surrounded by culms and overhead leaves.
+// A near-level gap reveals the house; the walking route stays over 19 m away.
+export const BREEZE_VIEW = {p:[7,1.70,26],direction:[-7,2,-28],fov:64};
+// Seated outside the kitchen beside the broom: real cement floor y=.200015,
+// eye 1.15 m above it. This p.y is absolute; the well and courtyard remain in view.
+export const WELL_RAIN_VIEW = {p:[-4.2,1.35,1.2],direction:[4,-2.2,10],fov:68};
 export type RoomId = 'upstairs' | 'store' | 'room-one' | 'room-two' | 'hall' | 'kitchen';
 export const ROOM_VIEWS: Record<RoomId, {label:string; p:number[]; t:number[]; fov:number}> = {
- upstairs: {label:'二层厅堂',p:[0,4.85,-.60],t:[1.35,3.90,-3.80],fov:66},
- store: {label:'仓库',p:[4.08,4.85,-1.35],t:[5.25,4.10,-4.80],fov:68},
- 'room-one': {label:'住屋一',p:[.65,4.85,-9.35],t:[1.15,4.20,-11.85],fov:66},
- 'room-two': {label:'住屋二',p:[6.05,4.85,-9.35],t:[8.30,4.25,-11.75],fov:66},
- hall: {label:'一楼堂屋',p:[-1.68,1.75,-1.1],t:[0,1.65,-2.67],fov:72},
- kitchen: {label:'一楼厨房',p:[-2.85,1.80,-1.15],t:[-5.45,1.12,-2.50],fov:74},
+ upstairs: {label:'二层厅堂',p:[-1.3,4.85,-3.8],t:[.2,4.7,14],fov:66},
+ store: {label:'仓库',p:[5.9,4.85,-5.35],t:[5,4.3,3.5],fov:74},
+ 'room-one': {label:'住屋一',p:[.65,4.85,-9.35],t:[2.25,4.8,-15],fov:66},
+ 'room-two': {label:'住屋二',p:[6.05,4.85,-9.35],t:[8.7,4.8,-15],fov:66},
+ hall: {label:'一楼堂屋',p:[-1.65,1.75,-1.9],t:[2.2,1.4,.1],fov:74},
+ kitchen: {label:'一楼厨房',p:[-4.2,1.80,-4.7],t:[-7,1.8,-12],fov:74},
 };
-export const DETAIL_VIEWS = {
- wall: {label:'柴房墙脚',p:[-5.1,1.5,5.8],t:[-6.9,.8,2.8],fov:64,note:'近看红泥墙、旧竹竿和路沿的小草。'},
- pail: {label:'旧桶与院坝',p:[-4.30,1.10,4.00],t:[-5.08,.20,2.69],fov:55,note:'旧木桶搁在院坝上，木条和箍带都磨旧了。'},
- window: {label:'窗前旧物',p:[-3.05,1.68,2.80],t:[-4.72,1.13,-1.68],fov:48,note:'日光透过旧窗，屋里是老电视和吃饭的木桌。'},
- hall: {label:'祠堂旧门',p:[-.55,1.7,3.6],t:[0,1.65,-2.60],fov:59,note:'在门前停一停，看囍字、旧对联和柴草。'},
- slope: {label:'屋旁小山',p:[9.2,1.65,3.2],t:[14.5,1.2,-4.5],fov:67,note:'水泥地渐渐接进坡脚的泥土、落叶和草。'},
- remains: {label:'林边残墙',p:[-10,1.6,6.5],t:[-13.4,.6,2.5],fov:62,note:'残破红土墙旁，枯草和朽木压在旧坡上。'},
- forest: {label:'竹林坡地',p:[-6.5,1.55,11.2],t:[-9,.1,17],fov:65,note:'竹叶落在缓坡上，细根沿着土面伸展。'},
+// Outdoor places use absolute standing eye heights on the actual courtyard surface.
+export const OUTDOOR_VIEWS = {
+ courtyard: {label:'屋前空地',p:[-1.5,1.4274203222107813,11],t:[-.5,3,-.5],fov:68},
+ 'yard-edge': {label:'院边竹荫',p:[7.5,1.6034467727,8.3],t:[-2.7,2.6,.7],fov:64},
 } as const;
-export type DetailId = keyof typeof DETAIL_VIEWS;
+export const PLACE_VIEWS = {...OUTDOOR_VIEWS,...ROOM_VIEWS};
+export type PlaceId = keyof typeof PLACE_VIEWS;
+export const FOREST_SLOPE_VIEW = {p:[-6.5,1.55,11.2],t:[-9,.1,17],fov:65};
 export const FUEL_PLACEMENTS = [
  {x:5.2,z:6.7,rotation:.13,scale:1.18},
  {x:-3,z:6.1,rotation:-.21,scale:.72},
@@ -50,7 +59,7 @@ export const CAMERA_STOPS = [
  { p:[-16.9447,1.95,20.388689], t:[-.80035,6.849482,0] },
  { p:[-9.7,1.70,14.8], t:[-2.7,2.7,0] },
  { p:[-2.4,1.70,8.8], t:[-1.2,2.2,.2] },
- { p:[-4.7,1.65,6.1], t:[-7.2,1.4,1.7] },
+ { p:FOREST_SLOPE_VIEW.p, t:FOREST_SLOPE_VIEW.t },
  { p:[-16.9447,1.95,20.388689], t:[-.80035,6.849482,0] },
 ];
 export const positionPath=new CatmullRomCurve3(CAMERA_STOPS.map(s=>new Vector3(...s.p)),false,'centripetal');
@@ -61,9 +70,16 @@ export function cameraProgress(progress:number){
  return (i+MathUtils.smootherstep(f,.08,.91))/4;
 }
 export function seeded(seed:number){return()=>{seed|=0; seed=seed+0x6D2B79F5|0; let n=Math.imul(seed^seed>>>15,1|seed); n=n+Math.imul(n^n>>>7,61|n)^n; return ((n^n>>>14)>>>0)/4294967296;};}
-export const SHORE={waterY:-1.65, rightX:38, frontZ:68};
-export function pathCenter(z:number){return 12.25+1.05*Math.sin((z+3)*.14)+.22*Math.sin(z*.49);}
-export function pathWidth(z:number){return 1.45+.14*Math.sin(z*.83)+.12*Math.sin(z*1.71);}
+export const SHORE={waterY:-1.65, rightX:38, frontZ:68, waterStartZ:18};
+export function pathCenter(z:number){
+ const forest=12.25+1.05*Math.sin((z+3)*.14)+.22*Math.sin(z*.49);
+ const descending=15.5+6.3*MathUtils.smoothstep(-z,-6,10)+.20*Math.sin(z*.24);
+ return MathUtils.lerp(descending,forest,MathUtils.smoothstep(z,7,21));
+}
+export function pathWidth(z:number){
+ const forest=1.45+.14*Math.sin(z*.83)+.12*Math.sin(z*1.71);
+ return MathUtils.lerp(.78+.065*Math.sin(z*.61),forest,MathUtils.smoothstep(z,7,19));
+}
 export function pathClearance(x:number,z:number){if(z < -12 || z > 44)return 100;return Math.abs(x-pathCenter(z))-pathWidth(z)*.5;}
 export const TERRAIN_GRID={x0:-130,z0:-110,width:190,depth:180,columns:150,rows:140};
 function terrainHeight(x:number,z:number){
@@ -71,14 +87,17 @@ function terrainHeight(x:number,z:number){
  const front=SHORE.frontZ+4*Math.sin(x*.07);
  const edge=Math.max(x-right,z-front);
  const drop=MathUtils.smoothstep(edge,-6,3)*3.2;
- const back=MathUtils.smoothstep(-z,5,40)*(13+5*Math.sin(x*.04+1));
+ // Begin the distant rise beyond the rear foundations. A near hill multiplied
+ // by the house footing mask previously made a sheer, untextured earth wall.
+ const back=MathUtils.smoothstep(-z,24,88)*(4.2+.8*Math.sin(x*.04+1))*(1-MathUtils.smoothstep(x,0,48));
  const side=MathUtils.smoothstep(-x,13,48)*(14+6*Math.cos(z*.035));
- // A nearby hill rises beyond a low shoulder. The photographed footpath and
- // house footing stay at the courtyard level instead of crossing a tall mound.
- const shoulder=MathUtils.smoothstep(x,10.4,17.5);
- const pathShoulder=.08+.92*MathUtils.smoothstep(pathClearance(x,z),.45,3.2);
- const mound=4.1*Math.exp(-1*((x-20)/9)**2-((z+10)/13)**2)*shoulder*pathShoulder;
- const hill=Math.max(back,side)+Math.min(back,side)*.22+mound;
+ // The house-side foreground is a weed bank. Beyond its crest the narrow
+ // path turns right and descends out of view; it does not climb a new hill.
+ const rightBank=MathUtils.smoothstep(x,10.5,18.5);
+ const valley=rightBank*(1-MathUtils.smoothstep(z,6,14));
+ const crest=.58*Math.exp(-1*((x-13.1)/2.8)**2-((z+1)/9)**2);
+ const descent=(2.8*MathUtils.smoothstep(-z,-3,13)+.22)*valley;
+ const hill=Math.max(back,side)+Math.min(back,side)*.22+crest-descent;
  const courtyard=x>-13 && x<10 && z>-5 && z<8.7;
  const rough=courtyard?0:(Math.sin(x*.84+z*.7)*Math.sin(z*.47-x*.3)*.075+Math.sin(x*.19-z*.27)*.1);
  const woodland=MathUtils.smoothstep(z,8.8,11)*(1-MathUtils.smoothstep(z,31,38))*(1-MathUtils.smoothstep(x,10.5,15));
@@ -106,12 +125,14 @@ export function treePositions(){
  const rand=seeded(38216); const items:{x:number;z:number;s:number;rotation:number;variant:number;leanX:number;leanZ:number;relocatedFrom?:number[]}[]=[];
  const paths=Array.from({length:81},(_,i)=>positionPath.getPoint(i/80));
  const add=(x:number,z:number,s:number,variant:number)=>{
-  if(groundHeight(x,z)<-1.2 || (x>-13&&x<10.5&&z>-5&&z<9))return;
+  const inlandDescent=x>10.5&&x<35&&z<20;
+  if((groundHeight(x,z)<-1.2&&!inlandDescent) || (x>-13&&x<10.5&&z>-5&&z<9))return;
   if(pathClearance(x,z)<.6)return;
+  if(x>10.5&&x<25&&z>-18&&z<8)return; // leave the meadow bank and descending lane open
   if(z<13.1&&z>9&&x>-3&&x<3)return;
   if(paths.some(p=>(p.x-x)**2+(p.z-z)**2<.72**2))return;
-  if(Object.values(DETAIL_VIEWS).some(view=>(view.p[0]-x)**2+(view.p[2]-z)**2<.85**2))return;
-  const anchored=(z<24&&x>-14&&x<12)||paths.some(p=>(p.x-x)**2+(p.z-z)**2<3.5**2)||Object.values(DETAIL_VIEWS).some(view=>(view.p[0]-x)**2+(view.p[2]-z)**2<3.5**2);
+  if([FOREST_SLOPE_VIEW, BREEZE_VIEW, MOON_VIEW].some(view=>(view.p[0]-x)**2+(view.p[2]-z)**2<.85**2))return;
+  const anchored=(z<24&&x>-14&&x<12)||paths.some(p=>(p.x-x)**2+(p.z-z)**2<3.5**2)||[FOREST_SLOPE_VIEW, BREEZE_VIEW, MOON_VIEW].some(view=>(view.p[0]-x)**2+(view.p[2]-z)**2<3.5**2);
   const lean=anchored?0:(.025+.045*Math.abs(Math.sin(x*3.47+z*1.18)));
   items.push({x,z,s,rotation:rand()*Math.PI*2,variant,leanX:Math.sin(x*4.12-z)*lean,leanZ:Math.sin(z*2.35+x)*lean});
  };
@@ -145,6 +166,15 @@ export function treePositions(){
   for(let j=0;j<5;j++){
    const angle=clumpRandom()*Math.PI*2,radius=.18+clumpRandom()*1.05;
    add(cx+Math.cos(angle)*radius,cz+Math.sin(angle)*radius,.92+clumpRandom()*.49,(clump+j)%4);
+  }
+ }
+ // Younger bamboo beyond the hidden descending bend closes the middle
+ // layer. Mature stems alone left the inferred rear terrain against white sky.
+ const bankRandom=seeded(488921);
+ for(const [cx,cz] of [[26,-6],[27,-14],[29,-24],[32,-5],[33,-14],[25.5,-29]]){
+  for(let j=0;j<12;j++){
+   const angle=bankRandom()*Math.PI*2,r=.12+bankRandom()*1.45;
+   add(cx+Math.cos(angle)*r,cz+Math.sin(angle)*r,.28+bankRandom()*.25,j%4);
   }
  }
  // Younger culms bring leaves into the middle layer where the photographs

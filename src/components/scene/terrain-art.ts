@@ -24,8 +24,14 @@ export function addTerrainArt(
   const materials: T.Material[] = [];
   const restored: { mesh: GroundMesh; original: T.MeshStandardMaterial; enhanced: T.MeshStandardMaterial }[] = [];
   const surfaceTexture = makeSurfaceTexture();
+  // Preserve the forest/courtyard finish, while retaining fine cement grains
+  // along the shallow viewing angle of the narrow footpath. The cloned texture
+  // shares its packed pixels and occupies the same shader sampler slot.
+  const pathTexture = surfaceTexture.clone();
+  pathTexture.anisotropy = mobile ? 4 : 8;
+  pathTexture.needsUpdate = true;
   const duffTexture = makeDuffTexture(mobile ? 512 : 1024);
-  textures.push(surfaceTexture, duffTexture);
+  textures.push(surfaceTexture, pathTexture, duffTexture);
 
   // Enhance the actual terrain rather than overlaying a second terrain skin.
   // This preserves the existing geography, cast shadows and dusk/night cycle.
@@ -43,13 +49,13 @@ export function addTerrainArt(
     // relief is derivative based, so it cannot create floating geometry.
     enhanced.onBeforeCompile = function (shader, renderer) {
       previousCompile(shader, renderer);
-      shader.uniforms.taSurface = { value: surfaceTexture };
+      shader.uniforms.taSurface = { value: isPath ? pathTexture : surfaceTexture };
       shader.uniforms.taDuffAtlas = { value: duffTexture };
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nvarying vec3 taWorld;\nvarying vec2 taUV;')
         .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\ntaWorld=(modelMatrix*vec4(transformed,1.0)).xyz;\ntaUV=uv;');
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 taWorld;\nvarying vec2 taUV;\nuniform sampler2D taSurface;\nuniform sampler2D taDuffAtlas;\n' + SURFACE_NOISE)
+        .replace('#include <common>', '#include <common>\nvarying vec3 taWorld;\nvarying vec2 taUV;\nuniform sampler2D taSurface;\nuniform sampler2D taDuffAtlas;\n' + SURFACE_NOISE + (isPath ? PATH_CONCRETE : ''))
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n${isPath ? PATH_SURFACE : GROUND_SURFACE}`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           // Relief and colour share the same erosion and moss masks. Fine
@@ -63,7 +69,7 @@ export function addTerrainArt(
           normal=normalize(abs(taDet)*normal-taFace*sign(taDet)*(dFdx(taBump)*taR1+dFdy(taBump)*taR2));
         `);
     };
-    enhanced.customProgramCacheKey = () => `${original.customProgramCacheKey()}|photo-terrain-7-red-earth-decay|${isPath}`;
+    enhanced.customProgramCacheKey = () => `${original.customProgramCacheKey()}|photo-terrain-7-red-earth-decay|${isPath}${isPath ? '|old-path-cement-2' : ''}`;
     mesh.material = enhanced;
     materials.push(enhanced);
     restored.push({ mesh, original, enhanced });
@@ -602,21 +608,81 @@ const GROUND_SURFACE = `
   roughnessFactor=mix(roughnessFactor,mix(.97-taDamp*.045,taCementRoughness,taYard),taRegion);
 `;
 
+const PATH_CONCRETE = `
+  void taPathConcrete(vec2 p,float traffic,float margin,out vec3 pigment,out float relief,out float surfaceRoughness){
+    // A tile is 0.87 m, with a rotated 0.64 m tile breaking its repetition.
+    // Mineral grains are roughly 1–15 mm; the packed hairlines stay below
+    // 2 mm wide and 10 cm long, rather than becoming oversized paving cracks.
+    vec4 fine=texture2D(taSurface,p*1.15);
+    vec4 crossGrain=texture2D(taSurface,mat2(.798,.603,-.603,.798)*p*1.57+vec2(.37,.19));
+    float aged=taFbm(p*.38+vec2(4.2,19.7));
+    float worn=taFbm(p*2.4+vec2(23.5,8.1));
+    vec2 patinaWarp=vec2(taNoise(p*1.1),taNoise(p*1.3+7.))-.5;
+    float patina=taFbm(p*4.6+patinaWarp*.7);
+    float abraded=smoothstep(.28,.72,taFbm(p*10.7+patinaWarp*.5));
+    float aggregate=fine.g*.69+crossGrain.g*.31;
+    float pits=fine.a*.72+crossGrain.a*.28;
+    float grain=fine.r*.64+crossGrain.r*.36;
+    // Low-contrast cement staining remains readable at a distance. It is
+    // continuous binder, not thresholded metre-wide dark organic islands.
+    pigment=mix(vec3(.061,.069,.060),vec3(.118,.123,.107),aged*.41+worn*.59);
+    pigment=mix(pigment,vec3(.127,.128,.111),traffic*.10);
+    // Small, softly eroded patches break the uniform finish left by pouring.
+    // Their modest contrast survives middle distance without reading as slabs.
+    pigment*=.81+patina*.34;
+    pigment=mix(pigment,vec3(.225,.228,.204),aggregate*(.27+abraded*.39));
+    pigment*=.91+grain*.18;
+    pigment=mix(pigment,vec3(.028,.034,.026),pits*.31);
+    // Centimetre-scale worn mortar carries small grey mineral flecks, while
+    // fine sediment fills nearby pores. This ages the walked centre without
+    // covering it in broad smooth moss islands or a pale fresh-cement stripe.
+    float sediment=smoothstep(.41,.73,taFbm(p*13.2+patinaWarp*.6));
+    pigment=mix(pigment,vec3(.043,.048,.038),sediment*.24*(1.-aggregate*.55));
+    // Moss and entrained humus occupy broken, shallow edge patches. The
+    // walked centre retains exposed concrete even beside a damp forest floor.
+    float colonies=smoothstep(.36,.71,taFbm(p*3.1+vec2(13.7,9.4)));
+    float fibres=fine.b*.65+crossGrain.b*.35;
+    float organic=margin*colonies*(.38+fibres*.26)*(1.-traffic*.55);
+    vec3 moss=mix(vec3(.030,.040,.023),vec3(.064,.071,.044),worn);
+    pigment=mix(pigment,moss,organic);
+    pigment=mix(pigment,vec3(.069,.064,.046),margin*worn*.17);
+    // Millimetre relief is filtered away once it is smaller than a pixel.
+    // Colour still benefits from mipmaps and anisotropic sampling at grazing
+    // angles; subpixel bump gradients cannot turn into crawling black grit.
+    float footprint=max(length(dFdx(p)),length(dFdy(p)));
+    float resolved=1.-smoothstep(.0018,.013,footprint);
+    relief=((grain-.48)*.0012+aggregate*.00095-pits*.00135)*resolved+organic*.00022;
+    surfaceRoughness=clamp(.957-traffic*.022-aggregate*.022+organic*.032,.89,.99);
+  }
+`;
+
 const PATH_SURFACE = `
   vec2 taP=taWorld.xz;
-  // UV.x is width-normalized on the existing path. Worn traffic meanders down
-  // its center; the margins retain old damp colonies. There are no literal
-  // repeating footprint decals or an immaculate painted center stripe.
-  float taWander=(taFbm(vec2(taP.y*.31,7.2))-.5)*.19;
+  // UV.x measures the actual width, while world coordinates keep all material
+  // detail at the same physical size through bends and varying path widths.
+  float taWander=(taFbm(vec2(taP.y*.31,7.2))-.5)*.10;
   float taCross=abs(taUV.x-.5+taWander);
-  float taEdge= smoothstep(.24,.49,taCross+(taFbm(taP*3.9)-.5)*.11);
-  float taTraffic=(1.-smoothstep(.09,.46,taCross))*(.65+taFbm(taP*.71+4.)*.31);
-  float taHumidity=clamp(.55+taEdge*.23+taFbm(taP*.36+27.)*.17,0.,1.);
+  float taEdge=smoothstep(.31,.49,taCross+(taFbm(taP*5.7)-.5)*.075);
+  float taTraffic=(1.-smoothstep(.10,.43,taCross))*(.71+taFbm(taP*.71+4.)*.24);
   vec3 taWorn;float taRelief;float taRoughness;
-  taOldConcrete(taP,taTraffic,taEdge,taHumidity,taWorn,taRelief,taRoughness);
-  // Accumulated dark soil merges into crumbling edges in intermittent patches.
-  float taInvasion=taEdge*smoothstep(.39,.72,taFbm(taP*2.9+16.))*.59;
-  taWorn=mix(taWorn,vec3(.036,.034,.020),taInvasion);
+  taPathConcrete(taP,taTraffic,taEdge,taWorn,taRelief,taRoughness);
+  // A few small deposits contain actual curved bamboo leaf/twig silhouettes
+  // from the existing duff atlas. Each deposit is at most 8 cm across: broken
+  // fragments collect near margins, with only occasional remnants mid-path.
+  // They are flush material detail, so bends, contact and wetness remain exact.
+  vec2 taDepositCell=floor(taP*2.8);
+  vec2 taDepositJitter=vec2(taHash(taDepositCell+32.1),taHash(taDepositCell+17.4))-.5;
+  vec2 taDepositLocal=(fract(taP*2.8)-.5-taDepositJitter*.43)/2.8;
+  float taDepositRadius=.026+taHash(taDepositCell+91.7)*.014;
+  float taDepositShape=1.-smoothstep(.63,1.,length(taDepositLocal/vec2(taDepositRadius,taDepositRadius*.72)));
+  float taDepositKeep=step(1.-(.012+taEdge*.32),taHash(taDepositCell+71.2));
+  vec4 taPathLitter=texture2D(taDuffAtlas,taP*.68+vec2(.213,.597));
+  float taLitterCover=taDepositShape*taDepositKeep*taPathLitter.g*.88;
+  vec3 taLitterPigment=mix(vec3(.064,.059,.042),vec3(.192,.172,.125),taPathLitter.r);
+  taLitterPigment=mix(taLitterPigment,vec3(.051,.046,.032),taPathLitter.a*.49);
+  taWorn=mix(taWorn,taLitterPigment,taLitterCover);
+  taRelief+=taLitterCover*taPathLitter.b*.00065;
+  taRoughness=mix(taRoughness,.98,taLitterCover);
   diffuseColor.rgb=taWorn;
   roughnessFactor=taRoughness;
 `;
