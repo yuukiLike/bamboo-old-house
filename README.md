@@ -1,88 +1,41 @@
 # 竹林里的老屋 · Bamboo Old House
 
-基于 Three.js 的交互式 3D 老屋场景，在竹林、木廊与房间之间漫游，感受晨昏、风雨和自然声景。使用 pnpm，可部署为静态网站。
+基于 Three.js 的交互式 3D 老屋场景，在竹林、木廊与房间之间漫游，感受晨昏、风雨和自然声景。支持沿路漫游、自由视角、360° 环顾与竹林望月，可切换五个时段和四档天气。
 
-## 目录
+使用 React、TypeScript、Three.js、Tailwind CSS 与 Vinext/Vite，源码位于 [`src/`](src/)。
 
-```text
-bamboo-old-house/
-├── src/          网页、Three.js 场景、实际使用的组件
-├── public/       GLB 模型（贴图内嵌）、自然录音、备用画面和图标
-├── dist/client/  构建后上传的完整网站
-└── 根目录配置    pnpm、类型检查、构建与部署配置
-```
+## 资源
 
-`node_modules/`、`.next/` 和 `dist/` 由工具生成。类型检查缓存放在 `node_modules/.cache/`。源码保留在 `src/`，说明集中在本文件，不另外生成交付记录或压缩包。
+| 资源 | 位置 | 用途 |
+| --- | --- | --- |
+| 老屋建筑 | [`architecture.glb`](public/models/architecture.glb) | 老屋主体、室内外建筑结构与陈设 |
+| 竹林 | [`bamboo.glb`](public/models/bamboo.glb) | 四组竹竿与竹叶模型 |
+| 廊下竹枝 | [`porch-bamboo.glb`](public/models/porch-bamboo.glb) | 木廊附近垂落、随风摆动的竹枝与竹叶 |
+| 背景植被 | [`background-foliage.glb`](public/models/background-foliage.glb) | 背景乔木、树冠与灌木 |
+| 林下植被 | [`understory.glb`](public/models/understory.glb) | 林下与山坡上的蕨类、草丛 |
+| 干柴堆 | [`dry-fuel.glb`](public/models/dry-fuel.glb) | 院落中的干柴堆 |
+| 竹子 LOD | [`bamboo-lod.json`](src/components/scene/generated/bamboo-lod.json) | 从竹子模型生成的远景简化数据 |
+| 自然录音 | [`public/audio/`](public/audio/) | 九段风、雨、鸟鸣与虫鸣等录音；[来源与致谢](public/audio/credits.md) |
+| 备用画面 | [桌面](public/scene-poster.webp)、[手机](public/scene-poster-mobile.webp) | 静态场景画面 |
+| 图标 | [`icon.svg`](public/icon.svg)、[`favicon.svg`](public/favicon.svg) | 网站图标 |
 
-## 运行与部署
+GLB 已内嵌贴图与缓冲数据。声音在用户主动操作后播放，并随时段和天气变化。
 
-环境：Node.js 24、pnpm 11.14.0。版本分别由 `.nvmrc` 和 `package.json` 指定。
+## 资源更新
 
-```sh
-pnpm install --frozen-lockfile
-pnpm dev
-```
+资源来自同级建模项目 `../blender-two/`；只有同步资源需要该目录，日常代码开发不依赖它。修改 `.blend` 后需先导出网页资源。
 
-开发地址以终端显示为准，通常为 `http://localhost:3000/`。构建与预览：
-
-```sh
-pnpm typecheck
-pnpm lint
-pnpm test
-node scripts/generate-bamboo-lod.mjs --check
-pnpm build
-pnpm preview
-```
-
-提交到 `main` 的 PR，以及合并后的 `main` 更新，都会运行 [GitHub Actions CI](.github/workflows/ci.yml)。工作流按上述顺序执行类型检查、lint、测试、竹子 LOD 数据校验和构建，结果显示为 `Checks`；点击失败的检查可以查看对应步骤日志。CI 使用 `.nvmrc` 的 Node.js 版本、`package.json` 的 pnpm 版本和锁文件安装依赖。涉及画面的修改还需通过预览检查手机和桌面的实际效果。
-
-预览地址默认为 `http://localhost:4175/`，以终端输出为准。部署时上传 **`dist/client/` 内的全部内容**，无需压缩。在线构建的安装命令为 `pnpm install --frozen-lockfile`，构建命令为 `pnpm build`，发布目录为 `dist/client`；Netlify 配置已包含这些设置。
-
-[自然声音来源与致谢](public/audio/credits.md)
-
-网页使用 `/models/` 和 `/_next/` 等根路径，按 `https://你的域名/` 部署。通过 HTTP/HTTPS 访问，不能双击 HTML 文件。线上无需 Blender、数据库或 Node.js 服务。`dist/server/` 是静态导出的构建中间产物，不需要上传。
-
-## 从原项目同步资源
-
-原项目位于同级 `../blender-two/`。先在原项目完成建模并导出网页资源，确认更新已经进入 `../blender-two/website/public/`，然后在本项目执行：
-
-```sh
-pnpm sync
-```
-
-该命令使用 macOS 自带的 `rsync`，单向复制原项目 `website/public/` 到本项目 `public/`，跳过 `.DS_Store` 与空目录，替换同名文件、补充新资源，再重新构建 `dist/client/`。它不回写原项目，也不自动删除本项目中额外的资源。完成后上传新的 `dist/client/`。如果把目录迁到 Windows，需要安装 rsync 或使用 WSL。
-
-**修改 `.blend` 文件本身不会更新网页。** 必须先导出适合网页的 GLB；完整建模与导出步骤见原项目 [README](../blender-two/README.md)。这里保留实际副本，不依赖符号链接；普通安装、开发和构建不要求原目录存在，只有 `pnpm sync` 需要它。
-
-同步范围需要区分：
-
-| 原项目的更新 | 网页项目的处理 |
+| 更新内容 | 处理方式 |
 | --- | --- |
-| 同名 GLB 的几何、内嵌贴图，或已有路径下的图片更新 | 执行 `pnpm sync` |
-| 模型改名、增删模型，或修改地形、植物布局、相机、灯光、风和水 | 同时合并 `website/components/scene/` 到 `src/components/scene/` 的对应改动，再同步资源、检查并构建 |
-| 页面或交互改动 | 对照 `website/app/`、`website/components/experience.tsx`，合并到 `src/` 中的对应位置 |
-| 新代码引入新的依赖或组件 | 只补充实际使用的依赖和文件，再运行类型检查与构建 |
+| 模型、贴图或录音 | 导出到 `../blender-two/website/public/` 后执行 `pnpm sync` |
+| 竹子模型 | 同步后执行 `node scripts/generate-bamboo-lod.mjs`，将 `bamboo.glb` 与生成的 `bamboo-lod.json` 一起提交 |
+| 模型增删改名、地形、布局、相机、灯光或天气效果 | 同时合并原项目 `website/components/scene/` 到本项目 `src/components/scene/` 的对应代码 |
+| 页面或交互 | 对照原项目 `website/app/`、`website/components/experience.tsx`，合并到本项目 `src/` 的对应位置 |
 
-GLB 不包含网页的全部效果，所以 `pnpm sync` 明确只同步资源。代码更新需要按上表合并，避免覆盖网页项目自己的改动，或把未使用的模板组件重新带回来。不要用原项目的 `package.json`、锁文件、构建配置覆盖这里的配置。
+`pnpm sync` 通过 `rsync` 单向复制资源并重新构建，替换同名文件、补充新资源，不自动删除额外文件。它只同步资源；代码需单独合并，并保留本项目的依赖、锁文件与构建配置。
 
-更新 `public/models/bamboo.glb` 后，执行 `node scripts/generate-bamboo-lod.mjs`，将生成的 `src/components/scene/generated/bamboo-lod.json` 与模型一起提交。CI 的 `--check` 模式会验证模型与 LOD 数据一致，不会修改文件。
+## 修改验证
 
-## 保留内容与验证
+目标为 `main` 的 PR 和 `main` 更新会运行 [CI](.github/workflows/ci.yml)，检查类型、lint、回归测试、竹子 LOD 数据一致性和生产构建，统一显示为 `Checks`。
 
-技术栈为 React、TypeScript、Three.js、Tailwind CSS、Vinext/Vite。当前场景版本为 `bamboo-2026-09-13-grove-and-controls`，同步自原项目提交 `1dfca58`。
-
-- 默认沿路走走，另有廊下望竹，以及包含八个屋内外地点的自由看看；保留360°环顾。
-- 竹林望月、林间的风和井旁听雨各有独立机位；林间进入白天大风，井旁从晴天进入细雨。
-- 清晨、白天、正午、傍晚、夜晚五个时段，与晴风、大风、细雨、暴雨四档天气组合；风雨只用档位，环境音量可调。
-- 竹竿、连接枝叶和阴影随阵风一起弯曲回摆，落叶不规则飘落；不同地面、木井盖和靠外木结构有受雨后的材质反馈，屋檐积水后渐渐滴流。
-- 手机时段条采用42px紧凑高度；自由看看没有额外外框，天气四按钮以两行排列，并处理短横屏的控件遮挡。
-
-六个模型位于 `public/models/`，贴图和缓冲数据已内嵌；建筑模型的 Meshopt 解码由现有场景代码完成。九段自然录音及其来源说明位于 `public/audio/`，声音在用户主动操作后播放。普通雨天无蝉鸣，细雨偶有蛙声，暴雨只保留风雨声。
-
-本次同步运行源码与公开资源，保留本项目的静态导出、Netlify/Cloudflare配置、pnpm依赖和锁文件；不带入原项目的Blender作者文件、历史验收材料或未使用的模板组件。
-
-同步后50个对应源码/资源文件逐一比对一致，类型检查、lint和静态构建通过。实际静态预览在1440×900桌面、390×844手机竖屏、667×375手机横屏完成75项操作检查和81个界面状态检查，覆盖时段、天气、声音、八个地点、环顾与移动布局；没有面板溢出、按钮遮挡、页面/着色器或资源请求错误。此验证针对本地静态构建，不代表线上部署状态。
-
-性能优化：保留原有桌面与手机渲染分辨率（像素比分别最高 1.6 / 1.25），不因窗口面积或持续掉帧降低清晰度。室内着色器在加载时预热，镜头静止时复用接触阴影。地形顶点缓存、视野外草木剔除和雨水细分顶点复用减少重复计算，保留原有场景布局、材质与风雨行为。
-
-维护原则：根目录只放工具要求的配置和本说明；业务源码放入 `src/`；优先复用现有配置与 pnpm 命令，不增加重复记录、压缩包或无实际用途的组件。
+涉及渲染或交互的修改，还需在手机与桌面预览中确认实际效果，尤其是首次进入、昼夜切换、风雨和视角切换。
