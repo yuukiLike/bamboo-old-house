@@ -8,15 +8,14 @@
   },
   "scripts": {
     "dev": "vinext dev",
-    "build": "pnpm generate:lod && vinext build",
+    "build": "vinext build",
     "start": "vite preview",
     "lint": "oxlint",
     "format": "oxfmt",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "sync": "rsync -aim --exclude=.DS_Store ../blender-two/website/public/ public/ && pnpm build",
-    "generate:lod": "node scripts/generate-bamboo-lod.mjs"
+    "sync": "rsync -aim --exclude=.DS_Store ../blender-two/website/public/ public/ && pnpm build"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

@@ -3,7 +3,8 @@ import {createHash} from 'node:crypto';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {MeshoptSimplifier} from 'meshoptimizer/simplifier';
 
-// Build-time only: keep original vertices, UVs, normals and culm curves.
+// After updating bamboo.glb, run: node scripts/generate-bamboo-lod.mjs
+// Keep original vertices, UVs, normals and culm curves.
 // The distant band gets an index-only LOD with a 5 mm absolute error budget.
 const input=new URL('../public/models/bamboo.glb',import.meta.url);
 const output=new URL('../src/components/scene/generated/bamboo-lod.json',import.meta.url);
@@ -33,6 +34,6 @@ for(let variant=0;variant<4;variant++){
  variants[name]={sourceVertices:positions.length/3,sourceIndices:indices.length,error,indices:Array.from(lod)};
 }
 const content=JSON.stringify({sourceHash:createHash('sha256').update(data).digest('hex'),variants})+'\n';
-if(process.argv.includes('--check'))assert.equal(readFileSync(output,'utf8'),content,'Run pnpm generate:lod after changing bamboo.glb');
+if(process.argv.includes('--check'))assert.equal(readFileSync(output,'utf8'),content,'Run node scripts/generate-bamboo-lod.mjs after changing bamboo.glb');
 else writeFileSync(output,content);
 console.log('Bamboo distant LOD: '+Object.values(variants).map(v=>`${v.sourceIndices/3} → ${v.indices.length/3}`).join(', ')+' triangles');

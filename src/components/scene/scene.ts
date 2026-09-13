@@ -17,16 +17,62 @@ import { createVegetationVisibility } from './vegetation-visibility';
 import { ViewControls } from './view-controls';
 import { createInteriorContact } from './interior-contact';
 import { createViewTransition } from './view-transition';
-import { followWalkProgress } from './walk-motion';
 import { shadeWindowRecesses } from './window-light';
-import { excludeUnreachablePointLights } from './local-lights';
-import { stabilizeDoorSurfaces } from './door-surfaces';
-import { stabilizeRoomSurfaces } from './room-surfaces';
-import { BUILD_ID, PORCH_VIEW, MOON_VIEW, BREEZE_VIEW, WELL_RAIN_VIEW, ROOM_VIEWS, PLACE_VIEWS, groundHeight, pathClearance, treePositions, cameraProgress, positionPath, targetPath, type ViewMode, type TimeOfDay, type PlaceId } from './config';
+import { stabilizeHouseSurfaces } from './house-surfaces';
+import { BUILD_ID, PORCH_VIEW, MOON_VIEW, BREEZE_VIEW, WELL_RAIN_VIEW, ROOM_VIEWS, PLACE_VIEWS, groundHeight, pathClearance, treePositions, cameraProgress, followWalkProgress, positionPath, targetPath, type ViewMode, type TimeOfDay, type PlaceId } from './config';
 export interface SceneHandle { transition:ReturnType<typeof createViewTransition>;dispose:()=>void;setWeather:(value:WeatherSettings)=>void;setPaused:(value:boolean)=>void;reset:()=>void;setView:(view:ViewMode)=>void;setTimeOfDay:(value:TimeOfDay)=>void;setPanorama:(value:boolean)=>void;setPlace:(value:PlaceId)=>void; }
 interface Hooks {onProgress:(state:string,value:number|null)=>void;onFailure:()=>void;onPanorama:(value:boolean)=>void;onBearing:(value:number)=>void;onGust?:(strength:number)=>void;onRunoff?:(flow:number)=>void;}
 interface Diagnostics {startupMs:number;pixelRatio:number;windGust:number;weather:{wind:number;rain:number;wetness:number;mud:number;autumn:number};fallingLeaves:Record<string,number>;rainEffects:Record<string,unknown>;build:string;quality:string;gpu:string;viewport:number[];drawSize:number[];progress:number;camera:number[];target:number[];drawCalls:number;triangles:number;textures:number;geometries:number;frames:number[];windTime:number;paused:boolean;bambooCount:number;viewMode:ViewMode;place:PlaceId;timeOfDay:TimeOfDay;nightMix:number;noonMix:number;dawnMix:number;duskMix:number;panorama:boolean;yaw:number;pitch:number;fov:number;getPoster:()=>string;reset:()=>void;}
 declare global { interface Window { __BAMBOO__?:Diagnostics; } }
+
+const include=/^[ \t]*#include +<([\w\d./]+)>/gm;
+function expand(source:string):string{
+ return source.replace(include,(directive,name:string)=>{
+  const chunk=T.ShaderChunk[name as keyof typeof T.ShaderChunk];
+  return typeof chunk==='string'?expand(chunk):directive;
+ });
+}
+
+/** Fixed room lamps cannot illuminate plants beyond their finite ranges.
+ * Prove that for every instance in a spatial batch, then share an unlit
+ * material clone only between unreachable batches. Nearby batches retain
+ * their original lights and shadows. */
+function excludeUnreachablePointLights(scene:T.Scene){
+ scene.updateMatrixWorld(true);
+ const lights:{position:T.Vector3;range:number}[]=[];
+ scene.traverse(object=>{if(object instanceof T.PointLight)lights.push({position:object.getWorldPosition(new T.Vector3()),range:object.distance});});
+ if(!lights.length||lights.some(light=>light.range===0))return;
+ const variants=new Map<T.Material,T.Material>(),matrix=new T.Matrix4(),box=new T.Box3();
+ scene.traverse(object=>{
+  if(!(object instanceof T.Mesh))return;
+  const materials:T.Material[]=Array.isArray(object.material)?object.material:[object.material];
+  let unreachable=false;
+  if(object instanceof T.InstancedMesh&&!object.name.includes('falling')){
+   object.geometry.computeBoundingBox();
+   const margin=/^(Stalk_|Leaves_|Porch_)/.test(object.name)?2.6:.55;
+   unreachable=true;
+   for(let i=0;i<object.count&&unreachable;i++){
+    object.getMatrixAt(i,matrix);matrix.premultiply(object.matrixWorld);
+    box.copy(object.geometry.boundingBox!).applyMatrix4(matrix).expandByScalar(margin);
+    if(lights.some(light=>box.distanceToPoint(light.position)<=light.range))unreachable=false;
+   }
+  }
+  if(!unreachable)return;
+  const specializeMaterial=(material:T.Material)=>{
+   let variant=variants.get(material);if(variant)return variant;
+   variant=material.clone();
+   const compile=material.onBeforeCompile.bind(material),key=material.customProgramCacheKey();
+   variant.onBeforeCompile=(shader,renderer)=>{
+    compile(shader,renderer);
+    const specialize=(source:string)=>expand(source).replace(/NUM_POINT_LIGHT_SHADOWS|NUM_POINT_LIGHTS/g,'0');
+    shader.vertexShader=specialize(shader.vertexShader);shader.fragmentShader=specialize(shader.fragmentShader);
+   };
+   variant.customProgramCacheKey=()=>key+'|no-reachable-room-lights';
+   variants.set(material,variant);return variant;
+  };
+  object.material=Array.isArray(object.material)?materials.map(specializeMaterial):specializeMaterial(materials[0]);
+ });
+}
 
 export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:AbortSignal):Promise<SceneHandle>{
  signal?.throwIfAborted();
@@ -74,8 +120,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   await yieldLoading('正在铺开竹林…');
   const environment=addEnvironment(scene,renderer,mobile,time,night,noon,dawn,dusk,weather);cleanEnvironment=environment.dispose;
   const [house,bamboo,understory,foliage,porchBamboo,fuel]=await models;
-  stabilizeDoorSurfaces(house);
-  stabilizeRoomSurfaces(house);
+  stabilizeHouseSurfaces(house);
   await yieldLoading('正在安放老屋…');
   house.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;const materials=Array.isArray(o.material)?o.material:[o.material];for(const material of materials){if(material instanceof T.MeshStandardMaterial){material.envMapIntensity=.45;for(const tex of [material.map,material.normalMap,material.roughnessMap])if(tex)tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
    // glTF packs roughness and metalness together. With a zero metalness
