@@ -1,6 +1,8 @@
-# 竹林里的老屋 · Bamboo Old House
+# 竹海里的故乡 · Home in a Sea of Bamboo
 
-基于 Three.js 的交互式 3D 老屋场景。在竹林、木廊与房间之间漫游，切换昼夜与风雨，聆听自然声景。
+基于 Three.js 的交互式 3D 竹林老屋。在昼夜与风雨之间漫游，聆听自然声景。
+
+An interactive 3D experience of an old home in a bamboo forest, with changing light, weather, and nature sounds. Built with Three.js.
 
 [在线体验 · yuuki.fans](https://yuuki.fans)
 
