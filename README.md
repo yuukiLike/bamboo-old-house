@@ -4,6 +4,14 @@
 
 使用 React、TypeScript、Three.js、Tailwind CSS 与 Vinext/Vite，源码位于 [`src/`](src/)。
 
+## 预览
+
+| 桌面端 | 移动端 |
+| --- | --- |
+| <img src="docs/screenshots/desktop.jpg" alt="桌面端竹林老屋场景预览" width="640"> | <img src="docs/screenshots/mobile.jpg" alt="移动端竹林老屋场景预览" width="220"> |
+
+桌面端截图为 1440 × 900；移动端为浏览器视口模拟，尺寸为 402 × 874。
+
 ## 资源
 
 | 资源 | 位置 | 用途 |
