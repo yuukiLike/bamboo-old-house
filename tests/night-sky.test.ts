@@ -51,13 +51,18 @@ await test('HDR-safe environment generation preserves the live moon, stars and r
     assert.ok(capturedSky);
     const compact = (shader: string) => shader.replace(/\s+/g, '');
     const pmrem = compact(pmremShader);
-    assert.match(pmrem, /min\(texColor,vec3\(60000\.0\)\)/,
+    const limit = 'gl_FragColor.rgb=min(gl_FragColor.rgb,vec3(60000.0));';
+    assert.ok(pmrem.includes(limit),
       'PMREM must receive the half-float limit before generating environment lighting');
+    assert.ok(pmrem.indexOf(limit) > pmrem.indexOf('gl_FragColor=vec4(texColor,1.0);'),
+      'PMREM must limit the assigned daylight output');
+    assert.ok(pmrem.indexOf(limit) < pmrem.indexOf('#include<tonemapping_fragment>'),
+      'the HDR limit must run before tone mapping');
     assert.doesNotMatch(pmrem, /moonDisc|rainSky/,
       'environment lighting is generated before the live day/night/weather blend');
 
     const finalShader = compact(capturedSky.material.fragmentShader);
-    assert.match(finalShader, /min\(texColor,vec3\(60000\.0\)\)/);
+    assert.ok(finalShader.includes(limit));
     assert.match(finalShader, /floatmoonDisc=/, 'the composed shader must render the moon');
     assert.match(finalShader, /nightColor\+=vec3\([^;]+step\(\.9991,star\)/,
       'the composed shader must add stars to night colour');
@@ -67,8 +72,10 @@ await test('HDR-safe environment generation preserves the live moon, stars and r
       'the final output must use the blended sky rather than raw daylight');
     assert.equal(finalShader.match(/gl_FragColor=/g)?.length, 1,
       'a later daylight assignment must not overwrite the moon and rain blend');
-    assert.ok(finalShader.indexOf('min(texColor,vec3(60000.0))') < finalShader.indexOf('vec3clearSky=texColor;'),
-      'daylight must be limited before blending with the night and rain skies');
+    assert.ok(finalShader.indexOf(limit) > finalShader.indexOf('gl_FragColor=vec4(clearSky,1.0);'),
+      'the HDR limit must apply to the final night and rain blend');
+    assert.ok(finalShader.indexOf(limit) < finalShader.indexOf('#include<tonemapping_fragment>'),
+      'the live sky must be limited before tone mapping');
 
     const uniforms = capturedSky.material.uniforms;
     assert.equal(uniforms.uNight, night);
