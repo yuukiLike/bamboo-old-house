@@ -51,46 +51,20 @@ export class SceneTransition {
  }
 }
 
-/** A single compositor opacity layer. No canvas readback or second scene draw. */
-export function createSceneTransition(overlay:HTMLDivElement) {
+/** Capture the displayed GPU frame before committing a new viewpoint. The
+ * renderer starts revealing only after it has drawn that destination. */
+interface ViewTransition {
+ capture:(complete:()=>void)=>()=>void;
+ reveal:(complete:()=>void)=>()=>void;
+ clear:()=>void;
+}
+export function createSceneTransition(current:()=>ViewTransition|undefined) {
  return new SceneTransition({
-  animate(covered,complete) {
-   const opacity=Number.parseFloat(getComputedStyle(overlay).opacity)||0,target=covered?1:0;
-   const duration=(covered?120:220)*Math.abs(target-opacity);
-   let frame=0,animation:Animation|undefined,finished=false;
-   overlay.style.opacity=String(opacity);overlay.style.visibility='visible';
-   overlay.style.willChange='opacity';overlay.dataset.phase=covered?'cover':'reveal';
-   const timer=setTimeout(done,duration+180);
-   function done() {
-    if(finished)return;finished=true;
-    clearTimeout(timer);cancelAnimationFrame(frame);
-    overlay.style.opacity=String(target);
-    if(animation){animation.onfinish=null;animation.cancel();}
-    complete();
-   }
-   const begin=()=>{
-    if(finished)return;
-    if(duration<1||typeof overlay.animate!=='function'){done();return;}
-    animation=overlay.animate([{opacity},{opacity:target}],{
-     duration,easing:covered?'cubic-bezier(.4,0,.8,1)':'cubic-bezier(.16,1,.3,1)',fill:'forwards',
-    });
-    animation.onfinish=done;
-   };
-   if(covered)begin();
-   // Let React's destination layout and the next Three frame reach the screen
-   // while fully covered before revealing it, without copying the canvas.
-   else frame=requestAnimationFrame(()=>{frame=requestAnimationFrame(begin);});
-   return()=>{
-    if(finished)return;finished=true;
-    const current=getComputedStyle(overlay).opacity;
-    clearTimeout(timer);cancelAnimationFrame(frame);
-    if(animation){animation.onfinish=null;animation.cancel();}
-    overlay.style.opacity=current;
-   };
+  animate(capture,complete) {
+   const transition=current();
+   if(!transition){complete();return()=>{};}
+   return capture?transition.capture(complete):transition.reveal(complete);
   },
-  clear() {
-   overlay.style.opacity='0';overlay.style.visibility='hidden';overlay.style.willChange='';
-   delete overlay.dataset.phase;
-  },
+  clear(){current()?.clear();},
  });
 }

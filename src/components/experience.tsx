@@ -22,7 +22,6 @@ const chapters = [
 export default function Experience() {
  const mount = useRef<HTMLDivElement>(null);
  const engine = useRef<SceneHandle | null>(null);
- const transitionOverlay = useRef<HTMLDivElement>(null);
  const sceneTransition = useRef<ReturnType<typeof createSceneTransition> | null>(null);
  const requestedPlace = useRef<{view:ViewMode;place:PlaceId;panorama:boolean}>({view:'walk',place:'courtyard',panorama:false});
  const committedPlace = useRef({view:'walk' as ViewMode,place:'courtyard' as PlaceId});
@@ -64,13 +63,13 @@ export default function Experience() {
  const soundRequest = useRef(0);
  const panoramaButton = useRef<HTMLButtonElement>(null);
  useEffect(()=>{
-   if(!transitionOverlay.current)return;
-   const transition=createSceneTransition(transitionOverlay.current);sceneTransition.current=transition;
+   const transition=createSceneTransition(()=>engine.current?.transition);sceneTransition.current=transition;
    const visibility=()=>{if(document.hidden)transition.finish();};
+   const resize=()=>transition.finish();
    const media=matchMedia('(prefers-reduced-motion: reduce)');
    const change=()=>{if(media.matches)transition.finish();};
-   document.addEventListener('visibilitychange',visibility);media.addEventListener('change',change);
-   return()=>{transition.dispose();sceneTransition.current=null;pendingNavigation.current=undefined;document.removeEventListener('visibilitychange',visibility);media.removeEventListener('change',change);};
+   document.addEventListener('visibilitychange',visibility);window.addEventListener('resize',resize);media.addEventListener('change',change);
+   return()=>{transition.dispose();sceneTransition.current=null;pendingNavigation.current=undefined;document.removeEventListener('visibilitychange',visibility);window.removeEventListener('resize',resize);media.removeEventListener('change',change);};
  },[]);
  useEffect(()=>{if(!ready||staticMode)sceneTransition.current?.finish();},[ready,staticMode]);
  useEffect(() => {
@@ -218,7 +217,6 @@ export default function Experience() {
   <div className="scene-shell" aria-hidden={!panorama}>
    <picture><source media="(max-width:700px)" srcSet="/scene-poster-mobile.webp"/><img className="fallback-view" src="/scene-poster.webp" alt="" /></picture>
    <div ref={mount} className={`scene-mount ${ready?'ready':''}`} />
-   <div ref={transitionOverlay} className="scene-transition" aria-hidden="true" />
   </div>
   <div className="scene-shade" />
   <header className="site-header">

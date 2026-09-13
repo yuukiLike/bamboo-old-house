@@ -48,3 +48,54 @@ await test('contact refinement uses the live render target and survives pending 
  }
  assert.equal(released,targets.length,'both contact resolutions and composer targets are released once');
 });
+
+await test('a destination jump draws full detail on its first frame and cancels the prior refinement',context=>{
+ let now=1,target:T.WebGLRenderTarget|null=null,alpha=1;
+ context.mock.method(performance,'now',()=>now*1000);
+ const clearColor=new T.Color();
+ const frames:{contact:T.Texture;refined:T.Texture;refinement:number}[]=[];
+ const normals:{width:number;x:number}[]=[];
+ const renderer={
+  autoClear:true,autoClearColor:true,autoClearDepth:true,autoClearStencil:true,
+  toneMapping:T.ACESFilmicToneMapping,toneMappingExposure:.98,outputColorSpace:T.SRGBColorSpace,
+  getSize:(size:T.Vector2)=>size.set(800,600),getPixelRatio:()=>1.6,
+  getRenderTarget:()=>target,setRenderTarget:(value:T.WebGLRenderTarget|null)=>{target=value;},
+  getClearColor:(value:T.Color)=>value.copy(clearColor),getClearAlpha:()=>alpha,
+  setClearColor:(value:T.ColorRepresentation)=>clearColor.set(value),setClearAlpha:(value:number)=>{alpha=value;},
+  clear:()=>{},
+  render:(object:T.Object3D,view:T.Camera)=>{
+   if(object instanceof T.Scene&&object.overrideMaterial instanceof T.MeshNormalMaterial&&target)
+    normals.push({width:target.width,x:view.position.x});
+   if(!(object instanceof T.Mesh)||!(object.material instanceof T.ShaderMaterial)||object.material.name!=='CachedInteriorContact')return;
+   const uniforms=object.material.uniforms;
+   frames.push({contact:uniforms.tContact.value,refined:uniforms.tRefined.value,refinement:uniforms.refinement.value});
+  },
+ };
+ const camera=new T.PerspectiveCamera(),contact=createInteriorContact(renderer as unknown as T.WebGLRenderer,new T.Scene(),camera,new T.Group(),false);
+ const render=()=>{contact.render(1/60);assert.equal(target,null);return frames.at(-1)!;};
+ try {
+  const initial=render();assert.equal(initial.contact,initial.refined);
+  now=1.016;camera.rotateY(.1);
+  const moving=render();assert.notEqual(moving.contact,moving.refined);
+  now=1.15;render();now=1.20;
+  assert.ok(render().refinement>0,'start a real motion-to-detail refinement in the old room');
+
+  now=1.22;camera.position.x=5;contact.resetForViewChange();const beforeArrival=normals.length;
+  const arrived=render();
+  assert.equal(normals.length,beforeArrival+1,'recompute contact for the destination instead of sampling the old detail map');
+  assert.deepEqual(normals.at(-1),{width:640,x:5});
+  assert.equal(arrived.contact,arrived.refined,'the first destination frame already samples full detail');
+  assert.equal(arrived.refinement,0,'the old room cannot contribute a refinement tail');
+  for(const time of [1.25,1.35,1.5]) {
+   now=time;const still=render();assert.equal(still.contact,arrived.contact);assert.equal(still.refinement,0);
+  }
+  now=1.52;camera.rotateY(.1);
+  const panning=render();assert.notEqual(panning.contact,panning.refined,'continuous input retains the cheaper aligned contact pass');
+
+  // Returning from an outdoor view can leave a stale motion cache for a long
+  // time without any interior render. It still needs full detail immediately.
+  now=9;camera.position.x=-3;contact.resetForViewChange();
+  const returned=render();assert.equal(returned.contact,returned.refined);assert.equal(returned.refinement,0);
+  assert.deepEqual(normals.at(-1),{width:640,x:-3});
+ } finally {contact.dispose();}
+});

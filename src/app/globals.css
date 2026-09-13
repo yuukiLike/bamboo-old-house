@@ -22,7 +22,6 @@ button:focus-visible,a:focus-visible { outline:2px solid #e5f5be; outline-offset
 .scene-mount { opacity:0; transition:opacity 1s ease; touch-action:pan-y; }
 .scene-mount.ready { opacity:1; }
 .scene-mount canvas { display:block; touch-action:pan-y; }
-.scene-transition { position:absolute; inset:0; z-index:1; pointer-events:none; visibility:hidden; opacity:0; background:#172e22; }
 .fallback-view { object-fit:cover; object-position:center; }
 .scene-shade { pointer-events:none; position:fixed; inset:0; z-index:1; background:linear-gradient(180deg,rgba(6,24,20,.36),transparent 16%,transparent 79%,rgba(6,22,16,.45)); }
 .site-header { position:fixed; inset:0 0 auto; z-index:8; display:flex; align-items:center; justify-content:space-between; padding:32px 48px; gap:20px; }

@@ -47,6 +47,11 @@ class CachedContactPass extends ShaderPass {
  override setSize(width:number,height:number) {
   this.contact.setSize(width,height);this.motionContact.setSize(width,height);this.refresh.invalidate();this.warmed=false;
  }
+ resetForViewChange() {
+  // A destination jump is already settled. Render its full contact detail
+  // on the first frame instead of treating the new room as an ongoing pan.
+  this.refresh.invalidate();
+ }
  warm(renderer:T.WebGLRenderer,writeBuffer:T.WebGLRenderTarget,readBuffer:T.WebGLRenderTarget) {
   if(this.warmed)return;
   this.camera.updateWorldMatrix(true,false);
@@ -154,6 +159,7 @@ export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,cam
    return preparing;
   },
   render(delta=0) { if(disposed)return;pipeline??=build();pipeline.composer.render(delta); },
+  resetForViewChange() { if(!disposed)pipeline?.cachedContact.resetForViewChange(); },
   resize() { if(!pipeline)return;const size=renderer.getSize(new T.Vector2());pipeline.composer.setPixelRatio(renderer.getPixelRatio());pipeline.composer.setSize(size.x,size.y); },
   dispose() {
    if(disposed)return;disposed=true;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-const {SceneTransition}:typeof import('../src/components/scene-transition')=
+const {SceneTransition,createSceneTransition}:typeof import('../src/components/scene-transition')=
  await import(new URL('../src/components/scene-transition.ts',import.meta.url).href);
 
 function setup() {
@@ -68,4 +68,17 @@ await test('a failed handoff still reveals the scene, including the immediate pa
  assert.equal(state.animations[1].covered,false);state.animations[1].complete();assert.equal(state.clears,1);
  assert.throws(()=>state.transition.request(()=>{throw Error('lost context');},false),/lost context/);
  assert.equal(state.clears,2);
+});
+
+await test('the production handoff waits for captured and rendered frames, including a stalled renderer',()=>{
+ let captured=()=>{},revealed=()=>{},applied=0,cleared=0,reveals=0;
+ const renderer={capture:(done:()=>void)=>{captured=done;return()=>{};},
+  reveal:(done:()=>void)=>{reveals++;revealed=done;return()=>{};},clear:()=>{cleared++;}};
+ const transition=createSceneTransition(()=>renderer);
+ transition.request(()=>{applied++;});
+ assert.equal(applied,0);assert.equal(reveals,0);
+ // Only an actual captured frame can commit the location; no timer or guessed
+ // number of animation frames may expose a destination that has not rendered.
+ captured();assert.equal(applied,1);assert.equal(reveals,1);assert.equal(cleared,0);
+ revealed();assert.equal(cleared,1);
 });

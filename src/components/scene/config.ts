@@ -1,5 +1,5 @@
 import { Vector3, CatmullRomCurve3, MathUtils } from 'three';
-export const BUILD_ID = 'bamboo-2026-09-13-trackpad';
+export const BUILD_ID = 'bamboo-2026-09-13-smooth-switching';
 export type ViewMode = 'porch' | 'walk' | 'free' | 'moon' | 'breeze' | 'well-rain';
 export type TimeOfDay = 'dawn' | 'day' | 'noon' | 'dusk' | 'night';
 // Shared with the editable Blender environment export (metres, web Y up).
