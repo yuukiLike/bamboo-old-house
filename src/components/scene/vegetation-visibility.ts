@@ -1,7 +1,7 @@
 import * as T from 'three';
 
 const groundDetails=new Set([
- 'Fallen_bamboo_leaves','Curled_bamboo_leaf_litter','Small_margin_rosettes','Embedded_angular_bank_stones',
+ 'Fallen_bamboo_leaves','Curled_bamboo_leaf_litter','Small_margin_rosettes',
  'Flattened_rotten_logs_with_splintered_ends','Fine_bent_dry_grass_tufts',
  'Sparse_curled_dead_leaves_on_brittle_stems','Dense_interlaced_dry_grass_mat','Low_brittle_leafless_scrub',
  'Pine_needle_duff_along_descending_lane',
@@ -15,7 +15,9 @@ export function createVegetationVisibility(scene:T.Scene) {
  scene.updateMatrixWorld(true);
  scene.traverse(object=>{
   if(!(object instanceof T.InstancedMesh))return;
-  if(!groundDetails.has(object.name)&&!/^(Stalk_|Leaves_|Bank_|Hillside_|Background_|Meadow_grass_beside_house_)/.test(object.name))return;
+  // Nearby stones and meadow grass are already small shadow-casting batches.
+  // Splitting them adds beauty + shadow draws with almost no geometry saved.
+  if(!groundDetails.has(object.name)&&!/^(Stalk_|Leaves_|Bank_|Hillside_|Background_)/.test(object.name))return;
   // These static placements only use instance matrices/colors. Do not reorder
   // bound branches, particles or future batches with their own instance data.
   if(object.morphTexture||Object.values(object.geometry.attributes).some(attribute=>

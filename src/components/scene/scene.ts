@@ -15,7 +15,6 @@ import { createWeather } from './weather';
 import { createFallingLeaves } from './falling-leaves';
 import { createVegetationVisibility } from './vegetation-visibility';
 import { ViewControls } from './view-controls';
-import { createRenderBudget } from './render-budget';
 import { createInteriorContact } from './interior-contact';
 import { shadeWindowRecesses } from './window-light';
 import { BUILD_ID, PORCH_VIEW, MOON_VIEW, BREEZE_VIEW, WELL_RAIN_VIEW, ROOM_VIEWS, PLACE_VIEWS, groundHeight, pathClearance, treePositions, cameraProgress, positionPath, targetPath, type ViewMode, type TimeOfDay, type PlaceId } from './config';
@@ -26,12 +25,14 @@ declare global { interface Window { __BAMBOO__?:Diagnostics; } }
 
 export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:AbortSignal):Promise<SceneHandle>{
  signal?.throwIfAborted();
- const started=performance.now(),renderBudget=createRenderBudget();
+ const started=performance.now();
  const mobile=matchMedia('(max-width:700px)').matches;
  let renderer:T.WebGLRenderer;
  try{renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});}catch{throw new Error('WEBGL_UNAVAILABLE');}
  renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
- renderer.setPixelRatio(renderBudget.resize(innerWidth,innerHeight,devicePixelRatio,mobile));renderer.setSize(innerWidth,innerHeight);
+ // Keep the authored desktop/mobile resolution, including large viewports.
+ // Frame time must never lower it: fine bamboo leaves need stable sampling.
+ renderer.setPixelRatio(Math.min(devicePixelRatio,mobile?1.25:1.6));renderer.setSize(innerWidth,innerHeight);
  renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
  renderer.info.autoReset=false;
  mount.appendChild(renderer.domElement);
@@ -109,7 +110,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   let progress=0,displayProgress=0,lastScroll=0,paused=matchMedia('(prefers-reduced-motion:reduce)').matches,dragging=false,dragX=0,dragY=0,pointerX=0,pointerY=0,previousX=0,previousY=0;
   const media=matchMedia('(prefers-reduced-motion:reduce)');let reduced=media.matches;
   const scroll=()=>{if(controls.active||viewMode!=='walk')return;progress=T.MathUtils.clamp(scrollY/Math.max(1,document.documentElement.scrollHeight-innerHeight),0,1);lastScroll=performance.now();dragging=false;};
-  const resize=()=>{camera.aspect=innerWidth/innerHeight;renderer.setPixelRatio(renderBudget.resize(innerWidth,innerHeight,devicePixelRatio,matchMedia('(max-width:700px)').matches));renderer.setSize(innerWidth,innerHeight);camera.updateProjectionMatrix();interiorContact.resize();};
+  const resize=()=>{camera.aspect=innerWidth/innerHeight;renderer.setPixelRatio(Math.min(devicePixelRatio,mobile?1.25:1.6));renderer.setSize(innerWidth,innerHeight);camera.updateProjectionMatrix();interiorContact.resize();};
   const change=()=>{reduced=media.matches;};
   const release=()=>{dragging=false;pointerX=0;pointerY=0;};
   const pointerdown=(e:PointerEvent)=>{if(controls.active||e.pointerType!=='mouse'||e.button!==0||reduced)return;dragging=true;previousX=e.clientX;previousY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);};
@@ -118,7 +119,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const setPanorama=(value:boolean)=>{if(controls.active===value)return;reset();controls.setActive(value);hooks.onPanorama(value);};
   const setView=(value:ViewMode)=>{if(viewMode===value)return;viewMode=value;setPanorama(value==='free');reset();scroll();displayProgress=progress;};
   const setPlace=(value:PlaceId)=>{if(!Object.hasOwn(PLACE_VIEWS,value)||place===value)return;place=value;reset();if(viewMode==='free')setPanorama(true);};
-  let last=performance.now(),hidden=document.hidden;const visibility=()=>{hidden=document.hidden;last=performance.now();renderBudget.reset();release();controls.cancelInput();};
+  let last=performance.now(),hidden=document.hidden;const visibility=()=>{hidden=document.hidden;last=performance.now();release();controls.cancelInput();};
   const contextLost=(e:Event)=>{e.preventDefault();hooks.onFailure();mount.classList.remove('ready');};
   window.addEventListener('scroll',scroll,{passive:true});window.addEventListener('resize',resize);window.addEventListener('blur',release);document.addEventListener('visibilitychange',visibility);media.addEventListener('change',change);
   renderer.domElement.addEventListener('pointerdown',pointerdown);renderer.domElement.addEventListener('pointermove',pointermove);renderer.domElement.addEventListener('pointerup',release);renderer.domElement.addEventListener('pointerleave',release);renderer.domElement.addEventListener('pointercancel',release);renderer.domElement.addEventListener('lostpointercapture',release);renderer.domElement.addEventListener('webglcontextlost',contextLost);
@@ -164,8 +165,6 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const tick=(now:number)=>{
    if(disposed)return;raf=requestAnimationFrame(tick);if(hidden)return;
    const delta=Math.min((now-last)/1000,.075);const actual=now-last;last=now;
-   const pixelRatio=renderBudget.sample(actual);
-   if(Math.abs(pixelRatio-renderer.getPixelRatio())>.001){renderer.setPixelRatio(pixelRatio);interiorContact.resize();}
    diagnostics.pixelRatio=renderer.getPixelRatio();
    if(!paused&&!reduced)time.value+=delta;
    if(!dragging){const decay=Math.exp(-delta*(now-lastScroll<180?9:2));dragX*=decay;dragY*=decay;}
