@@ -23,8 +23,9 @@ export function addEnvironment(scene:T.Scene,renderer:T.WebGLRenderer,mobile:boo
  const sunPosition=new T.Vector3(22,20,30).normalize();
  sky.material.uniforms.sunPosition.value.copy(sunPosition); scene.add(sky);
  // Keep the solar disc within PMREM's half-float range; Infinity in the
- // environment map turns lit materials black on Apple GPUs.
- sky.material.fragmentShader=sky.material.fragmentShader.replace('vec4( texColor, 1.0 )','vec4( min( texColor, vec3( 60000.0 ) ), 1.0 )');
+ // environment map turns lit materials black on Apple GPUs. Clamp the final
+ // output so addDayCycle can still replace the daylight color with moon/rain.
+ sky.material.fragmentShader=sky.material.fragmentShader.replace('#include <tonemapping_fragment>','gl_FragColor.rgb = min( gl_FragColor.rgb, vec3( 60000.0 ) );\n#include <tonemapping_fragment>');
  const pmrem=new T.PMREMGenerator(renderer); const env=pmrem.fromScene(sky as unknown as T.Scene,.04,1,100000);scene.environment=env.texture;scene.environmentIntensity=.026;pmrem.dispose();
  scene.fog=new T.FogExp2(0x8ba998,.0045);
  const ambient=new T.HemisphereLight(0xc6dbed,0x514733,.9);scene.add(ambient);
