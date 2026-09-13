@@ -65,9 +65,19 @@ export const CAMERA_STOPS = [
 export const positionPath=new CatmullRomCurve3(CAMERA_STOPS.map(s=>new Vector3(...s.p)),false,'centripetal');
 export const targetPath=new CatmullRomCurve3(CAMERA_STOPS.map(s=>new Vector3(...s.t)),false,'centripetal');
 export function cameraProgress(progress:number){
- const v=Math.min(.999999,Math.max(0,progress))*4, i=Math.floor(v), f=v-i;
- // Every destination has a gentle dwell; state is reconstructed from scroll.
- return (i+MathUtils.smootherstep(f,.08,.91))/4;
+ // The authored curve already connects the viewpoints smoothly. A separate
+ // dwell around every chapter discarded wheel input and felt like getting stuck.
+ return MathUtils.clamp(progress,0,1);
+}
+/** A short, time-based follow shared by wheel and chapter navigation.
+ * Always follow the latest page position; there is no queued animation or
+ * weather-dependent delay. Use real elapsed time, not the physics time cap. */
+export function followWalkProgress(current:number,target:number,elapsedSeconds:number,scrollRangePixels:number):number {
+ const alpha=1-Math.exp(-30*Math.max(0,elapsedSeconds));
+ const next=current+(target-current)*alpha;
+ // Finish at the exact page position once less than a quarter CSS pixel
+ // remains, so an imperceptible tail cannot keep the camera updating.
+ return Math.abs(target-next)*Math.max(1,scrollRangePixels)<.25?target:next;
 }
 export function seeded(seed:number){return()=>{seed|=0; seed=seed+0x6D2B79F5|0; let n=Math.imul(seed^seed>>>15,1|seed); n=n+Math.imul(n^n>>>7,61|n)^n; return ((n^n>>>14)>>>0)/4294967296;};}
 export const SHORE={waterY:-1.65, rightX:38, frontZ:68, waterStartZ:18};

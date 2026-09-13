@@ -1,3 +1,5 @@
+import * as T from 'three';
+
 const clamp=(v:number,a:number,b:number)=>Math.max(a,Math.min(b,v));
 const smooth=(a:number,b:number,v:number)=>{const u=clamp((v-a)/(b-a),0,1);return u*u*(3-2*u);};
 const GUST_PERIOD=18.4,GUST_DURATION=5.2;
@@ -44,6 +46,76 @@ export function forestWindEnvelope(x:number,z:number){
  const house=Math.hypot(Math.max(-13-x,0,x-10.5),Math.max(-17.7-z,0,z-9));
  return .68+1.12*smooth(1.0,7,house);
 }
+/** Root-level force shared by every vertex of one plant. */
+export function forestWindTip(time:number,x:number,z:number,height:number,wind:number,result:[number,number]=[0,0]):[number,number]{
+ height=Math.max(height,.25);
+ const phase=x*.17+z*.11,delayed=time-(.45+height*.024+.18*Math.sin(phase));
+ const response=forestWindResponse(delayed,x,z),w=clamp(wind,0,1);
+ const amplitude=w*(1.65-.65*w)*forestWindEnvelope(x,z)*Math.min(1,height/10);
+ result[0]=(.045+response*.94+Math.sin(time*.81+phase)*.014)*amplitude;
+ result[1]=(.025+response*.37+Math.sin(time*.63+phase*1.27)*.012)*amplitude;
+ return result;
+}
+
+/** Install after visibility batching. Only root force is cached: the authored
+ * per-vertex curvature, leaf hinges and normal deformation still run on GPU.
+ * Each batch owns its derived attribute, so visibility reordering and shared
+ * LOD geometry cannot mix up plants or disconnect their animated shadows. */
+export function createInstanceWind(scene:T.Scene,maxAttributes=16){
+ const entries:{mesh:T.InstancedMesh;source:T.BufferGeometry;attribute:T.InstancedBufferAttribute;height:number;branch:boolean;version:number;time:number;wind:number}[]=[];
+ const materials=new Map<T.Material,{compile:T.Material['onBeforeCompile'];key:T.Material['customProgramCacheKey']}>();
+ const force:[number,number]=[0,0];
+ scene.traverse(object=>{
+  if(!(object instanceof T.InstancedMesh))return;
+  const surface:T.Material=Array.isArray(object.material)?object.material[0]:object.material;
+  const settings=surface.userData.instanceWind as {height:number;branch?:boolean}|undefined;
+  if(!settings)return;
+  const source:T.BufferGeometry=object.geometry;
+  // Bound porch leaves already occupy all 16 vertex inputs (including their
+  // tangent, hinge and parent frame). Retain the analytic shader on those.
+  const slots=Object.values(source.attributes).reduce((sum,attribute)=>sum+Math.ceil(attribute.itemSize/4),0)+4+Number(!!object.instanceColor);
+  if(slots+1>maxAttributes)return;
+  const geometry=new T.BufferGeometry();
+  for(const [name,attribute]of Object.entries(source.attributes))geometry.setAttribute(name,attribute);
+  geometry.setIndex(source.index);geometry.groups=source.groups.map(group=>({...group}));
+  geometry.setDrawRange(source.drawRange.start,source.drawRange.count);
+  geometry.boundingBox=source.boundingBox?.clone()??null;geometry.boundingSphere=source.boundingSphere?.clone()??null;
+  const attribute=new T.InstancedBufferAttribute(new Float32Array(object.instanceMatrix.count*2),2).setUsage(T.DynamicDrawUsage);
+  geometry.setAttribute('aInstanceWind',attribute);object.geometry=geometry;
+  entries.push({mesh:object,source,attribute,height:settings.height,branch:!!settings.branch,version:-1,time:NaN,wind:NaN});
+  for(const material of [surface,object.customDepthMaterial,object.customDistanceMaterial]){
+   if(!material||materials.has(material))continue;
+   materials.set(material,{compile:material.onBeforeCompile.bind(material),key:material.customProgramCacheKey.bind(material)});
+   const compile=material.onBeforeCompile.bind(material),key=material.customProgramCacheKey();
+   material.onBeforeCompile=(shader:T.WebGLProgramParametersWithUniforms,renderer:T.WebGLRenderer)=>{compile(shader,renderer);shader.vertexShader='#define USE_CACHED_INSTANCE_WIND\n'+shader.vertexShader;};
+   material.customProgramCacheKey=()=>key+'|cached-root-wind';
+  }
+ });
+ return {
+  update(time:number,wind:number){
+   for(const entry of entries){
+    const {mesh,attribute,height,branch}=entry;
+    if(!mesh.visible||mesh.count===0)continue;
+    if(time===entry.time&&wind===entry.wind&&entry.version===mesh.instanceMatrix.version)continue;
+    entry.version=mesh.instanceMatrix.version;entry.time=time;entry.wind=wind;
+    const matrices=mesh.instanceMatrix.array,root=mesh.geometry.getAttribute('aBranchRoot'),frame=mesh.geometry.getAttribute('aBranchFrame');
+    for(let i=0;i<mesh.count;i++){
+     const offset=i*16;
+     const x=branch?root.getX(i):matrices[offset+12],z=branch?root.getZ(i):matrices[offset+14];
+     const fullHeight=branch?frame.getW(i):height*Math.hypot(matrices[offset+4],matrices[offset+5],matrices[offset+6]);
+     forestWindTip(time,x,z,fullHeight,wind,force);attribute.setXY(i,force[0],force[1]);
+    }
+    attribute.clearUpdateRanges();attribute.addUpdateRange(0,mesh.count*2);attribute.needsUpdate=true;
+   }
+  },
+  dispose(){
+   for(const {mesh,source}of entries){mesh.geometry.dispose();mesh.geometry=source;}
+   for(const [material,original]of materials){material.onBeforeCompile=original.compile;material.customProgramCacheKey=original.key;material.needsUpdate=true;}
+   entries.length=0;materials.clear();
+  },
+ };
+}
+
 export type CulmCurve=ReadonlyArray<readonly [number,number,number]>;
 
 function curveStrain(u:number,squaredTip:number,curveDots:readonly number[],h:number){
@@ -62,14 +134,8 @@ function curvedShortening(u:number,squaredTip:number,curveDots:readonly number[]
  * slope supplies vertical shortening through fourth order instead of stretching culms.
  * This is a bounded visual response to a wind field, not a structural solver. */
 export function forestWindBend(time:number,x:number,z:number,height:number,length:number,wind=.28,axis:[number,number,number]=[0,1,0],curve?:CulmCurve){
- const h=Math.max(length,.25),u=clamp(height/h,0,1.12),phase=x*.17+z*.11;
- const delayed=time-(.45+h*.024+.18*Math.sin(phase));
- const response=forestWindResponse(delayed,x,z),w=clamp(wind,0,1);
- // Perceptual control: an ordinary breeze remains visible, while the storm
- // endpoint keeps the same safe displacement budget.
- const amplitude=w*(1.65-.65*w)*forestWindEnvelope(x,z)*Math.min(1,h/10);
- const dx=(.045+response*.94+Math.sin(time*.81+phase)*.014)*amplitude;
- const dz=(.025+response*.37+Math.sin(time*.63+phase*1.27)*.012)*amplitude;
+ const h=Math.max(length,.25),u=clamp(height/h,0,1.12);
+ const [dx,dz]=forestWindTip(time,x,z,h,wind);
  const along=dx*axis[0]+dz*axis[2],tip=[dx-axis[0]*along,-axis[1]*along,dz-axis[2]*along];
  const shape=u*u*(3-u)*.5,slope=(3*u-1.5*u*u)/h;
  const squaredTip=tip[0]**2+tip[1]**2+tip[2]**2,squaredSlope=squaredTip*slope*slope;
@@ -88,6 +154,9 @@ export function forestWindBend(time:number,x:number,z:number,height:number,lengt
 export const FOREST_WIND_GLSL=`
 uniform float uWindTime;
 uniform float uWindStrength;
+#ifdef USE_CACHED_INSTANCE_WIND
+attribute vec2 aInstanceWind;
+#endif
 float forestGustAge(vec3 root,float t){return t+3.4-root.x*.105-root.z*.042;}
 float forestGustAmplitude(float cycle){return .8+.17*sin(cycle*1.71+.8);}
 float forestGustAt(vec3 root,float t){
@@ -120,6 +189,9 @@ float forestWindEnvelope(vec3 root){
  return .68+1.12*smoothstep(1.,7.,length(outside));
 }
 vec2 forestWindTip(vec3 root,float fullHeight){
+#ifdef USE_CACHED_INSTANCE_WIND
+ return aInstanceWind;
+#else
  float phase=root.x*.17+root.z*.11;
  float delayed=uWindTime-(.45+fullHeight*.024+.18*sin(phase));
  float response=forestResponseAt(root,delayed);
@@ -127,6 +199,7 @@ vec2 forestWindTip(vec3 root,float fullHeight){
  float amplitude=w*(1.65-.65*w)*forestWindEnvelope(root)*min(1.,fullHeight/10.);
  return vec2(.045+response*.94+sin(uWindTime*.81+phase)*.014,
   .025+response*.37+sin(uWindTime*.63+phase*1.27)*.012)*amplitude;
+#endif
 }
 vec3 forestTipAlong(vec3 root,float fullHeight,vec3 axis){
  vec2 force=forestWindTip(root,max(fullHeight,.25));vec3 tip=vec3(force.x,0.,force.y);

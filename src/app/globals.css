@@ -287,6 +287,12 @@ h1,h2 { font-family:'Songti SC','STSong','Noto Serif CJK SC',serif; font-size:44
 @media(max-width:700px) and (max-height:500px) and (orientation:landscape) {
  .is-free .room-panel { width:calc(100vw - 208px); }
  .is-free .panorama-info { right:14px; }
+ /* Settings need room for their touch targets on a short screen. Restore the
+    scene controls when the panel closes instead of clipping its options. */
+ .settings-panel { top:76px; max-height:calc(100svh - 90px); }
+ .weather-presets { grid-template-columns:repeat(4,minmax(0,1fr)); }
+ .settings-open .day-switch,.settings-open .view-toolbar,.settings-open .panorama-info,
+ .settings-open .site-footer,.settings-open .exploration-nav { visibility:hidden; pointer-events:none; }
 }
 
 @media(max-width:360px) {

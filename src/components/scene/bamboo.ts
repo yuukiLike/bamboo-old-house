@@ -5,6 +5,7 @@ import { fitCulmCurve } from './culm-curve';
 import { addLeafHinges, LEAF_WIND_GLSL } from './leaf-motion';
 import { groundHeight, treePositions, porchBranchPlacements } from './config';
 import type { WeatherUniforms } from './weather-state';
+import distantLod from './generated/bamboo-lod.json';
 
 const curveCommon=`
 uniform vec3 uCulmCurves[20];
@@ -57,8 +58,13 @@ export function addBamboo(scene:T.Scene,prototype:T.Group,time:{value:number},mo
    let base=bases.get(key);if(!base){base=source.geometry.clone().applyMatrix4(source.matrixWorld);if(type==='Leaves')addLeafHinges(base,8);bases.set(key,base);}
    // LOD index buffers share the transformed vertex attributes. Identical
    // stalk geometry is uploaded once instead of once for each distance band.
-   const geometry=type==='Stalk'?base:new T.BufferGeometry();
-   if(type==='Leaves'){for(const [name,attribute] of Object.entries(base.attributes))geometry.setAttribute(name,attribute);geometry.setIndex(base.index);}
+   const geometry=type==='Stalk'&&level===0?base:new T.BufferGeometry();
+   if(geometry!==base){for(const [name,attribute] of Object.entries(base.attributes))geometry.setAttribute(name,attribute);geometry.setIndex(base.index);}
+   if(type==='Stalk'&&level===1){
+    const lod=distantLod.variants[`Stalk_${variant}` as keyof typeof distantLod.variants];
+    if(base.attributes.position.count!==lod.sourceVertices||base.index?.count!==lod.sourceIndices)throw new Error('BAMBOO_LOD_ASSET_MISMATCH');
+    geometry.setIndex(lod.indices);
+   }
    geometry.userData.culmCurve=curves[variant];
    if(type==='Leaves'&&(level===1||mobile)){
     const index=geometry.index;
@@ -68,7 +74,7 @@ export function addBamboo(scene:T.Scene,prototype:T.Group,time:{value:number},mo
     }
    }
    const original=Array.isArray(source.material)?source.material[0]:source.material;
-   const material=(original as T.MeshStandardMaterial).clone();material.envMapIntensity=.65;
+   const material=(original as T.MeshStandardMaterial).clone();material.envMapIntensity=.65;material.userData.instanceWind={height:14};
    if(type==='Leaves'){material.side=T.DoubleSide;material.roughness=.83;}
    material.onBeforeCompile=shader=>{deform(shader,variant,type==='Leaves');if(type==='Leaves')addLeafLight(shader,night);};
    material.customProgramCacheKey=()=>`bamboo-weather-${type}-v3`;
@@ -193,7 +199,7 @@ export function addPorchBamboo(scene:T.Scene,prototype:T.Group,time:{value:numbe
  for(const type of ['Branches','Leaves']) {
   const source=prototype.getObjectByName(type) as T.Mesh;
   if(!source?.geometry)throw new Error('PORCH_BAMBOO_ASSET_INVALID');
-  const material=(source.material as T.MeshStandardMaterial).clone();material.envMapIntensity=.55;
+  const material=(source.material as T.MeshStandardMaterial).clone();material.envMapIntensity=.55;material.userData.instanceWind={height:14,branch:true};
   if(type==='Leaves'){material.side=T.DoubleSide;material.roughness=.73;}
   material.onBeforeCompile=shader=>{deform(shader,type==='Leaves');if(type==='Leaves')addLeafLight(shader,night);};
   material.customProgramCacheKey=()=>`porch-weather-${type}-v3`;

@@ -69,6 +69,9 @@ importers:
       '@vitejs/plugin-rsc':
         specifier: 0.5.26
         version: 0.5.26(react-dom@19.2.6(react@19.2.6))(react-server-dom-webpack@19.2.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(webpack@5.110.3(esbuild@0.27.3)))(react@19.2.6)(vite@8.0.13(@types/node@22.19.19)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.51.2))
+      meshoptimizer:
+        specifier: 1.1.1
+        version: 1.1.1
       oxfmt:
         specifier: 0.61.0
         version: 0.61.0
