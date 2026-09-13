@@ -8,7 +8,8 @@
 
 | 桌面端 | 移动端 |
 | --- | --- |
-| <img src="docs/screenshots/desktop.jpg" alt="桌面端竹林老屋场景预览" width="640"> | <img src="docs/screenshots/mobile.jpg" alt="移动端竹林老屋场景预览" width="220"> |
+| 傍晚老屋<br><img src="docs/screenshots/desktop.jpg" alt="桌面端傍晚老屋场景预览" width="640"> | 傍晚老屋<br><img src="docs/screenshots/mobile.jpg" alt="移动端傍晚老屋场景预览" width="220"> |
+| 竹林望月<br><img src="docs/screenshots/desktop-moon.jpg" alt="桌面端竹林望月场景预览" width="640"> | 竹林望月<br><img src="docs/screenshots/mobile-moon.jpg" alt="移动端竹林望月场景预览" width="220"> |
 
 桌面端截图为 1440 × 900；移动端为浏览器视口模拟，尺寸为 402 × 874。
 
