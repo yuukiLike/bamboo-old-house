@@ -8,14 +8,15 @@
   },
   "scripts": {
     "dev": "vinext dev",
-    "build": "vinext build",
+    "build": "pnpm generate:lod && vinext build",
     "start": "vite preview",
     "lint": "oxlint",
     "format": "oxfmt",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "sync": "rsync -aim --exclude=.DS_Store ../blender-two/website/public/ public/ && pnpm build"
+    "sync": "rsync -aim --exclude=.DS_Store ../blender-two/website/public/ public/ && pnpm build",
+    "generate:lod": "node scripts/generate-bamboo-lod.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",
@@ -40,6 +41,7 @@
     "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
+    "meshoptimizer": "1.1.1",
     "oxfmt": "0.61.0",
     "oxlint": "1.76.0",
     "oxlint-tsgolint": "7.0.2001",

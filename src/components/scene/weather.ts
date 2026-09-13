@@ -442,7 +442,7 @@ uniform float weatherWetness;
 uniform float weatherTime;
 uniform float weatherRain;
 uniform float weatherNight;
-uniform float weatherSurface;
+
 uniform float weatherRainTime;
 uniform float weatherAbsorptionActivity;
 float wetHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
@@ -530,7 +530,7 @@ function weatherSurfaces(scene:T.Scene,roof:HeightField,weather:WeatherUniforms,
       material.onBeforeCompile=(shader,renderer)=>{
         originalCompile.call(material,shader,renderer);
         shader.uniforms.weatherWetness=weather.wetness;shader.uniforms.weatherTime=weather.time;
-        shader.uniforms.weatherRain=weather.rain;shader.uniforms.weatherNight=weather.night;shader.uniforms.weatherSurface={value:surface};
+        shader.uniforms.weatherRain=weather.rain;shader.uniforms.weatherNight=weather.night;
         shader.uniforms.weatherIngressWater=surfaceWeather.ingressWater;shader.uniforms.weatherRainTime=surfaceWeather.rainTime;shader.uniforms.weatherAbsorptionActivity=surfaceWeather.activity;
         shader.vertexShader=shader.vertexShader
           .replace('#include <common>','#include <common>\nattribute float rainExposure;attribute vec3 rainIngress;varying vec3 weatherIngress;varying float weatherExposure;varying vec3 weatherWorld;')
@@ -541,28 +541,33 @@ function weatherSurfaces(scene:T.Scene,roof:HeightField,weather:WeatherUniforms,
             #endif
             weatherWorld=(modelMatrix*rainWorld).xyz;weatherExposure=rainExposure;weatherIngress=rainIngress;`);
         shader.fragmentShader=shader.fragmentShader
-          .replace('#include <common>','#include <common>\n'+WET_GLSL)
+          .replace('#include <common>','#include <common>\n#define weatherSurface '+surface.toFixed(1)+'\n'+WET_GLSL)
           // Terrain-art expands the roughness chunk with its final dry
           // palette and relief. Apply wetness after that complete expansion.
           .replace('#include <metalnessmap_fragment>',`
+            float wetPuddle=0.;
+            if(weatherWetness>0.||weatherAbsorptionActivity>0.||dot(weatherIngressWater,weatherIngressWater)>0.){
+            float wetUp=clamp(normalize(cross(dFdx(weatherWorld),dFdy(weatherWorld))).y,0.,1.);
+            float wetIncoming=min(.92,1.-exp(-max(0.,dot(weatherIngress,weatherIngressWater))*6.));
+            // Sheltered walls/floors cannot receive open-air absorption marks.
+            // Keep the surface derivative outside the exposure branch.
+            if(weatherExposure>0.||wetIncoming>0.){
             float wetHard=weatherSurface==1.?1.:0.;
             if(weatherSurface==0.)wetHard=smoothstep(-13.,-12.5,weatherWorld.x)*(1.-smoothstep(9.6,10.2,weatherWorld.x))*smoothstep(-5.,-4.5,weatherWorld.z)*(1.-smoothstep(8.3,8.9,weatherWorld.z));
             float wetGrain=wetNoise(weatherWorld.xz*3.1);
-            float wetUp=clamp(normalize(cross(dFdx(weatherWorld),dFdy(weatherWorld))).y,0.,1.);
             float wetSoil=weatherSurface==0.?1.-wetHard:0.;
             // Ordinary rain leaves a long readable early-rain stage: tiny dark
             // absorbed hits over mostly dry binder. Only sustained saturation
             // joins those marks into a continuous film; stopping never resets it.
             float wetBase=weatherWetness*(.17+.83*smoothstep(.50,.94,weatherWetness));
             float wetDots=0.;
-            if(weatherAbsorptionActivity>.001&&(weatherSurface==0.||weatherSurface==1.))wetDots=wetAbsorptionDots(weatherWorld.xz);
+            if(weatherAbsorptionActivity>.001&&weatherExposure>0.&&wetUp>0.&&(weatherSurface==0.||weatherSurface==1.))wetDots=wetAbsorptionDots(weatherWorld.xz);
             float wetAmount=max(wetBase,wetDots*weatherAbsorptionActivity*(.81+weatherWetness*.19)*wetUp)*weatherExposure;
             if(weatherSurface==2.||weatherSurface==3.)wetAmount=weatherWetness*weatherExposure;
             if(weatherSurface==4.)wetAmount=max(weatherWetness,sqrt(weatherWetness)*.88)*weatherExposure;
             // Retained incoming dose fills the wood pores progressively: even a
             // narrow opening eventually wets a board instead of imposing a
             // permanently faint tint proportional to the aperture size.
-            float wetIncoming=min(.92,1.-exp(-max(0.,dot(weatherIngress,weatherIngressWater))*6.));
             wetAmount=max(wetAmount,wetIncoming);
             float wetAbsorb=mix(.38,.30,wetSoil);
             if(weatherSurface==3.)wetAbsorb=.81;
@@ -576,13 +581,16 @@ function weatherSurfaces(scene:T.Scene,roof:HeightField,weather:WeatherUniforms,
             float wetTarget=(weatherSurface==2.||weatherSurface==4.)?.43:weatherSurface==3.?.31:mix(.76,.52,wetHard);
             roughnessFactor=mix(roughnessFactor,min(roughnessFactor,wetTarget),wetAmount);
             float wetDepression=wetNoise(weatherWorld.xz*1.37+17.);
-            float wetPuddle=smoothstep(.59,.83,wetDepression)*smoothstep(.76,.98,weatherWetness)*weatherExposure*wetHard*pow(wetUp,8.);
+            wetPuddle=smoothstep(.59,.83,wetDepression)*smoothstep(.76,.98,weatherWetness)*weatherExposure*wetHard*pow(wetUp,8.);
             roughnessFactor=mix(roughnessFactor,.085,wetPuddle);
+            }
+            }
             #include <metalnessmap_fragment>
           `)
           .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
             // Wavelets exist only after pooling. They perturb reflected light
             // over centimetres and never paint white circles onto dry cement.
+            if(wetPuddle>0.&&weatherRain>0.){
             vec2 rainCell=floor(weatherWorld.xz*24.),rainLocal=fract(weatherWorld.xz*24.)-.5;
             float rainSeed=wetHash(rainCell);
             rainLocal-=vec2(wetHash(rainCell+8.1),wetHash(rainCell+21.7))*.34-.17;
@@ -591,13 +599,15 @@ function weatherSurfaces(scene:T.Scene,roof:HeightField,weather:WeatherUniforms,
             float rainWave=cos((rainR-rainAge*.75)*48.)*exp(-abs(rainR-rainAge*.75)*18.)*(1.-rainAge);
             vec2 rainGradient=normalize(rainLocal+vec2(.0001))*rainWave*.006*weatherRain*wetPuddle;
             normal=normalize(normal+mat3(viewMatrix)*vec3(rainGradient.x,0.,rainGradient.y));
+            }
           `)
-          .replace('#include <opaque_fragment>',`float wetFresnel=.02+.98*pow(1.-clamp(dot(normal,normalize(vViewPosition)),0.,1.),5.);
+          .replace('#include <opaque_fragment>',`if(wetPuddle>0.){float wetFresnel=.02+.98*pow(1.-clamp(dot(normal,normalize(vViewPosition)),0.,1.),5.);
             vec3 wetSky=mix(vec3(.38,.46,.48),vec3(.018,.029,.044),weatherNight);
             outgoingLight+=wetSky*wetFresnel*wetPuddle*.16;
+            }
             #include <opaque_fragment>`);
       };
-      material.customProgramCacheKey=()=>key+'|weather-open-edge-rain-3|'+surface;
+      material.customProgramCacheKey=()=>key+'|weather-open-edge-rain-5|'+surface;
       material.needsUpdate=true;
     }
   });

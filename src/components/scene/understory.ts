@@ -68,6 +68,7 @@ function ageGroundGrass(material:T.MeshStandardMaterial,name:string){
 /** Root-clamped bending uses one height for each matching branch/crown pair. */
 export function addPlantWind(material:T.Material,weather:WeatherUniforms|undefined,height:number,response:number){
  if(!weather)return;
+ material.userData.instanceWind={height};
  const previous=material.onBeforeCompile.bind(material),cacheKey=material.customProgramCacheKey();
  material.onBeforeCompile=(shader,renderer)=>{
   previous(shader,renderer);

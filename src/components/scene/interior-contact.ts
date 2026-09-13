@@ -114,7 +114,7 @@ export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,cam
  return {
   prepare() {
    if(disposed)return Promise.resolve();
-   if(!preparing){preparationPending=true;preparing=prepare().finally(()=>{preparationPending=false;if(disposed)release();});}
+   if(!preparationPending){preparationPending=true;preparing=prepare().finally(()=>{preparationPending=false;if(disposed)release();});}
    return preparing;
   },
   render(delta=0) { if(disposed)return;pipeline??=build();pipeline.composer.render(delta); },

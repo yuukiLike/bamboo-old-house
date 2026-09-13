@@ -117,26 +117,43 @@ function createTriangleShelter(meshes:T.Mesh[]){
   };
   let root:Node|null=build(0,count);centers=new Float32Array(0);
   const ray=new T.Ray(),a=new T.Vector3(),b=new T.Vector3(),c=new T.Vector3(),hit=new T.Vector3();
+  // Reuse traversal storage and visit the nearest bounds first. Exposure rays
+  // usually hit a nearby wall; visiting the distant roof first needlessly
+  // walks thousands of triangles for every sheltered vertex.
+  const origin=[0,0,0],direction=[0,0,0],inverse=[0,0,0],stack:Node[]=[];
+  const entryDistance=(node:Node)=>{
+    let near=0,far=12;
+    for(let axis=0;axis<3;axis++){
+      if(Math.abs(direction[axis])<1e-8){if(origin[axis]<node.lo[axis]||origin[axis]>node.hi[axis])return Infinity;continue;}
+      const t1=(node.lo[axis]-origin[axis])*inverse[axis],t2=(node.hi[axis]-origin[axis])*inverse[axis];
+      near=Math.max(near,Math.min(t1,t2));far=Math.min(far,Math.max(t1,t2));
+      if(far<near)return Infinity;
+    }
+    return near;
+  };
   const blocked=(x:number,y:number,z:number,dx:number,dy:number,dz:number)=>{
     ray.origin.set(x,y,z);ray.direction.set(dx,dy,dz).normalize();
-    const o=[x,y,z],d=ray.direction.toArray(),stack:Node[]=root?[root]:[];
+    ray.origin.toArray(origin);ray.direction.toArray(direction);
+    for(let axis=0;axis<3;axis++)inverse[axis]=1/direction[axis];
+    stack.length=0;if(root&&entryDistance(root)!==Infinity)stack.push(root);
     while(stack.length){
-      const node=stack.pop()!;let near=0,far=12;
-      for(let axis=0;axis<3;axis++){
-        if(Math.abs(d[axis])<1e-8){if(o[axis]<node.lo[axis]||o[axis]>node.hi[axis])far=-1;continue;}
-        const t1=(node.lo[axis]-o[axis])/d[axis],t2=(node.hi[axis]-o[axis])/d[axis];
-        near=Math.max(near,Math.min(t1,t2));far=Math.min(far,Math.max(t1,t2));
+      const node=stack.pop()!;
+      if(node.left&&node.right){
+        const left=entryDistance(node.left),right=entryDistance(node.right);
+        if(left<right){if(right!==Infinity)stack.push(node.right);if(left!==Infinity)stack.push(node.left);}
+        else{if(left!==Infinity)stack.push(node.left);if(right!==Infinity)stack.push(node.right);}
+        continue;
       }
-      if(far<near)continue;
-      if(node.left&&node.right){stack.push(node.left,node.right);continue;}
       for(let i=node.start;i<node.end;i++){
         const offset=ids[i]*9;a.fromArray(vertices,offset);b.fromArray(vertices,offset+3);c.fromArray(vertices,offset+6);
-        if(ray.intersectTriangle(a,b,c,false,hit)&&hit.distanceToSquared(ray.origin)>.000009&&hit.distanceToSquared(ray.origin)<144)return true;
+        if(ray.intersectTriangle(a,b,c,false,hit)){
+          const distance=hit.distanceToSquared(ray.origin);if(distance>.000009&&distance<144)return true;
+        }
       }
     }
     return false;
   };
-  return{blocked,dispose(){root=null;vertices=new Float32Array(0);ids=new Uint32Array(0);}};
+  return{blocked,dispose(){root=null;stack.length=0;vertices=new Float32Array(0);ids=new Uint32Array(0);}};
 }
 
 /** Authored floors and lime walls contain metre-wide sparse triangles.
@@ -144,19 +161,26 @@ function createTriangleShelter(meshes:T.Mesh[]){
  * interpolate wetness over an entire protected wall or floor. */
 export function refineRainFloor(source:T.BufferGeometry,matrix:T.Matrix4,balconyOnly=false){
   const attributes=Object.entries(source.attributes),vertices:Record<string,number[]>={};
-  for(const [name]of attributes)vertices[name]=[];
   const positions=source.attributes.position,index=source.index;
+  for(const [name,attribute]of attributes){
+    const values:number[]=[];
+    for(let i=0;i<attribute.count;i++)for(let j=0;j<attribute.itemSize;j++)values.push(attribute.getComponent(i,j));
+    vertices[name]=values;
+  }
   const va=new T.Vector3(),vb=new T.Vector3(),vc=new T.Vector3();
-  type Vertex=Record<string,number[]>;
-  const samples=new Map<number,Vertex>(),vertexIndices=new Map<Vertex,number>(),indices:number[]=[];
-  const sample=(i:number):Vertex=>{
-    let vertex=samples.get(i);
-    if(!vertex){vertex=Object.fromEntries(attributes.map(([name,a])=>[name,Array.from({length:a.itemSize},(_,j)=>a.getComponent(i,j))]));samples.set(i,vertex);}
-    return vertex;
+  const midpoints=new Map<string,number>(),indices:number[]=[];
+  const midpoint=(a:number,b:number)=>{
+    const key=a<b?`${a}:${b}`:`${b}:${a}`;
+    const cached=midpoints.get(key);if(cached!==undefined)return cached;
+    const id=vertices.position.length/3;
+    for(const [name,attribute]of attributes){
+      const values=vertices[name],size=attribute.itemSize;
+      for(let j=0;j<size;j++)values.push((values[a*size+j]+values[b*size+j])*.5);
+    }
+    midpoints.set(key,id);return id;
   };
-  const midpoint=(a:Vertex,b:Vertex):Vertex=>Object.fromEntries(attributes.map(([name])=>[name,a[name].map((v,j)=>(v+b[name][j])*.5)]));
-  const split=(a:Vertex,b:Vertex,c:Vertex,depth=0)=>{
-    va.fromArray(a.position).applyMatrix4(matrix);vb.fromArray(b.position).applyMatrix4(matrix);vc.fromArray(c.position).applyMatrix4(matrix);
+  const split=(a:number,b:number,c:number,depth=0)=>{
+    va.fromArray(vertices.position,a*3).applyMatrix4(matrix);vb.fromArray(vertices.position,b*3).applyMatrix4(matrix);vc.fromArray(vertices.position,c*3).applyMatrix4(matrix);
     const ab=va.distanceToSquared(vb),bc=vb.distanceToSquared(vc),ca=vc.distanceToSquared(va);
     const floor=!balconyOnly||([va,vb,vc].every(p=>p.y>3.20&&p.y<3.31&&p.z>-.25&&p.z<2.31)&&Math.max(va.y,vb.y,vc.y)-Math.min(va.y,vb.y,vc.y)<.002);
     if(floor&&Math.max(ab,bc,ca)>.35**2&&depth<15){
@@ -164,16 +188,10 @@ export function refineRainFloor(source:T.BufferGeometry,matrix:T.Matrix4,balcony
       else if(bc>=ca){const m=midpoint(b,c);split(a,b,m,depth+1);split(a,m,c,depth+1);}
       else{const m=midpoint(c,a);split(a,b,m,depth+1);split(m,b,c,depth+1);}return;
     }
-    // Sibling triangles share the same immutable endpoint/midpoint objects.
-    // Index those exact vertices rather than repeating their wetness raycasts.
-    for(const v of [a,b,c]){
-      let id=vertexIndices.get(v);
-      if(id===undefined){id=vertexIndices.size;vertexIndices.set(v,id);for(const [name]of attributes)vertices[name].push(...v[name]);}
-      indices.push(id);
-    }
+    indices.push(a,b,c);
   };
   const count=index?.count??positions.count,offsets:number[]=[];
-  for(let i=0;i<count;i+=3){offsets.push(indices.length);split(sample(index?index.getX(i):i),sample(index?index.getX(i+1):i+1),sample(index?index.getX(i+2):i+2));}
+  for(let i=0;i<count;i+=3){offsets.push(indices.length);split(index?index.getX(i):i,index?index.getX(i+1):i+1,index?index.getX(i+2):i+2);}
   offsets.push(indices.length);
   const geometry=new T.BufferGeometry();for(const [name,a]of attributes)geometry.setAttribute(name,new T.Float32BufferAttribute(vertices[name],a.itemSize));
   geometry.setIndex(indices);

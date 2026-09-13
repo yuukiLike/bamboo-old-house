@@ -9,7 +9,7 @@ import { addPineBank } from './pine-bank';
 import { addForestFloor } from './forest-floor';
 import { addForestRemains } from './forest-remains';
 import { addWoodlandFinish } from './woodland-finish';
-import { forestWindGust } from './wind';
+import { forestWindGust, createInstanceWind } from './wind';
 import { createWeatherState, mudResistance, type WeatherSettings } from './weather-state';
 import { createWeather } from './weather';
 import { createFallingLeaves } from './falling-leaves';
@@ -17,6 +17,7 @@ import { createVegetationVisibility } from './vegetation-visibility';
 import { ViewControls } from './view-controls';
 import { createInteriorContact } from './interior-contact';
 import { shadeWindowRecesses } from './window-light';
+import { excludeUnreachablePointLights } from './local-lights';
 import { BUILD_ID, PORCH_VIEW, MOON_VIEW, BREEZE_VIEW, WELL_RAIN_VIEW, ROOM_VIEWS, PLACE_VIEWS, groundHeight, pathClearance, treePositions, cameraProgress, positionPath, targetPath, type ViewMode, type TimeOfDay, type PlaceId } from './config';
 export interface SceneHandle { dispose:()=>void;setWeather:(value:WeatherSettings)=>void;setPaused:(value:boolean)=>void;reset:()=>void;setView:(view:ViewMode)=>void;setTimeOfDay:(value:TimeOfDay)=>void;setPanorama:(value:boolean)=>void;setPlace:(value:PlaceId)=>void; }
 interface Hooks {onProgress:(state:string,value:number|null)=>void;onFailure:()=>void;onPanorama:(value:boolean)=>void;onBearing:(value:number)=>void;onGust?:(strength:number)=>void;onRunoff?:(flow:number)=>void;}
@@ -37,13 +38,13 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
  renderer.info.autoReset=false;
  mount.appendChild(renderer.domElement);
  const scene=new T.Scene();const camera=new T.PerspectiveCamera(54,innerWidth/innerHeight,.12,750);camera.name='Bamboo_View';
- const time={value:0},night={value:0},noon={value:0},dawn={value:0},dusk={value:1};let cleanEnvironment=()=>{},cleanContact=()=>{},cleanWeather=()=>{},cleanLeaves=()=>{};
+ const time={value:0},night={value:0},noon={value:0},dawn={value:0},dusk={value:1};let cleanEnvironment=()=>{},cleanContact=()=>{},cleanWeather=()=>{},cleanLeaves=()=>{},cleanWind=()=>{};
  const weatherState=createWeatherState(time,night),weather=weatherState.uniforms;
  const loadedGroups:T.Group[]=[];const controller=new AbortController();let disposed=false,compiling=false,resourcesReleased=false,raf=0;
  const textureSet=new Set<T.Texture>(),materialSet=new Set<T.Material>(),geometrySet=new Set<T.BufferGeometry>();
  const disposeObjects=(root:T.Object3D)=>root.traverse(o=>{if(o instanceof T.Mesh||o instanceof T.Points){geometrySet.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materialSet.add(m);for(const value of Object.values(m))if(value instanceof T.Texture)textureSet.add(value);}if(o.customDepthMaterial)materialSet.add(o.customDepthMaterial);}if(o instanceof T.Light&&'shadow' in o)(o.shadow as T.LightShadow).dispose();});
  const releaseResources=()=>{const bitmaps=new Set<ImageBitmap>();textureSet.forEach(t=>{const data:unknown=t.source?.data;if(typeof ImageBitmap!=='undefined'&&data instanceof ImageBitmap)bitmaps.add(data);t.dispose();});materialSet.forEach(m=>m.dispose());geometrySet.forEach(g=>g.dispose());bitmaps.forEach(bitmap=>bitmap.close());textureSet.clear();materialSet.clear();geometrySet.clear();};
- const finalizeResources=()=>{if(resourcesReleased)return;resourcesReleased=true;cleanContact();cleanLeaves();cleanWeather();disposeObjects(scene);loadedGroups.forEach(disposeObjects);if(scene.environment)textureSet.add(scene.environment);releaseResources();cleanEnvironment();renderer.dispose();renderer.forceContextLoss();};
+ const finalizeResources=()=>{if(resourcesReleased)return;resourcesReleased=true;cleanContact();cleanLeaves();cleanWind();cleanWeather();disposeObjects(scene);loadedGroups.forEach(disposeObjects);if(scene.environment)textureSet.add(scene.environment);releaseResources();cleanEnvironment();renderer.dispose();renderer.forceContextLoss();};
  const cleanup=()=>{if(disposed)return;disposed=true;signal?.removeEventListener('abort',cleanup);controller.abort();cancelAnimationFrame(raf);removeEvents();renderer.domElement.remove();delete window.__BAMBOO__;if(!compiling)finalizeResources();};
  let removeEvents=()=>{};
  signal?.addEventListener('abort',cleanup,{once:true});
@@ -102,10 +103,22 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const fallingLeaves=createFallingLeaves(scene,camera,mobile,weather,(x,z)=>weatherEffects.surfaceHeightAt(x,z));cleanLeaves=()=>fallingLeaves.dispose();
   stabilizeShadowSampling(scene);
   const vegetationVisibility=createVegetationVisibility(scene);
+  excludeUnreachablePointLights(scene);
+  const instanceWind=createInstanceWind(scene,renderer.capabilities.maxAttributes);cleanWind=()=>instanceWind.dispose();
   const interiorContact=createInteriorContact(renderer,scene,camera,house,mobile);cleanContact=()=>interiorContact.dispose();
   hooks.onProgress('日光正落进竹林…',100);
   const pos=new T.Vector3(),target=new T.Vector3(),basePos=new T.Vector3(),baseTarget=new T.Vector3(),mobileOffset=new T.Vector3();
   let viewMode:ViewMode='walk',timeOfDay:TimeOfDay='dusk',place:PlaceId='courtyard';
+  const houseMeshes=new Set<T.Object3D>();house.traverse(object=>{if(object instanceof T.Mesh)houseMeshes.add(object);});
+  renderer.setOpaqueSort((a,b)=>{
+   const order=a.groupOrder-b.groupOrder||a.renderOrder-b.renderOrder;if(order)return order;
+   // Room walls reject hidden forest fragments before their lighting runs.
+   // Preserve Three's material ordering within each group.
+   if(viewMode==='free'&&Object.hasOwn(ROOM_VIEWS,place)){
+    const occlusion=Number(!houseMeshes.has(a.object))-Number(!houseMeshes.has(b.object));if(occlusion)return occlusion;
+   }
+   return a.material.id-b.material.id||a.z-b.z||a.id-b.id;
+  });
   const controls=new ViewControls(renderer.domElement,()=>setPanorama(false));
   let progress=0,displayProgress=0,lastScroll=0,paused=matchMedia('(prefers-reduced-motion:reduce)').matches,dragging=false,dragX=0,dragY=0,pointerX=0,pointerY=0,previousX=0,previousY=0;
   const media=matchMedia('(prefers-reduced-motion:reduce)');let reduced=media.matches;
@@ -155,9 +168,23 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
    else if(!reduced){const distance=pos.distanceTo(target);target.x+=Math.sin(dragX)*distance+pointerX*.22;target.y+=Math.sin(dragY)*distance-pointerY*.12;}
    camera.position.copy(pos);camera.lookAt(target);vegetationVisibility.update(camera);
   };
-  updateCamera();environment.update();compiling=true;
+  updateCamera();instanceWind.update(time.value,weather.wind.value);environment.update();compiling=true;
   // Three polls program readiness asynchronously; retain its material properties until that settles.
-  try{await renderer.compileAsync(scene,camera);if(!disposed)await interiorContact.prepare();}finally{compiling=false;if(disposed)finalizeResources();}
+  try{
+   // Day/night use different light counts; indoor HDR is another variant.
+   // Warm all four before controls become active, including fixed lamp maps.
+   for(const mix of [0,1]){
+    night.value=mix;environment.update();
+    hooks.onProgress(mix?'正在点亮屋内灯火…':'正在准备日光与阴影…',100);
+    await renderer.compileAsync(scene,camera);if(disposed)break;
+    await interiorContact.prepare();if(disposed)break;
+    renderFrame();
+    // Drivers can defer HDR/MSAA and postprocessing pipeline creation until
+    // the first draw even after linking succeeds. Exercise the actual room
+    // path while the loading cover is still up, for both lighting states.
+    interiorContact.render(0);
+   }
+  }finally{night.value=0;environment.update();compiling=false;if(disposed)finalizeResources();}
   if(disposed)throw new Error('SCENE_DISPOSED');
   renderFrame();
   diagnostics.startupMs=performance.now()-started;last=performance.now();
@@ -175,7 +202,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
     const goal=Number(timeOfDay===period);mix.value=reduced?goal:T.MathUtils.damp(mix.value,goal,2.4,delta);
     if(Math.abs(mix.value-goal)<.001)mix.value=goal;
    }
-   weatherState.update(delta,reduced);controls.update(delta);environment.update();updateCamera();weatherEffects.update(delta,reduced);fallingLeaves.update(delta);hooks.onGust?.(paused||reduced?0:forestWindGust(time.value,camera.position.x,camera.position.z));renderFrame(delta);frame++;
+   weatherState.update(delta,reduced);controls.update(delta);environment.update();updateCamera();instanceWind.update(time.value,weather.wind.value);weatherEffects.update(delta,reduced);fallingLeaves.update(delta);hooks.onGust?.(paused||reduced?0:forestWindGust(time.value,camera.position.x,camera.position.z));renderFrame(delta);frame++;
    if(frame>30){diagnostics.frames.push(actual);if(diagnostics.frames.length>15000)diagnostics.frames.shift();}
    if(frame%15===0){diagnostics.windGust=forestWindGust(time.value,camera.position.x,camera.position.z);diagnostics.weather={wind:weather.wind.value,rain:weather.rain.value,wetness:weather.wetness.value,mud,autumn:weather.autumn.value};diagnostics.fallingLeaves={...fallingLeaves.stats};const rainInfo=weatherEffects.diagnostics();hooks.onRunoff?.(rainInfo.runoffFlow);diagnostics.rainEffects={...Object.fromEntries(Object.entries(rainInfo).filter(([,value])=>typeof value==='number')),sheltered:weatherEffects.isSheltered(camera.position.x,camera.position.y,camera.position.z)};diagnostics.viewport=[innerWidth,innerHeight];diagnostics.drawSize=[renderer.domElement.width,renderer.domElement.height];diagnostics.progress=progress;diagnostics.camera=camera.position.toArray();diagnostics.target=target.toArray();diagnostics.drawCalls=renderer.info.render.calls;diagnostics.triangles=renderer.info.render.triangles;diagnostics.textures=renderer.info.memory.textures;diagnostics.geometries=renderer.info.memory.geometries;diagnostics.windTime=time.value;diagnostics.paused=paused||reduced;diagnostics.viewMode=viewMode;diagnostics.place=place;diagnostics.timeOfDay=timeOfDay;diagnostics.nightMix=night.value;diagnostics.noonMix=noon.value;diagnostics.dawnMix=dawn.value;diagnostics.duskMix=dusk.value;diagnostics.panorama=controls.active;diagnostics.yaw=controls.yaw;diagnostics.pitch=controls.pitch;diagnostics.fov=camera.fov;hooks.onBearing(Math.round(controls.bearing)%360);}
   };raf=requestAnimationFrame(tick);
