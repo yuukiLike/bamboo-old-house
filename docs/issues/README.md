@@ -1,15 +1,15 @@
 # 本地 Issues
 
-这里维护当前四个本地 issue 的范围、待确认问题和验收标准。issue 文件通过 `docs/issues` 问题集合分支保存；尚未创建 GitHub Issues。先实现 LOCAL-004 的部署流程。
+这里维护当前四项工作。LOCAL-004 已发布为 [GitHub issue #6](https://github.com/yuukiLike/bamboo-old-house/issues/6)，范围收窄为创建预览分支；其余三项保留为本地计划。
 
-`LOCAL-001` 等为本地编号，不是 GitHub issue 编号；以后发布时在各文件中补充实际 GitHub 链接。
+`LOCAL-001` 等为本地编号，不是 GitHub issue 编号。已发布项的进度与验收以对应 GitHub issue 为准。
 
 | 本地编号 | Issue | 状态 | 建议执行顺序 | 开始前需要明确的事项 |
 | --- | --- | --- | --- | --- |
 | LOCAL-001 | [极简截图模式与 PNG 截图按钮](./001-photo-mode.md) | 待开发 | 3 | 截图内容、模式中的交互与动画行为 |
 | LOCAL-002 | [中英日切换及各语言独立文案](./002-localized-content.md) | 待开发；文案待用户提供 | 4 | 首次访问语言；收到文案后确定内容位置与排版 |
 | LOCAL-003 | [3D 性能基线与优化证据记录流程](./003-3d-performance-baseline.md) | 待开发 | 2 | 固定设备、浏览器与原始证据保存位置 |
-| LOCAL-004 | [预览环境、正式发布与回退流程](./004-preview-release.md) | 本地实现完成；过渡配置已确认，待线上验收 | 1 | 正式版本短 ID `03f1fb5a`，待记录完整 UUID 与预览验证结果 |
+| LOCAL-004 | [创建 Cloudflare 预览分支](./004-preview-release.md) | [GitHub #6](https://github.com/yuukiLike/bamboo-old-house/issues/6)，待预览验收 | 1 | 验证预览可用且正式版本 `03f1fb5a` 不变 |
 
 ## 执行约定
 
