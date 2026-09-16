@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const accountId = '59189ac1604f92c5cd02c2c0398a8190';
 const workerName = 'bamboo-old-house';
 const previewRules = {
-  branch_includes: ['preview'],
+  branch_includes: ['preview/*'],
   branch_excludes: ['main'],
 };
 
@@ -54,7 +54,8 @@ export async function configurePreviewBranch({
   const preview = triggers.find(
     (item) =>
       (isDeepStrictEqual(item.branch_includes, ['*']) ||
-        isDeepStrictEqual(item.branch_includes, ['preview'])) &&
+        isDeepStrictEqual(item.branch_includes, ['preview']) ||
+        isDeepStrictEqual(item.branch_includes, ['preview/*'])) &&
       isDeepStrictEqual(item.branch_excludes, ['main']),
   );
   if (
@@ -130,7 +131,7 @@ async function main() {
   console.log(JSON.stringify(result, null, 2));
   console.log(
     result.applied
-      ? '已回读确认：非生产自动构建仅匹配 preview；main 触发器保持原样。'
+      ? '已回读确认：非生产自动构建仅匹配 preview/*；main 触发器保持原样。'
       : '仅查看，尚未修改。添加 --apply 才会保存以上分支规则。',
   );
 }

@@ -65,7 +65,7 @@ await test('preview filter dry run never writes, and apply patches only the prev
   assert.deepEqual(api.patches, [
     {
       url: 'https://api.cloudflare.com/client/v4/accounts/59189ac1604f92c5cd02c2c0398a8190/builds/triggers/preview-trigger',
-      body: { branch_includes: ['preview'], branch_excludes: ['main'] },
+      body: { branch_includes: ['preview/*'], branch_excludes: ['main'] },
     },
   ]);
   await configurePreviewBranch({ token, apply: true, request: api.request });
@@ -74,6 +74,22 @@ await test('preview filter dry run never writes, and apply patches only the prev
     1,
     'reapplying an existing rule must not write',
   );
+});
+
+await test('preview filter upgrades the previous fixed-branch rule without changing production', async () => {
+  const api = cloudflare([
+    production,
+    { ...preview, branch_includes: ['preview'] },
+  ]);
+  const result = await configurePreviewBranch({
+    token: 'test-token',
+    apply: true,
+    request: api.request,
+  });
+  assert.equal(result.applied, true);
+  assert.deepEqual(result.before.branch_includes, ['preview']);
+  assert.deepEqual(result.after.branch_includes, ['preview/*']);
+  assert.equal(api.patches.length, 1);
 });
 
 await test('preview filter refuses missing credentials or unexpected trigger layouts before mutation', async () => {
