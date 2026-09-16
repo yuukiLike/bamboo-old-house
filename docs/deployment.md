@@ -27,21 +27,21 @@
 - 确认 Git 仓库为 `yuukiLike/bamboo-old-house`，production branch 为 `main`。
 - 查看是否还有其他平台或 workflow 在发布同一个正式入口。仓库保留的 `netlify.toml` 不能证明 Netlify 仍在使用；不要再接一套自动上线流程。
 
-本次尚未读取和修改控制台的实际路由、分支配置，正式地址与当前 UUID 留待这一步记录。
+维护者已提供控制台截图并确认过渡配置完成；上一次准确生产版本的短 ID 为 `03f1fb5a`。正式地址与完整 version UUID 仍待记录。短 ID 不是 Git SHA，不据此推断对应源码版本。
 
 ### 2. 在旧 main 上也能执行的过渡设置
 
-在 **Settings → Build** 中，先将当前可见的 **Deploy command** 改成下面的命令：
+在 **Settings → Build** 中，先将当前可见的 **Deploy command（部署命令）** 改成下面的命令：
 
 ```sh
-npx --yes wrangler@4.132.0 versions upload --config wrangler.static.jsonc
+npx wrangler versions upload --config wrangler.static.jsonc
 ```
 
 先保留当前能成功运行的 Build command。过渡命令兼容尚未包含新 package scripts 的 `main`，只上传版本。确认保存成功后再合并实现分支。不要在旧 `main` 上提前改成尚不存在的 `pnpm deploy:preview`。
 
 随后进入 **Settings → Build → Branch control**，勾选 **Builds for non-production branches** 并保存。非生产分支部署命令仅在开启此功能后适用；未开启时不要假定界面已有两个命令输入框。
 
-回到构建配置的编辑界面，找到 **Non-production branch deploy command**，也填写上面的过渡命令。如果开启后仍未找到该字段，按实际界面核对入口，不要把构建命令误当成第二个部署命令。
+回到构建配置的编辑界面，找到 **Non-production branch deploy command**（维护者实际中文界面中的 **“版本命令”**），也填写上面的过渡命令。如果开启后仍未找到该字段，按实际界面核对入口，不要把构建命令误当成第二个部署命令。
 
 如果界面提供自定义分支规则，包含需要预览的功能分支并排除 `docs/*`，例如 `feat/*`、`fix/*`、`chore/*`、`codex/*`。首次验证需要包括 `chore/preview-release`。
 
@@ -57,7 +57,7 @@ npx --yes wrangler@4.132.0 versions upload --config wrangler.static.jsonc
 | Root directory | 仓库根目录，界面通常表示为 `/` 或留空 |
 | Build command | `pnpm install --frozen-lockfile && pnpm build:release` |
 | Deploy command | `pnpm deploy:preview` |
-| Non-production branch deploy command | `pnpm deploy:preview` |
+| Non-production branch deploy command（版本命令） | `pnpm deploy:preview` |
 | Non-production branch builds | 开启；选择需要预览的功能分支，排除问题集合 `docs/*` |
 | Build variable: `NODE_VERSION` | `24` |
 | Build variable: `PNPM_VERSION` | `11.14.0` |
@@ -129,15 +129,15 @@ Cloudflare 允许从最近 **100 个已上传版本**选择可部署版本，功
 
 ## 验证记录
 
-本次完成仓库实现与本地验证；Cloudflare 配置、上传、正式发布和回退由维护者执行。下面的云端项目尚未验收，不作为已完成记录。
+本次完成仓库实现与本地验证；Cloudflare 操作由维护者执行。2026-09-16，维护者确认过渡配置已保存，并提供上一次准确生产版本的短 ID；真实预览、正式发布和回退尚未验收。
 
 本地已通过类型检查、lint、24 项测试、LOD 校验、生产构建和 Wrangler upload dry run。Wrangler 本地静态服务实际响应验证：带版本前缀的主机名返回 `noindex`，无版本前缀的正式主机名和自定义主机名不返回该 header；未提交源码时准备发布会被拒绝。以上不替代线上验收。
 
 | 项目 | 结果 |
 | --- | --- |
 | 实际正式地址 | 待维护者填写 |
-| 配置前正式 deployment / version UUID | 待维护者填写 |
-| 两条 deploy command 与分支规则已保存 | 待验证 |
+| 上一次准确生产版本 | 维护者提供短 ID `03f1fb5a`；完整 version UUID 与 deployment ID 待记录 |
+| 两条 deploy command 与分支规则已保存 | 维护者已确认：部署命令与版本命令均为 `versions upload --config wrangler.static.jsonc`（通过 npx 运行），`main` 为生产分支，已开启非生产分支构建；实际构建效果待验证 |
 | 预览 commit SHA / build UUID / version UUID / 固定 URL | 待首次上传后填写 |
 | 桌面、手机、模型、声音与无 404 | 待验证 |
 | 预览 noindex、正式不受影响 | 待线上验证 |
