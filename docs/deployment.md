@@ -31,7 +31,7 @@
 
 ### 2. 在旧 main 上也能执行的过渡设置
 
-在 **Settings → Build** 中，将 **Deploy command** 和 **Non-production branch deploy command** 都改成下面的命令：
+在 **Settings → Build** 中，先将当前可见的 **Deploy command** 改成下面的命令：
 
 ```sh
 npx --yes wrangler@4.132.0 versions upload --config wrangler.static.jsonc
@@ -39,7 +39,11 @@ npx --yes wrangler@4.132.0 versions upload --config wrangler.static.jsonc
 
 先保留当前能成功运行的 Build command。过渡命令兼容尚未包含新 package scripts 的 `main`，只上传版本。确认保存成功后再合并实现分支。不要在旧 `main` 上提前改成尚不存在的 `pnpm deploy:preview`。
 
-在 **Branch control** 开启非生产分支构建。选择包含需要预览的功能分支、排除 `docs/*`；如果界面提供自定义规则，可包括 `feat/*`、`fix/*`、`chore/*`、`codex/*`。首次验证需要包括 `chore/preview-release`。
+随后进入 **Settings → Build → Branch control**，勾选 **Builds for non-production branches** 并保存。非生产分支部署命令仅在开启此功能后适用；未开启时不要假定界面已有两个命令输入框。
+
+回到构建配置的编辑界面，找到 **Non-production branch deploy command**，也填写上面的过渡命令。如果开启后仍未找到该字段，按实际界面核对入口，不要把构建命令误当成第二个部署命令。
+
+如果界面提供自定义分支规则，包含需要预览的功能分支并排除 `docs/*`，例如 `feat/*`、`fix/*`、`chore/*`、`codex/*`。首次验证需要包括 `chore/preview-release`。
 
 在 **Settings → Domains & Routes** 开启 **Preview URLs**；仓库也通过 `preview_urls: true` 保留此设置。不要切换已有正式域名。
 
