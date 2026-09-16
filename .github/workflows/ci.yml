@@ -52,3 +52,6 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Check deployable assets
+        run: node scripts/release.mjs inspect

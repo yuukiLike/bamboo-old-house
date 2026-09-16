@@ -1,0 +1,3 @@
+# Match version and alias URLs only; leave the production hostname unchanged.
+https://:preview-bamboo-old-house.:subdomain.workers.dev/*
+  X-Robots-Tag: noindex
