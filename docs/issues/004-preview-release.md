@@ -3,9 +3,9 @@
 | 字段 | 内容 |
 | --- | --- |
 | 本地编号 | LOCAL-004 |
-| 状态 | 待开发 |
+| 状态 | 本地实现完成；维护者已确认 Cloudflare 过渡配置，待线上验收 |
 | GitHub issue | 未发布；以问题集合分支保存 |
-| 开发分支 | `chore/preview-release`（实施时创建） |
+| 开发分支 | `chore/preview-release`（本地已提交） |
 | 参考版本 | `v0.1.0` / `dbd8e74` |
 
 ## 目标
@@ -22,10 +22,17 @@
 ## 已查明的现状
 
 - 项目静态导出到 `dist/client`，`wrangler.static.jsonc` 配置 Cloudflare Worker `bamboo-old-house`。
-- `main` 提交存在成功的 Cloudflare Workers Builds 检查，说明已有平台侧 Git 集成；其具体分支、构建与发布设置仍需核对。
+- `main` 提交存在成功的 Cloudflare Workers Builds 检查；维护者的控制台截图确认 Git 仓库为 `yuukiLike/bamboo-old-house`，生产分支为 `main`，已勾选“非生产分支构建”。
 - 仓库另有 `netlify.toml`，文件存在不代表当前正式站使用 Netlify；实现时沿用实际部署平台，不并行引入第二条上线渠道。
 - GitHub Actions 的 `Checks` 包含类型、lint、测试、LOD 一致性和构建。当前 workflow 未包含部署步骤。
 - 资源使用 `/models/`、`/audio/` 等根路径，预览采用独立主机名，避免子路径部署影响加载。
+
+## 维护者确认记录（2026-09-16）
+
+- 维护者已确认 Cloudflare 过渡配置完成：构建命令为 `pnpm run build`；“部署命令”和“版本命令”均为 `npx wrangler versions upload --config wrangler.static.jsonc`。中文界面的“版本命令”即非生产分支部署命令。
+- 维护者提供的上一次准确生产版本 ID：`03f1fb5a`。这是 8 位短 ID，作为旧生产版本的识别记录；完整 version UUID 尚未记录，实际回退时从部署详情核对完整值。它不是 Git 提交 SHA，也未推断其对应 `v0.1.0`。
+- 仓库实现已提交在本地 `chore/preview-release`；问题集合分支仅保存 issue 和计划，不包含实现代码。待实现进入部署分支后，再使用 `build:release` 与 `deploy:preview` 完整命令。
+- 本记录区分维护者确认与线上验证：尚未核验真实预览 URL、上传前后正式版本是否不变、正式切换和回退，相关验收项继续保持未勾选。
 
 ## 实现范围
 
@@ -53,8 +60,8 @@
 
 ## 待核对
 
-- 当前正式地址、Cloudflare 控制台的分支和部署命令。
-- 现有授权是否支持预览上传、版本查询与部署管理。
+- 当前正式地址、生产短 ID `03f1fb5a` 对应的完整 version UUID。
+- 实际预览上传与加载结果、版本来源、上传前后正式版本对比。
 - 是否需要自定义预览子域名或访问控制；首版优先使用平台默认地址。
 
 ## 关联
