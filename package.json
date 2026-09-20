@@ -9,6 +9,9 @@
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && node scripts/generate-bamboo-lod.mjs --check",
+    "build:release": "pnpm check && pnpm build && node scripts/release.mjs prepare",
+    "deploy:preview": "node scripts/release.mjs upload",
     "start": "vite preview",
     "lint": "oxlint",
     "format": "oxfmt",
@@ -46,7 +49,8 @@
     "oxlint-tsgolint": "7.0.2001",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
-    "vite": "8.0.13"
+    "vite": "8.0.13",
+    "wrangler": "4.132.0"
   },
   "type": "module",
   "description": "An interactive 3D memory of an old house in a bamboo forest, built with Three.js."
