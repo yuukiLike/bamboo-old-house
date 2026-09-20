@@ -208,3 +208,4 @@ Cloudflare 操作由维护者执行。2026-09-16，首次 `chore/preview-release
 | 回退：时间、原因、明确目标 UUID、结果 | 尚未执行 |
 
 关联：[LOCAL-004](issues/004-preview-release.md)、[3D 性能基线](issues/003-3d-performance-baseline.md)。
+test
