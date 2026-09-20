@@ -63,7 +63,7 @@ Workers 当前公开的“非生产分支构建”开关覆盖所有非生产分
 
 以后复测使用[分支过滤验证记录](./cloudflare-workers-branch-filter-verification.txt)，其中保留了五条单行 curl、对照条件与当时的响应。
 
-仓库的 `scripts/configure-preview-branch.mjs` 不作为可用配置步骤；其模拟接口测试不能证明云端支持过滤。`migrate_to_previews` 用于迁移预览机制，不用于设置分支过滤。
+`migrate_to_previews` 用于迁移预览机制，不用于设置分支过滤。
 
 如果必须让其他分支完全不启动构建，先关闭原生非生产分支构建，再另行配置带分支过滤的外部 CI。构建启动后判断分支并退出，仍然会产生一次构建。
 

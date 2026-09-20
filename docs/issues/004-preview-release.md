@@ -25,7 +25,7 @@
 - Workers：维护者完整复测两遍。相同 token、账户和触发器 UUID 下，保存 `branch_includes: ["*"]` 成功；仅改为 `["preview/*"]` 返回 `400 / 12002: Invalid request body`。
 - 上游跟踪：[Workers Builds #15722](https://github.com/cloudflare/workers-sdk/issues/15722)、[文档说明 #33549](https://github.com/cloudflare/cloudflare-docs/issues/33549)。
 
-复测使用[五条单行 curl 验证记录](../cloudflare-workers-branch-filter-verification.txt)。`scripts/configure-preview-branch.mjs` 的模拟测试不能证明云端支持该配置，当前不作为可用操作步骤。
+复测使用[五条单行 curl 验证记录](../cloudflare-workers-branch-filter-verification.txt)。
 
 ## 历史与后续验收
 
