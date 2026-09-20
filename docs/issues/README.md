@@ -9,7 +9,7 @@
 | LOCAL-001 | [极简截图模式与 PNG 截图按钮](./001-photo-mode.md) | 待开发 | 3 | 截图内容、模式中的交互与动画行为 |
 | LOCAL-002 | [中英日切换及各语言独立文案](./002-localized-content.md) | 待开发；文案待用户提供 | 4 | 首次访问语言；收到文案后确定内容位置与排版 |
 | LOCAL-003 | [3D 性能基线与优化证据记录流程](./003-3d-performance-baseline.md) | 待开发 | 2 | 固定设备、浏览器与原始证据保存位置 |
-| LOCAL-004 | [创建 Cloudflare 预览分支](./004-preview-release.md) | [GitHub #6](https://github.com/yuukiLike/bamboo-old-house/issues/6)，待应用预览分支前缀规则 | 1 | 仅 `preview/*` 触发非生产预览，普通分支不构建；正式版本 `03f1fb5a` 不变 |
+| LOCAL-004 | [创建 Cloudflare 预览分支](./004-preview-release.md) | Pages 已验证；Workers 分支过滤受上游错误阻塞，见 [GitHub #6](https://github.com/yuukiLike/bamboo-old-house/issues/6) 与[验证记录](../cloudflare-workers-branch-filter-verification.txt) | 1 | Workers 修复后复测 `preview/*` 配置及实际构建触发行为 |
 
 ## 执行约定
 
