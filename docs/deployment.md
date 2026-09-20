@@ -1,212 +1,99 @@
-# 预览、正式发布与回退
+# 部署、预览与回退
 
-当前使用 Cloudflare Worker `bamboo-old-house`，静态目录为 `dist/client`。Cloudflare 控制台由仓库维护者配置和操作；本次仓库改动不会自动修改控制台设置。
+项目通过 Vinext 静态导出，同一份 `dist/client` 产物可部署到 Cloudflare Pages 或 Workers。
 
-## 日常流程
-
-```text
-preview/功能名 分支开发、推送 → 自动生成该分支的预览
-      ↓
-PR 检查、合并 main → 上传正式候选 → 人工验收、上线
-```
-
-使用同一个 Worker 的版本预览即可。`main` 是正式候选来源；推送 `main` 也只上传版本，不直接切换正式流量。
-
-**2026-09-16 状态：预览上传和 noindex 已验证；“仅 preview/* 自动构建”的云端过滤尚待维护者执行。** 下表是应用过滤后的行为，不能把创建 Git 分支当作过滤已经生效。
-
-| 操作 | Cloudflare 自动行为 |
+| 配置 | 值 |
 | --- | --- |
-| 本地 commit，没有 push | 不触发 |
-| push `preview/*`，例如 `preview/photo-mode`、`preview/i18n` | 构建并上传对应分支的预览版本 |
-| push `main` | 保留现有流程：构建并上传候选，人工上线 |
-| push 其他分支，例如 `feat/*`、`fix/*`、`docs/*`、`chore/*`、`codex/*` | 不触发构建 |
+| 构建命令 | `pnpm run build` |
+| 静态输出目录 | `dist/client` |
+| 根目录 | 仓库根目录 |
+| Node.js 要求 | `>=22.13.0`，与 `package.json` 一致 |
+| pnpm | `11.14.0`，构建变量可设 `PNPM_VERSION=11.14.0` |
 
-## 预览分支规则：一次性配置
+## 为什么使用 `wrangler.static.jsonc`
 
-控制台已有“非生产分支构建”复选框，但维护者当前界面没有分支白名单入口。使用官方 Builds API 修改现有非生产 trigger，无需新建 Worker 或接入另一套 CI。不要在构建命令里判断分支后退出：那仍然已经触发了一次构建。
+Vinext 会检测默认名称的 `wrangler.jsonc`、`wrangler.json` 等文件，将项目识别为 Cloudflare Workers 项目。为避免干扰 `output: 'export'` 的静态导出，提交 `33a9d0a` 专门把 `wrangler.jsonc` 改名为 `wrangler.static.jsonc`。
 
-### 1. 创建个人 API Token
+保留这个文件名，Worker 部署命令显式传入 `--config wrangler.static.jsonc`。其中 `assets.directory` 指向 `./dist/client`，`name` 必须与目标 Worker 名称一致。Pages 直接使用构建输出目录。
 
-打开 [个人 API Tokens](https://dash.cloudflare.com/profile/api-tokens)，选择创建自定义 Token：
+## Pages：按 `preview/*` 自动预览
 
-- `Account → Workers Builds Configuration → Edit`。
-- `Account → Workers Scripts → Read`，用于定位此 Worker。
-- Account Resources 只选择当前 `bamboo-old-house` 所在账户。
+创建 Pages 项目并连接 Git 仓库，框架预设选“无”，填写上面的构建命令与输出目录。在 **设置 → 构建和部署 → 分支控制** 中配置：
 
-必须从个人资料页创建 user-scoped Token。不要使用账户级 Token，也无需替换当前构建所用的 Token。API 参考中前一项权限标记为 `Workers CI Write`。[官方权限说明](https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/#before-you-start)
-
-### 2. 在项目终端执行
-
-代码已位于 `preview/integration` 分支。在 macOS 默认 zsh 终端，进入项目目录后逐行运行：
-
-```sh
-read -rs 'CLOUDFLARE_API_TOKEN?粘贴 Cloudflare API Token，然后按回车：'
-export CLOUDFLARE_API_TOKEN
-node scripts/configure-preview-branch.mjs --apply
-unset CLOUDFLARE_API_TOKEN
-```
-
-第一行等待输入，粘贴的 Token 不显示在屏幕上；不要把 Token 填进命令本身、仓库文件或聊天。脚本使用项目账户与 Worker 名，自动查询 trigger UUID，并只保存以下规则：
-
-```json
-{
-  "branch_includes": ["preview/*"],
-  "branch_excludes": ["main"]
-}
-```
-
-脚本会回读规则，并核对 `main` trigger 与其他设置。看到 **“已回读确认：非生产自动构建仅匹配 preview/*；main 触发器保持原样。”** 才表示配置成功。遇到错误时保留错误信息核查，不能当作已完成。去掉 `--apply` 可以只查看拟修改的规则。
-
-这是一次性设置，后续推送无需重复运行。之后若通过控制台重建或调整 Git 构建连接，再用脚本检查规则。此规则控制后续 Git 自动触发；历史构建、已有排队任务、人工重试不会因此被删除或禁止。[分支过滤 API](https://developers.cloudflare.com/api/resources/workers_builds/subresources/triggers/methods/update/)
-
-### 3. 验证与日常使用
-
-1. 后续向普通功能分支推送提交，确认 Cloudflare Builds 没有为该提交新增构建。
-2. 向 `preview/` 开头的功能分支推送，确认生成该分支的新构建和预览地址。
-3. 每个功能可独立开发、预览，再向 `main` 提 PR；不必都合并进同一个预览分支。需要集中联调时可使用 `preview/integration`，上线时仍只合并已经验收的功能。
-
-```sh
-# 在准备开发或需要预览的代码版本上创建分支
-git switch -c preview/photo-mode
-git push -u origin preview/photo-mode
-```
-
-约定匹配分支名开头的 `preview/`：`preview/photo-mode` 会匹配，`feat/preview/photo-mode`、`my-preview-test` 不会匹配。推送一次会构建一次，后续推送同一分支也会更新预览。不要重新创建名为 `preview` 的分支，它与 `preview/xxx` 存在 Git 引用路径冲突；原固定分支迁移为 `preview/integration`。
-
-预览 URL 以 Cloudflare 实际构建输出为准。GitHub 检查工作流仍按自己的规则执行，表格只描述 Cloudflare Builds。
-
-## 首次配置：先停止自动上线，再接入新命令
-
-### 1. 记录当前正式版本
-
-打开 **Workers & Pages → bamboo-old-house**：
-
-- 在 **Settings → Domains & Routes** 记录正在使用的正式域名和 `workers.dev` 地址。
-- 在 **Deployments** 记录当前正式部署 ID、version UUID 和时间。首次上线前的回退目标就是这个明确版本，不是上传列表中的“上一个”。
-- 确认 Git 仓库为 `yuukiLike/bamboo-old-house`，production branch 为 `main`。
-- 查看是否还有其他平台或 workflow 在发布同一个正式入口。仓库保留的 `netlify.toml` 不能证明 Netlify 仍在使用；不要再接一套自动上线流程。
-
-维护者已提供控制台截图并确认过渡配置完成；上一次准确生产版本的短 ID 为 `03f1fb5a`。正式地址与完整 version UUID 仍待记录。短 ID 不是 Git SHA，不据此推断对应源码版本。
-
-### 2. 在旧 main 上也能执行的过渡设置
-
-在 **Settings → Build** 中，先将当前可见的 **Deploy command（部署命令）** 改成下面的命令：
-
-```sh
-npx wrangler versions upload --config wrangler.static.jsonc
-```
-
-先保留当前能成功运行的 Build command。过渡命令兼容尚未包含新 package scripts 的 `main`，只上传版本。确认保存成功后再合并实现分支。不要在旧 `main` 上提前改成尚不存在的 `pnpm deploy:preview`。
-
-随后进入 **Settings → Build → Branch control**，勾选 **Builds for non-production branches** 并保存。非生产分支部署命令仅在开启此功能后适用；未开启时不要假定界面已有两个命令输入框。
-
-回到构建配置的编辑界面，找到 **Non-production branch deploy command**（维护者实际中文界面中的 **“版本命令”**），也填写上面的过渡命令。如果开启后仍未找到该字段，按实际界面核对入口，不要把构建命令误当成第二个部署命令。
-
-复选框默认会覆盖所有非生产分支；开启后按上面的“一次性配置”收紧为 `preview/*`。初次试运行使用的 `chore/preview-release` 不再作为持续预览分支。
-
-在 **Settings → Domains & Routes** 开启 **Preview URLs**；仓库也通过 `preview_urls: true` 保留此设置。不要切换已有正式域名。
-
-> 仅修改仓库里的 Wrangler 文件不会修改 Workers Builds 的部署命令。若控制台仍是 `wrangler deploy`，推送正式分支仍可能立即上线。
-
-### 3. 可选：以后需要发布清单时再接入仓库脚本
-
-当前 `pnpm run build` 配合两条 `npx wrangler versions upload --config wrangler.static.jsonc` 命令已能提供预览，继续保持即可。以下是以后接入发布清单的可选设置，不是本次分支过滤的前置条件；只有所构建的分支包含这些脚本时才可使用。
-
-| 位置 / 字段 | 填写内容 |
+| 配置 | 推荐值 |
 | --- | --- |
-| Production branch | `main` |
-| Root directory | 仓库根目录，界面通常表示为 `/` 或留空 |
-| Build command | `pnpm install --frozen-lockfile && pnpm build:release` |
-| Deploy command | `pnpm deploy:preview` |
-| Non-production branch deploy command（版本命令） | `pnpm deploy:preview` |
-| Non-production branch builds | 开启；通过 Builds API 将非生产 trigger 限定为 `preview/*` |
-| Build variable: `NODE_VERSION` | `24` |
-| Build variable: `PNPM_VERSION` | `11.14.0` |
-| Build variable: `SKIP_DEPENDENCY_INSTALL` | `true`，安装已写进 Build command |
+| 生产分支 | `main` |
+| 预览分支 | 自定义分支 |
+| 包括预览分支 | `preview/*` |
+| 排除预览分支 | 留空 |
 
-构建变量填写在 **Build variables and secrets**，不是应用运行时的 Variables & Secrets。沿用现有 Workers Builds 连接和构建 token，不需要新增 GitHub Actions secret，也不要把个人 OAuth token 复制进仓库。
+这组规则只自动构建 `preview/` 开头的预览分支；其他非生产分支跳过。保存后刷新确认配置保留，并用一次预览分支推送和一次普通分支推送验证实际触发情况。[Pages 分支控制](https://developers.cloudflare.com/pages/configuration/branch-build-controls/)
 
-此期间旧分支没有新脚本时，先更新分支，不要临时改回自动上线命令。
+勾选“启用自动生产分支部署”时，推送 `main` 会直接发布到 Pages 生产环境。需要人工控制上线时，关闭该选项，再单独发起生产部署；关闭后不会自动生成 `main` 候选版本。
 
-[Cloudflare 的构建配置](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)、[分支规则](https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/)、[运行时与构建变量](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)。
+发布异常时，在 **部署 → 历史生产部署 → 回滚到此部署** 恢复旧版。预览部署不能作为这个回滚操作的目标。[Pages 回滚](https://developers.cloudflare.com/pages/configuration/rollbacks/)
 
-## 仓库命令与版本来源
+## Workers：上传候选版本，人工发布
+
+### 构建配置
+
+全新 Worker 首次部署使用以下命令；它会创建并上线首个版本：
+
+```sh
+pnpm run build
+pnpm exec wrangler deploy --config wrangler.static.jsonc
+```
+
+已有 Worker 采用下面的日常配置，在 **设置 → 构建** 中保存：
+
+| 配置 | 值 |
+| --- | --- |
+| 生产分支 | `main` |
+| 构建命令 | `pnpm run build` |
+| 部署命令 | `npx wrangler versions upload --config wrangler.static.jsonc` |
+| 非生产分支部署命令／版本命令（启用时） | `npx wrangler versions upload --config wrangler.static.jsonc` |
+
+`versions upload` 只上传候选版本；只有后续发布操作才切换正式流量。修改仓库文件不会替你修改控制台的部署命令。[Workers 构建配置](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)
+
+### 非生产分支的限制
+
+Workers 当前公开的“非生产分支构建”开关覆盖所有非生产分支。**不能把 Pages 的 `preview/*` 配置直接套到 Workers。** [Workers 分支控制](https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/)
+
+2026-09-20，维护者重复验证两次：对同一触发器使用相同 token 和账户，保存 `branch_includes: ["*"]` 成功，仅改为 `["preview/*"]` 则返回 `400 / 12002: Invalid request body`。
+
+仓库的 `scripts/configure-preview-branch.mjs` 不作为可用配置步骤；其模拟接口测试不能证明云端支持过滤。`migrate_to_previews` 用于迁移预览机制，不用于设置分支过滤。
+
+如果必须让其他分支完全不启动构建，先关闭原生非生产分支构建，再另行配置带分支过滤的外部 CI。构建启动后判断分支并退出，仍然会产生一次构建。
+
+### 验收、发布与回退
+
+1. 在预览地址验证页面、时段、天气、视角与声音，确认 JS/CSS、模型和声音资源没有 404。预览地址以 Cloudflare 实际输出为准。
+2. 合并到 `main` 后，验收该提交对应的候选版本，并记录 Git SHA、候选 version UUID 和当前正式 version UUID。
+3. 在 **Deployments** 中选择已验收版本，通过 **Promote deployment / Deploy** 将其设为 100% 流量。发布时沿用已经验收的版本。
+4. 异常时恢复已记录的旧正式版本；不要把“最近上传的版本”当作回退目标。
+
+发布和回退均可使用以下命令，UUID 分别填入已验收的新版本或旧正式版本：
+
+```sh
+pnpm exec wrangler versions deploy '<目标版本UUID>@100%' \
+  --config wrangler.static.jsonc --message '发布或回退原因'
+```
+
+只能在平台仍允许部署的历史版本范围内回退，因此应保留源码提交和版本记录。切换后检查正式页面与资源；已经打开的浏览器页面不会自动刷新。[版本发布](https://developers.cloudflare.com/workers/versions-and-deployments/deployment-management/)
+
+`public/_headers` 的预览 `noindex` 规则包含 Worker 名称 `bamboo-old-house`。更换 Worker 名称时也要更新该规则，并验证正式域名没有被加上 `noindex`。
+
+## 可选的发布清单
+
+普通 `pnpm run build` 不生成 `release.json`。需要追溯提交和产物时，可使用仓库已有脚本：
 
 | 命令 | 行为 |
 | --- | --- |
-| `pnpm build` | 普通本地生产构建，允许未提交修改 |
-| `pnpm check` | 类型、lint、测试、竹子 LOD 数据一致性检查 |
-| `pnpm build:release` | 检查通过后构建；要求 Git 工作区干净，检查单文件 25 MiB 上限，写入 `dist/client/release.json` |
-| `pnpm deploy:preview` | 核对提交、分支及产物摘要，再运行 `wrangler versions upload`；输出版本 ID 和预览 URL |
+| `pnpm build:release` | 检查并构建，要求工作区干净，检查单文件大小，生成 `dist/client/release.json` |
+| `pnpm deploy:preview` | 核对源码与产物摘要，使用 `wrangler.static.jsonc` 上传候选版本 |
 
-`build:release` 在 Cloudflare 侧重复执行质量检查，因为 Workers Builds 不会等待 GitHub 的 `Checks`。GitHub CI 继续独立运行，并检查构建产物大小。
+只在目标分支包含这些脚本时使用；普通构建以 Cloudflare 的提交信息和版本 ID 核对来源。
 
-只有使用 `build:release` / `deploy:preview` 时，预览的 `/release.json` 才提供完整 commit SHA、分支、构建时间、Cloudflare build UUID（本地构建为 `null`）和静态产物摘要，版本 tag/message 才记录对应来源。当前原生构建使用 Cloudflare Builds 页面核对 Git 提交与版本；不要求 `/release.json`。version UUID 在上传后由 Cloudflare 分配。
+## 当前验证状态
 
-版本预览地址形式：
-
-```text
-https://<version-prefix>-bamboo-old-house.<你的账户子域>.workers.dev
-```
-
-使用 Cloudflare 实际返回的链接，不手工拼猜。性能测量记录固定版本 URL 和完整 UUID。若平台同时提供分支 alias，它会随新构建变化，不作为性能基线的唯一标识。[版本预览与 alias](https://developers.cloudflare.com/workers/versions-and-deployments/preview-urls/)
-
-## 首次预览验收
-
-1. 记下当前正式 version UUID，再触发一个 `preview/` 开头的分支构建。
-2. 确认构建检查通过、日志实际执行 `versions upload`，记录新 UUID 和固定 preview URL。
-3. 在 Cloudflare 构建页面核对 commit SHA、分支和 build UUID；以后启用发布清单脚本时，再同时核对 `/release.json`。
-4. 手机和桌面打开预览：首次加载、时段、天气、视角切换正常；主动操作后声音正常。Network 中模型、声音、JS/CSS 没有 404。
-5. 检查预览响应有 `X-Robots-Tag: noindex`；正式域名和无版本前缀的正式 `workers.dev` 地址没有新增这条 header。
-6. 回到 Deployments，确认正式 version UUID 未改变。将实际结果填入文末记录。
-
-`public/_headers` 只匹配带前缀的 `*-bamboo-old-house.*.workers.dev`，同一产物提升为正式版本后不会对正式主机名设置 noindex。以后改 Worker 名称或增加自定义预览域名时，要相应更新规则。[静态资源响应头](https://developers.cloudflare.com/workers/static-assets/headers/)
-
-预览默认可通过链接访问。`noindex` 仅用于搜索索引，不限制访问；需要私有预览时另行配置 Cloudflare Access。不要为不受信任的 fork 分支开启带部署凭据的构建，也不要未经审查就把外部 PR 代码推到有构建授权的分支。原生 Builds 的 token 仍有部署权限；人工上线是此流程的操作约定，不是账号权限隔离。
-
-## 正式发布：使用已经验收的同一个版本
-
-1. 选择来自 `main` 的候选版本，检查 `/release.json`、版本 tag、GitHub `Checks` 与 Cloudflare build 指向相同 SHA 且检查通过。PR 的提交和最终合并 SHA 可能不同，合并后需要验收 main 的候选版本。
-2. 按上述方法验收这个候选版本，记录上一正式 UUID 与此次候选 UUID。
-3. 在 **Deployments** 中选择已验收版本的 **Promote deployment / Deploy**，将该版本设为 **100%** 流量，并填写发布原因；核对界面显示的 UUID 后提交。
-4. 再访问正式站及 `/release.json`，确认页面、资源、来源 SHA 和索引响应头；补充发布记录。
-
-不要在发布时重新 build/upload。等价 CLI 如下，只有维护者明确要切换正式流量时才运行：
-
-```sh
-pnpm exec wrangler versions deploy '<已验收的版本UUID>@100%' \
-  --config wrangler.static.jsonc --message '发布原因'
-```
-
-按序完成一次发布或回退，再开始下一次，避免两个操作互相覆盖。[版本提升](https://developers.cloudflare.com/workers/versions-and-deployments/deployment-management/)
-
-## 回退：明确选中曾经上线的版本
-
-从部署历史和验收记录选定以前的正式 version UUID，再通过控制台把该版本恢复至 100%。CLI 同样可以用 `versions deploy '<历史正式UUID>@100%'`，填写回退原因。
-
-不用“最近上传版本”推断回退目标，它可能是未经发布的功能预览。当前项目为静态站，同一版本包含页面、JS/CSS、模型与声音。回退后要重新加载并核对正式 `/release.json`；已打开的浏览器页面不会自动刷新。
-
-Cloudflare 允许从最近 **100 个已上传版本**选择可部署版本，功能分支预览也会消耗这个窗口。版本 URL 与 UUID 不是永久归档。保留 Git tag/提交和发布记录；目标版本过旧时，从对应源码重新构建、上传、验收，再发布新 UUID。重新构建不等于恢复同一份二进制产物。[版本与部署](https://developers.cloudflare.com/workers/versions-and-deployments/)、[回退](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/)
-
-## 验证记录
-
-Cloudflare 操作由维护者执行。2026-09-16，首次 `chore/preview-release` 预览上传成功，随后维护者要求收紧为 `preview/*` 分支前缀；云端过滤尚待执行。最新验收进度以 [GitHub issue #6](https://github.com/yuukiLike/bamboo-old-house/issues/6) 为准。正式发布和回退尚未执行。
-
-本地已通过类型检查、lint、24 项测试、LOD 校验、生产构建和 Wrangler upload dry run。Wrangler 本地静态服务实际响应验证：带版本前缀的主机名返回 `noindex`，无版本前缀的正式主机名和自定义主机名不返回该 header；未提交源码时准备发布会被拒绝。以上不替代线上验收。
-
-| 项目 | 结果 |
-| --- | --- |
-| 已验证正式 workers.dev 地址 | https://bamboo-old-house.yuuki-lab.workers.dev；自定义域名待记录 |
-| 上一次准确生产版本 | 维护者提供短 ID `03f1fb5a`；完整 version UUID 与 deployment ID 待记录 |
-| 已保存的构建配置 | 部署命令与版本命令均为 `versions upload --config wrangler.static.jsonc`（通过 npx 运行）；`main` 为生产分支，已开启非生产分支构建；仅 `preview/*` 的过滤尚待维护者应用 |
-| 首次预览 commit / build UUID / version UUID | `14ed6c4` / `145dc449-6bd0-48a0-8f14-73d33c7538f7` / `7273aa70-88c8-49a3-8f14-b929c82b3594` |
-| 首次固定预览 URL | https://7273aa70-bamboo-old-house.yuuki-lab.workers.dev |
-| 桌面、手机、模型、声音与无 404 | 待验证 |
-| 预览 noindex、正式响应头不受影响 | 已验证；维护者也已确认 noindex 检查 |
-| 上传前后正式 UUID 不变 | 待验证 |
-| 发布：时间、原因、新旧 UUID、验收人 | 尚未执行 |
-| 回退：时间、原因、明确目标 UUID、结果 | 尚未执行 |
-
-关联：[LOCAL-004](issues/004-preview-release.md)、[3D 性能基线](issues/003-3d-performance-baseline.md)。
-test
-trigger preview deploy
+截至 2026-09-20，维护者已验证 Pages 生产部署、预览部署及 `preview/*` 分支过滤。Workers 的 `preview/*` 配置仍被上述 API 错误阻塞，已提交 [Workers Builds #15722](https://github.com/cloudflare/workers-sdk/issues/15722) 和 [文档说明 #33549](https://github.com/cloudflare/cloudflare-docs/issues/33549)。
