@@ -209,3 +209,4 @@ Cloudflare 操作由维护者执行。2026-09-16，首次 `chore/preview-release
 
 关联：[LOCAL-004](issues/004-preview-release.md)、[3D 性能基线](issues/003-3d-performance-baseline.md)。
 test
+trigger preview deploy
