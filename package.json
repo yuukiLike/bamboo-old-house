@@ -16,6 +16,8 @@
     "lint": "oxlint",
     "format": "oxfmt",
     "preview": "vite preview",
+    "perf": "node scripts/perf/run.mjs",
+    "perf:report": "node scripts/perf/report.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "sync": "rsync -aim --exclude=.DS_Store ../blender-two/website/public/ public/ && pnpm build"

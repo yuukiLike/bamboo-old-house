@@ -13,6 +13,9 @@ export default defineConfig(({ isPreview }) => {
   }
 
   return {
+    // Performance recordings can resolve production call stacks without
+    // changing the regular release build or the scene's loading behavior.
+    build: { sourcemap: process.env.PERF_SOURCEMAP === '1' },
     css: { postcss: { plugins: [tailwindcss()] } },
     plugins: [vinext(), sites()],
   };

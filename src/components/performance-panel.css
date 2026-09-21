@@ -1,0 +1,71 @@
+.perf-panel {
+ position: fixed; top: 118px; right: 154px; z-index: 15; width: 420px;
+ max-width: calc(100vw - 48px); color: #dce8df; background: #13231ff7;
+ border: 1px solid #b9d1bd3b; border-radius: 10px; box-shadow: 0 12px 38px #07120e50;
+ font: 12px/1.5 'PingFang SC', 'Microsoft YaHei', sans-serif; letter-spacing: 0;
+ color-scheme: dark; contain: layout style;
+}
+.perf-panel * { box-sizing: border-box; }
+.perf-panel button, .perf-panel input { font: inherit; }
+.perf-panel button { border: 0; color: inherit; cursor: pointer; }
+.perf-panel button:focus-visible, .perf-panel input:focus-visible, .perf-group summary:focus-visible { outline: 2px solid #a9d7ae; outline-offset: 3px; }
+.perf-panel-header { padding: 0; }
+.perf-panel-title { display: flex; align-items: center; width: 100%; gap: 9px; padding: 13px 15px; background: transparent; text-align: left; }
+.perf-panel-title > span:nth-child(2) { font-weight: 600; }
+.perf-header-time { margin-left: auto; color: #bdcfbf; font-variant-numeric: tabular-nums; }
+.perf-status-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: #dfba7f; }
+.perf-status-ready { background: #aad2a9; }
+.perf-status-error { background: #e0a197; }
+.perf-panel-collapsed { width: 238px; }
+.perf-panel-body { max-height: calc(100svh - 330px); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 15px 15px; }
+.perf-overview { padding: 13px 0 12px; border-top: 1px solid #d2e4d71b; }
+.perf-overview > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.perf-overview strong { color: #f1f5eb; font-size: 25px; line-height: 1.2; font-weight: 500; font-variant-numeric: tabular-nums; }
+.perf-overview p { margin: 5px 0 11px; color: #9aafa1; font-size: 11px; }
+.perf-progress { width: 100%; }
+.perf-progress-track { width: 100%; height: 3px; border-radius: 2px; overflow: hidden; background: #b1c7b91a; }
+.perf-progress-indicator { height: 100%; border-radius: inherit; background: #a6cba8; }
+.perf-progress-indicator[data-indeterminate] { width: 35%; animation: perf-progress-travel 1.7s ease-in-out infinite; }
+.perf-progress-stopped .perf-progress-indicator { animation: none; background: #d0a08c; }
+.perf-explanation, .perf-limitations { margin: 0 0 13px; color: #a9bcb0; font-size: 11px; line-height: 1.7; }
+.perf-limitations { margin: 12px 0 0; color: #8fa597; }
+.perf-search-label { display: grid; gap: 6px; margin: 0 0 15px; color: #becdc2; font-size: 11px; }
+.perf-search-label input { width: 100%; min-height: 33px; border: 1px solid #acc5b335; border-radius: 5px; padding: 6px 9px; background: #06130e55; color: #e1eadf; }
+.perf-search-label input::placeholder { color: #829b8b; }
+.perf-section-heading { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 9px; }
+.perf-count { font-size: 10px; color: #adbfaf; background: #bdccbf14; padding: 1px 6px; border-radius: 4px; font-weight: 400; }
+.perf-active { padding: 0 0 12px; }
+.perf-active ul, .perf-timeline { margin: 0; padding: 0; list-style: none; }
+.perf-active ul { max-height: 174px; overflow: auto; scrollbar-width: thin; }
+.perf-active li { padding: 7px 0 9px; }
+.perf-active .perf-progress { margin-top: 6px; }
+.perf-row-heading { display: flex; gap: 10px; justify-content: space-between; align-items: baseline; }
+.perf-row-heading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.perf-row-heading strong { flex-shrink: 0; font-weight: 500; font-size: 11px; color: #e0e9d9; font-variant-numeric: tabular-nums; }
+.perf-row-code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8ca795; font: 10px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.perf-row-code span { color: #a7bba9; }
+.perf-group { border-top: 1px solid #bfd4c21f; padding: 0; }
+.perf-group summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+.perf-group summary > .perf-count { float: right; }
+.perf-axis { display: flex; justify-content: space-between; color: #8da395; font-size: 10px; margin: 0 0 8px; font-variant-numeric: tabular-nums; }
+.perf-timeline li { padding: 5px 0 10px; }
+.perf-time-track { position: relative; height: 6px; margin: 6px 0 3px; background: repeating-linear-gradient(to right, #b3c7b415 0, #b3c7b415 1px, transparent 1px, transparent 25%); border-radius: 2px; overflow: hidden; }
+.perf-time-track > span { position: absolute; top: 0; bottom: 0; min-width: 2px; max-width: 100%; background: #88b89c; border-radius: 2px; }
+.perf-timeline li[data-status='error'] .perf-time-track > span { background: #d59b8f; }
+.perf-timeline li[data-status='cancelled'] .perf-time-track > span, .perf-timeline li[data-status='superseded'] .perf-time-track > span { background: #9caa9d; }
+.perf-timeline li[data-status='skipped'] .perf-time-track > span { background: #b69f7f; }
+.perf-timeline li[data-status='running'] .perf-time-track > span { background: #d6b379; }
+.perf-row-meta { display: flex; justify-content: space-between; gap: 12px; color: #829d8d; font-size: 10px; font-variant-numeric: tabular-nums; }
+.perf-empty { color: #8ea395; margin: 3px 0 10px; font-size: 11px; }
+.perf-pagination { display: flex; align-items: center; justify-content: space-between; margin: 0 0 12px; font-size: 11px; color: #b4c5b6; }
+.perf-pagination button, .perf-panel-footer button { background: #b6c9b51a; border-radius: 4px; padding: 6px 10px; }
+.perf-pagination button:hover, .perf-panel-footer button:hover { background: #b6c9b52e; }
+.perf-pagination button:disabled { opacity: .35; cursor: default; }
+.perf-panel-footer { display: flex; gap: 10px; align-items: center; border-top: 1px solid #bfd4c21f; padding-top: 12px; color: #94ac9b; font-size: 11px; }
+.perf-panel-footer button { color: #dce8d8; }
+.perf-warning { display: block; color: #ddba90; font-size: 11px; margin: 8px 0 0; }
+.perf-panel-error { padding: 13px 15px; color: #ddba90; }
+@keyframes perf-progress-travel { from { transform: translateX(-100%); } to { transform: translateX(390%); } }
+@media (max-width: 1100px) { .perf-panel { width: 380px; } .perf-panel-collapsed { width: 228px; } }
+@media (max-width: 900px) { .perf-panel { top: 172px; right: 14px; width: 360px; max-width: calc(100vw - 28px); } .perf-panel-body { max-height: calc(100svh - 330px); } .perf-panel-collapsed { width: 224px; } }
+@media (prefers-reduced-motion: reduce) { .perf-progress-indicator[data-indeterminate] { animation: none; opacity: .7; } }

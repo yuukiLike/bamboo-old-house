@@ -2,7 +2,7 @@
 
 记录日期：2026-09-21。
 
-状态：工具选型与采集方案；尚未安装采集工具、接入埋点或运行性能测量。命令与脚本示例依据官方文档和发布源码核对，尚未经本项目实跑验证。
+状态：选型已实施为可运行的采集工具，入口为 `pnpm perf`。现有方案中的示例保留用于解释 API；实际配置、首屏 / 懒视图 / 望月与听风 / 系统按钮四条流水线及限制以 [工具使用说明](../../scripts/perf/README.md) 为准。另见 [重复采集与对比](../performance/pipeline.md)、[项目适配器](../performance/adapter.md)、[页面内进度](../performance/diagnostic-view.md)、[页面流程图](../performance/page-lifecycle.md)、[实测证据](../performance/first-capture.md) 与 [3D 专项开源仓库](../performance/open-source-tools.md)。本文的完整状态组合和长期稳定观察标准属于后续扩展目标，不等于默认流程已穷举全部功能组合。
 
 开发分支：`preview/performance-baseline`。产品参考提交：`4ccde789b494d31a568f0cb4d6a6741e649e036d`。
 
@@ -13,7 +13,7 @@
 建立从页面导航、资源加载、场景初始化，到首次可操作、画面展示，以及后续按需加载视图的性能链路。每项优化建议都应能指向 trace 时间区间、具体代码或渲染 pass，并用同条件复测确认收益。
 
 - 全程不新增测试用例。操作脚本用于采集和导出，没有测试断言，也不接入测试运行器。
-- 首轮使用当前电脑的原生 Chrome，覆盖桌面与移动模拟。移动模拟用于覆盖移动代码路径，不代表真实手机 GPU 表现。
+- 使用当前电脑的原生 Chrome Canary，避免占用用户正在使用的普通 Chrome；覆盖桌面与移动模拟。移动模拟用于覆盖移动代码路径，不代表真实手机 GPU 表现。
 - 使用生产构建，区分本地预览与线上 preview 的结果。
 - 基线阶段保持原有加载顺序、预热、分辨率和画质。先观测，再形成优化假设。
 - preview 日常访问的轻量记录与一次性完整诊断互补；集中查看首先复用现成性能报告，保留多轮结果供比较。
@@ -50,7 +50,7 @@ sitespeed.io 已提供采集和报告能力，因此不再把从头构建 Playwr
 
 “无需改源码”不等于“没有性能开销”。调用栈采样、注入观察器、截图和 WebGL 拦截均需与基线采集区分。不批量包装所有函数，也不替换全局 fetch/render 来推测全部业务阶段。
 
-注入只作用于采集器打开的访问。若要求任意普通 preview 访问都自动记录，需要把轻量采集器接入 preview 构建的应用启动路径。构建开关建议使用 `VITE_PERF_MONITOR=1`；默认关闭，详细面板按需加载。
+注入只作用于采集器打开的访问。已实施的业务开关为 URL 参数 `?perf=1`，默认关闭；采集命令自动添加。普通 preview 访问不会启动通用探针。source maps 用 `PERF_SOURCEMAP=1` 构建开关开启。
 
 来源：[Browsertime 配置](https://www.sitespeed.io/documentation/browsertime/configuration/)、[Playwright addInitScript](https://playwright.dev/docs/api/class-browsercontext#browser-context-add-init-script)、[User Timing](https://developer.mozilla.org/en-US/docs/Web/API/Performance/mark)。
 
@@ -75,7 +75,7 @@ npx --yes --package=sitespeed.io@42.7.0 sitespeed.io http://127.0.0.1:4175/ \
   --outputFolder outputs/performance/page-diagnostic
 ```
 
-这是无需改站点的页面级诊断入口，会下载并运行工具，要求本机有可用 Chrome/驱动。视频与视觉分析关闭时不进行 FFmpeg 视频采集；需要影片证据时另行配置相关依赖并单独录制。`--cpu` 采集主线程时间线与长任务；原始 trace 可放入 DevTools 分析。
+这是解释原生工具的页面级诊断入口，会下载并运行工具，要求本机有可用浏览器/驱动。实际录制应使用本项目 `pnpm perf --chrome ... --driver ...` 指定独立 Canary；不要让原生工具自动选择用户正在使用的普通 Chrome。视频与视觉分析关闭时不进行 FFmpeg 视频采集；需要影片证据时另行配置相关依赖并单独录制。`--cpu` 采集主线程时间线与长任务；原始 trace 可放入 DevTools 分析。
 
 上述默认结束条件不等于本项目 3D 就绪，不能把这条快速命令的结果标注成完整场景基线。完整采集必须改用业务完成条件或操作脚本，持续到场景就绪后指定的观测窗口。
 
@@ -87,7 +87,7 @@ npx --yes --package=sitespeed.io@42.7.0 sitespeed.io http://127.0.0.1:4175/ \
 
 ### 不改业务源码的首屏采集脚本示例
 
-下面内容可保存为 `scripts/perf/initial-3d.cjs`。该文件尚未创建；这里只记录经过 API 核对、未经实跑的示例。项目是 ESM，因此采用 `.cjs` 与工具 CommonJS 脚本接口匹配。
+以下是解释 API 的最小示例，不需要创建此文件。实际可运行版本是 `scripts/perf/scene-journey.cjs`，通过 `pnpm perf --flow load` 执行首屏采集。项目是 ESM，因此采用 `.cjs` 与工具 CommonJS 脚本接口匹配。
 
 ```js
 module.exports = async function (_context, commands) {
@@ -143,7 +143,7 @@ API 来源：[Browsertime 28.3.0 Measure](https://github.com/sitespeedio/browser
 
 优先补充动态导入、模型解析、启动编译/预热、首次室内管线、转场完成五类业务边界。每帧以数值缓冲记录，不向 Performance 时间线无限追加逐帧 mark，也不每帧 setState。
 
-公共采集接口保持最小：记录具名阶段、绑定 run/操作 ID、快照与导出。可在现有 `window.__BAMBOO__` 旁提供专用性能入口，避免改变原有诊断字段语义；尚未实施此接口。
+公共采集接口保持最小：已在现有 `window.__BAMBOO__` 旁实现有界的 `window.__BAMBOO_PERF__`，具名阶段带独立操作 ID 与状态。通用注入探针为 `window.__PERF_CAPTURE__.snapshot()`，原有诊断字段语义保持不变。实际 phase 名称见工具说明与原始记录的 `detail.phase`；上表保留设计时的建议名称。
 
 并行模型操作使用独立操作 ID，避免 measure 配对到另一并行操作的同名 mark。取消、被后续视图替代和未完成的阶段保留状态，不虚构完成耗时。同一操作的浏览器资源、阶段与帧使用一致的时间基准。
 
@@ -190,7 +190,7 @@ API 来源：[Browsertime 28.3.0 Measure](https://github.com/sitespeedio/browser
 
 报告沿用 sitespeed.io HTML、JSON、HAR 与 trace，增加项目阶段和帧摘要：加载瀑布与关键路径、视图首次/重复耗时、帧间隔中位数/p95/p99/最长帧、场景更新/渲染提交、绘制量变化。重型 trace 需保留 JS samples，并提供与对应构建匹配的 source maps。
 
-原始数据按 run ID 存入已忽略的 `outputs/performance/`；选定基线后保存到可长期访问的证据位置，在 `docs/performance/` 记录版本、采集配置、文件哈希及链接，不能只依赖临时文件。当前还没有性能证据，不能将示例数字或候选瓶颈写成实测结论。
+原始数据按 run ID 存入已忽略的 `outputs/performance/`；选定基线后保存到可长期访问的证据位置，在 `docs/performance/` 记录版本、采集配置、文件哈希及链接，不能只依赖临时文件。当前实跑状态与证据统一记录在 [首次采集记录](../performance/first-capture.md)，未测的功能仍不能写成实测结论。
 
 验收要求：
 

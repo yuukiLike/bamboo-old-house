@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import { ArrowDown, ArrowUpRight, Pause, Play, Compass, RotateCcw, Sun, SunMedium, Moon, Scan, X, DoorOpen, Sunrise, Sunset, Volume2, VolumeX, SlidersHorizontal, Wind, CloudRain, Droplets } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -7,6 +7,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { createSoundscape } from './scene/soundscape';
 import { createSceneTransition } from './scene-transition';
+import { beginPhase, phaseStatus, type FinishPhase } from '@/lib/performance';
 import { DEFAULT_WEATHER, WEATHER_PRESETS, type WeatherSettings } from './scene/weather-state';
 import type { SceneHandle } from './scene/scene';
 import { ROOM_VIEWS, OUTDOOR_VIEWS, PLACE_VIEWS, type PlaceId, type TimeOfDay, type ViewMode } from './scene/config';
@@ -20,10 +21,19 @@ const chapters = [
 ];
 
 export default function Experience() {
+ const [PerformancePanel,setPerformancePanel] = useState<ComponentType | null>(null);
+ useEffect(()=>{
+   const params=new URLSearchParams(location.search);
+   if(params.get('perf')!=='1'||params.get('perfUI')!=='1')return;
+   let disposed=false;
+   void import('./performance-panel').then(module=>{if(!disposed)setPerformancePanel(()=>module.default);}).catch(error=>console.warn('性能面板未载入',error));
+   return()=>{disposed=true;};
+ },[]);
  const mount = useRef<HTMLDivElement>(null);
  const engine = useRef<SceneHandle | null>(null);
  const sceneTransition = useRef<ReturnType<typeof createSceneTransition> | null>(null);
  const requestedPlace = useRef<{view:ViewMode;place:PlaceId;panorama:boolean}>({view:'walk',place:'courtyard',panorama:false});
+ const pendingViewTiming = useRef<FinishPhase | undefined>(undefined);
  const committedPlace = useRef({view:'walk' as ViewMode,place:'courtyard' as PlaceId});
  const pendingNavigation = useRef<{revision:number;run:()=>void}|undefined>(undefined);
  const navigationCounter = useRef(0);
@@ -69,7 +79,7 @@ export default function Experience() {
    const media=matchMedia('(prefers-reduced-motion: reduce)');
    const change=()=>{if(media.matches)transition.finish();};
    document.addEventListener('visibilitychange',visibility);window.addEventListener('resize',resize);media.addEventListener('change',change);
-   return()=>{transition.dispose();sceneTransition.current=null;pendingNavigation.current=undefined;document.removeEventListener('visibilitychange',visibility);window.removeEventListener('resize',resize);media.removeEventListener('change',change);};
+   return()=>{pendingViewTiming.current?.('cancelled');transition.dispose();sceneTransition.current=null;pendingNavigation.current=undefined;document.removeEventListener('visibilitychange',visibility);window.removeEventListener('resize',resize);media.removeEventListener('change',change);};
  },[]);
  useEffect(()=>{if(!ready||staticMode)sceneTransition.current?.finish();},[ready,staticMode]);
  useEffect(() => {
@@ -94,18 +104,26 @@ export default function Experience() {
    return()=>{cancelAnimationFrame(frame);window.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);};
  },[view]);
  useEffect(()=>{ let disposed=false,failed=false;const controller=new AbortController();
+   const finishStartup=beginPhase('startup.experience',{attempt});
+   let finishStage:FinishPhase|undefined;
    const resetRoof=()=>{roofRunoff.current=0;soundscape.current?.setRoofRunoff(0);};
    resetRoof();
    const start=async()=>{ try {
+     finishStage=beginPhase('startup.scene-import',{attempt});
      const { createScene } = await import('./scene/scene');
-     if(disposed || !mount.current)return;
-     const scene=await createScene(mount.current,{onProgress:(state,value)=>{if(!disposed)setLoading({state,progress:value});},onPanorama:(value)=>{if(!disposed){requestedPlace.current={...requestedPlace.current,panorama:value};setPanorama(value);if(!value)panoramaButton.current?.focus({preventScroll:true});}},onGust:(strength)=>{if(!disposed&&!failed)soundscape.current?.setGust(strength);},onRunoff:(flow)=>{if(disposed||failed)return;roofRunoff.current=flow;soundscape.current?.setRoofRunoff(flow);},onBearing:(value)=>{if(!disposed&&bearingLabel.current){const label=`${String(value).padStart(3,'0')}°`;if(bearingLabel.current.textContent!==label)bearingLabel.current.textContent=label;}},onFailure:()=>{if(!disposed){failed=true;engine.current=null;resetRoof();soundRequest.current++;weatherRequest.current++;void soundscape.current?.setEnabled(false);setSoundEnabled(false);setSoundBusy(false);setWeatherBusy(false);setSettingsPanel(null);setReady(false);setError(true);setStaticMode(true);setPanorama(false);setLoading({state:"实时画面已暂停，可重新载入。",progress:null});}}},controller.signal);
-     if(disposed||failed){scene.dispose();return;}
+     finishStage(disposed?'cancelled':'success');
+     if(disposed || !mount.current){finishStartup('cancelled');return;}
+     finishStage=beginPhase('startup.create-scene',{attempt});
+     const scene=await createScene(mount.current,{onProgress:(state,value)=>{if(!disposed)setLoading({state,progress:value});},onPanorama:(value)=>{if(!disposed){requestedPlace.current={...requestedPlace.current,panorama:value};setPanorama(value);if(!value)panoramaButton.current?.focus({preventScroll:true});}},onGust:(strength)=>{if(!disposed&&!failed)soundscape.current?.setGust(strength);},onRunoff:(flow)=>{if(disposed||failed)return;roofRunoff.current=flow;soundscape.current?.setRoofRunoff(flow);},onBearing:(value)=>{if(!disposed&&bearingLabel.current){const label=`${String(value).padStart(3,'0')}°`;if(bearingLabel.current.textContent!==label)bearingLabel.current.textContent=label;}},onFailure:()=>{if(!disposed){failed=true;finishStage?.('error',{reason:'webgl-context-lost'});finishStartup('error',{reason:'webgl-context-lost'});engine.current=null;resetRoof();soundRequest.current++;weatherRequest.current++;void soundscape.current?.setEnabled(false);setSoundEnabled(false);setSoundBusy(false);setWeatherBusy(false);setSettingsPanel(null);setReady(false);setError(true);setStaticMode(true);setPanorama(false);setLoading({state:"实时画面已暂停，可重新载入。",progress:null});}}},controller.signal);
+     finishStage(disposed?'cancelled':failed?'error':'success');
+     if(disposed||failed){finishStartup(disposed?'cancelled':'error');scene.dispose();return;}
      engine.current=scene; setReady(true);setLoading({state:'',progress:100});
-   } catch(e){ if(!disposed&&!failed){console.error('Scene failed:',e);setError(true);setStaticMode(true);setLoading({state:e instanceof Error && e.message==='WEBGL_UNAVAILABLE'?'此设备使用静态观看模式。':'竹林暂时没有载入，仍可继续阅读。',progress:null});} } };
+     finishStartup('success',{boundary:'ready-state-requested'});
+   } catch(e){ finishStage?.(disposed?'cancelled':phaseStatus(e));finishStartup(disposed?'cancelled':phaseStatus(e));if(!disposed&&!failed){console.error('Scene failed:',e);setError(true);setStaticMode(true);setLoading({state:e instanceof Error && e.message==='WEBGL_UNAVAILABLE'?'此设备使用静态观看模式。':'竹林暂时没有载入，仍可继续阅读。',progress:null});} } };
    void start();
-   return ()=>{disposed=true;resetRoof();controller.abort();engine.current?.dispose();engine.current=null;};
+   return ()=>{disposed=true;finishStage?.('cancelled');finishStartup('cancelled');resetRoof();controller.abort();engine.current?.dispose();engine.current=null;};
  },[attempt]);
+ useEffect(()=>{if(ready)beginPhase('startup.controls-ready',{attempt,boundary:'react-committed'})();},[ready,attempt]);
  useEffect(()=>{engine.current?.setPaused(paused || reduced);},[paused,reduced,ready]);
  useEffect(()=>{engine.current?.setView(view);},[view,ready]);
  useEffect(()=>{engine.current?.setPlace(place);},[place,ready]);
@@ -196,10 +214,12 @@ export default function Experience() {
    engine.current?.setView(next.view);engine.current?.setPlace(next.place);engine.current?.setPanorama(next.panorama);
  };
  const changePlace=(next:typeof requestedPlace.current,afterCommit?:()=>void)=>{
+   pendingViewTiming.current?.('superseded');
+   const finish=beginPhase('view.request-to-commit',{view:next.view,place:next.place});pendingViewTiming.current=finish;
    const previous=requestedPlace.current;requestedPlace.current=next;
    setSelectedDestination({view:next.view,place:next.place});
    pendingNavigation.current=undefined;
-   const apply=()=>{commitPlace();if(afterCommit){const revision=++navigationCounter.current;pendingNavigation.current={revision,run:afterCommit};setNavigationRevision(revision);}};
+   const apply=()=>{try{commitPlace();if(afterCommit){const revision=++navigationCounter.current;pendingNavigation.current={revision,run:afterCommit};setNavigationRevision(revision);}finish('success',{boundary:'state-and-scene-committed'});}catch(error){finish(phaseStatus(error));throw error;}};
    if(previous.view===next.view&&previous.place===next.place&&committedPlace.current.view===next.view&&committedPlace.current.place===next.place&&!sceneTransition.current?.covering) {apply();return;}
    const animate=ready&&!staticMode&&!document.hidden&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
    if(sceneTransition.current)sceneTransition.current.request(apply,animate);else apply();
@@ -213,6 +233,7 @@ export default function Experience() {
  const weatherLabel=weather.rain>.7?'暴雨':weather.rain>0?'细雨':(weather.autumn??0)>.5?'大风':weather.wind===0?'无风':'晴风';
  const listeningCopy=weather.rain>.7?'雨落屋檐 · 一场夏日大雨':weather.rain>0?(view==='well-rain'?'井边细雨 · 檐下滴答':'细雨轻落 · 叶间滴答'):(weather.autumn??0)>.5?'风起竹海 · 带一点秋凉':view==='breeze'?'风从身旁经过 · 叶片轻轻响':{dawn:'晨鸟初醒 · 叶间微风',day:'风过竹叶 · 远处鸟鸣',noon:'竹荫正浓 · 远处夏声',dusk:'晚风渐柔 · 虫声初起',night:'月下虫鸣 · 风过竹梢'}[timeOfDay];
  return <div className={`experience is-${view} ${panorama?'is-panorama':''} ${staticMode?'is-static':''} ${soundEnabled?'is-listening':''} ${settingsPanel?'settings-open':''}`} data-time={timeOfDay}>
+  {PerformancePanel && <PerformancePanel />}
   <a className="skip-link" href="#return" onClick={(e)=>{e.preventDefault();chooseView('walk',()=>navigate(4));}}>跳到结束</a>
   <div className="scene-shell" aria-hidden={!panorama}>
    <picture><source media="(max-width:700px)" srcSet="/scene-poster-mobile.webp"/><img className="fallback-view" src="/scene-poster.webp" alt="" /></picture>
