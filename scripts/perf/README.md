@@ -52,7 +52,7 @@ python3 -m http.server 4180 --bind 127.0.0.1 --directory outputs/performance
 | `--profile` | `desktop` | `desktop` 请求 1440×900 外窗、DPR 1；`mobile` 模拟 402×874 视口、DPR 2 |
 | `--iterations` | `3` | 独立浏览器轮次，1–30 |
 | `--mode` | `baseline` | 轻量采集；`diagnostic` 加 trace、JS 采样和截图 |
-| `--flow` | `journey` | 五段视图；`load` 仅首屏；`system` 覆盖系统按钮；`views` 专门采集望月与听风首次/重复切换 |
+| `--flow` | `journey` | 五段视图；`load` 仅首屏；`system` 覆盖系统按钮；`views` 采集望月与听风切换；`cache` 对照新会话首访与同会话复访 |
 | `--observe-ms` | `5000` | 就绪后每段观察 1,000–30,000 ms |
 | `--instrumentation` | `on` | `on` 添加 `?perf=1`；`off` 移除该参数；浏览器通用探针始终存在 |
 | `--scenario` | `scene-journey.cjs` | 自定义 Browsertime 流程及对应数据导出 |
@@ -93,6 +93,8 @@ python3 -m http.server 4180 --bind 127.0.0.1 --directory outputs/performance
 默认 5 秒观察适合快速定位与检查采集链路。长期稳定帧率应增加观察时长，并在自定义脚本中明确暖机段；当前脚本交互后仅有 500 ms 固定稳定等待，不宣称满足 10 秒暖机、30 秒观测的正式基线标准。
 
 ## 三层数据与介入位置
+
+HTTP 缓存另有独立的 `--flow cache`，在同一浏览器会话正常导航相同 URL 两次。可将 `--url` 指向 `https://yuuki.fans/`，由本地工具直接观测线上页面；不需要查询 Cloudflare 后台。每条资源保留本地复用、304 协商、网络传输或未知的分类与证据，详见 [HTTP 缓存口径与命令](../../docs/performance/http-cache.md)。
 
 | 层 | 实现 | 作用 |
 | --- | --- | --- |

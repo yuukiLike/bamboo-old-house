@@ -4,7 +4,9 @@ import { Component, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Progress } from '@base-ui/react/progress';
 import type { ActivePhase, Phase } from '@/lib/performance';
 import { createRuntimeCollector, type RuntimeSnapshot } from '@/lib/performance-runtime';
+import { classifyResourceCache, summarizeResourceCache } from '../../scripts/perf/resource-cache.mjs';
 import { PerformanceRuntimeView } from './performance-runtime-view';
+import { PerformanceCacheView, formatCacheBytes } from './performance-cache-view';
 import './performance-panel.css';
 
 const MAX_RESOURCES = 500;
@@ -40,6 +42,7 @@ interface Row {
  duration: number;
  status: string;
  detail?: string;
+ cache?: ReturnType<typeof classifyResourceCache>;
 }
 interface Resource {
  id: string;
@@ -47,7 +50,7 @@ interface Resource {
  startTime: number;
  duration: number;
  initiatorType: string;
- transferSize: number;
+ cache: ReturnType<typeof classifyResourceCache>;
  timing: Record<string, unknown>;
 }
 interface Snapshot {
@@ -107,7 +110,7 @@ function TimelineGroup({ title, rows, scale, query, initiallyOpen = false }: { t
  const [open, setOpen] = useState(initiallyOpen);
  const [pagination, setPagination] = useState({ query, page: 0 });
  const needle = query.trim().toLowerCase();
- const filtered = rows.filter(row => `${row.name} ${row.label} ${row.detail ?? ''} ${STATUS[row.status]}`.toLowerCase().includes(needle));
+ const filtered = rows.filter(row => `${row.name} ${row.label} ${row.detail ?? ''} ${STATUS[row.status]} ${row.cache?.status ?? ''} ${row.cache?.label ?? ''} ${row.cache?.evidence ?? ''}`.toLowerCase().includes(needle));
  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
  const current = Math.min(pagination.query === query ? pagination.page : 0, pages - 1);
  return <details className="perf-group" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
@@ -118,6 +121,7 @@ function TimelineGroup({ title, rows, scale, query, initiallyOpen = false }: { t
     {filtered.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE).map(row => <li key={row.id} data-status={row.status}>
      <div className="perf-row-heading"><span title={row.label}>{row.label}</span><strong>{duration(row.duration)}</strong></div>
      <div className="perf-row-code" title={`${row.name}${row.detail ? ` · ${row.detail}` : ''}`}>{row.name}{row.detail && <span> · {row.detail}</span>}</div>
+     {row.cache && <div className="perf-resource-cache"><span className="perf-cache-badge" data-cache-kind={row.cache.status} title={`${row.cache.evidence} · 来源：${row.cache.source}`}>{row.cache.status === 'revalidated' && row.cache.source === 'resource-timing' ? '重新验证（推断）' : row.cache.label}</span><span>传输 {formatCacheBytes(row.cache.transferBytes)}</span><span>编码 {formatCacheBytes(row.cache.encodedBodyBytes)}</span></div>}
      <div className="perf-time-track" aria-hidden="true" title={`导航后 ${duration(row.startTime)} 开始，持续 ${duration(row.duration)}，${STATUS[row.status] ?? row.status}`}>
       <span style={{ left: `${Math.min(100, row.startTime / scale * 100)}%`, width: `${Math.min(100 - Math.min(100, row.startTime / scale * 100), row.duration / scale * 100)}%`, transform: row.duration < 1 ? 'translateX(-1px)' : undefined }} />
      </div>
@@ -157,7 +161,8 @@ function Panel() {
     const id = `${resource.startTime}:${resource.name}:${resource.initiatorType}`;
     if (resourceIds.current.has(id)) continue;
     resourceIds.current.add(id);
-    resources.current.push({ id, name: resource.name, startTime: resource.startTime, duration: resource.duration, initiatorType: resource.initiatorType, transferSize: resource.transferSize, timing: resource.toJSON() });
+    const timing = resource.toJSON() as Record<string, unknown>;
+    resources.current.push({ id, name: resource.name, startTime: resource.startTime, duration: resource.duration, initiatorType: resource.initiatorType, cache: classifyResourceCache(timing, { pageUrl: location.href }), timing });
     if (resources.current.length > MAX_RESOURCES) {
      const evicted = resources.current.shift();
      if (evicted) resourceIds.current.delete(evicted.id);
@@ -195,7 +200,8 @@ function Panel() {
  const failed = snapshot.readyAt === undefined && !startupActive && startup && startup.detail.status !== 'success';
  const startupEnd = snapshot.readyAt ?? (failed ? startup.startTime + startup.duration : snapshot.now);
  const completed = snapshot.phases.map(phase => ({ id: phase.entryName, name: phase.detail.phase, label: LABELS[phase.detail.phase] ?? phase.detail.phase, startTime: phase.startTime, duration: phase.duration, status: phase.detail.status, detail: detail(phase) })).sort((a, b) => a.startTime - b.startTime);
- const network = snapshot.resources.map(resource => ({ id: resource.id, name: resource.initiatorType || 'resource', label: filename(resource.name), startTime: resource.startTime, duration: resource.duration, status: 'recorded', detail: `${resource.transferSize > 0 ? `${(resource.transferSize / 1024).toFixed(1)} KB` : '传输体积未提供或为 0'} · ${resource.name}` })).sort((a, b) => a.startTime - b.startTime);
+ const network = snapshot.resources.map(resource => ({ id: resource.id, name: resource.initiatorType || 'resource', label: filename(resource.name), startTime: resource.startTime, duration: resource.duration, status: 'recorded', detail: resource.name, cache: resource.cache })).sort((a, b) => a.startTime - b.startTime);
+ const resourceCache = summarizeResourceCache(snapshot.resources, { pageUrl: location.href });
  const navigation = navigationRows(snapshot.now);
  const scale = Math.max(1, startupEnd, ...completed.map(row => row.startTime + row.duration), ...network.map(row => row.startTime + row.duration), ...navigation.map(row => row.startTime + row.duration));
  const active = snapshot.active.filter(phase => `${phase.detail.phase} ${LABELS[phase.detail.phase] ?? ''} ${detail(phase)}`.toLowerCase().includes(query.trim().toLowerCase()));
@@ -203,7 +209,8 @@ function Panel() {
  const exportJson = () => {
   try {
    const latest = readSnapshot(resources.current.slice(), droppedResources.current, resourceObserverSupported.current);
-   const content = JSON.stringify({ schemaVersion: 1, capturedAt: new Date().toISOString(), timeOrigin: performance.timeOrigin, url: location.href, startupReadyAt: latest.readyAt, now: latest.now, navigation: performance.getEntriesByType('navigation').map(entry => entry.toJSON()), resources: resources.current.map(resource => resource.timing), businessPhases: { version: 1, enabled: true, phases: latest.phases, activePhases: latest.active, droppedPhases: latest.dropped, droppedActivePhases: latest.droppedActive }, runtime: runtimeCollector.current?.snapshot() ?? null, droppedResources: droppedResources.current, limitations: ['CPU submission does not prove GPU completion or display presentation.', 'Concurrent and nested durations must not be added.', 'The UI cannot repaint during synchronous main-thread work.', 'Resource history starts from entries still retained by the browser when the panel loads.', 'Runtime RAF rates are callback rates, not display FPS or GPU timings.', 'Runtime collection starts when this opt-in panel mounts; hidden and paused frame gaps are excluded.'] }, null, 2);
+   const retainedResources = latest.resources.map(resource => ({ ...resource.timing, cache: resource.cache }));
+   const content = JSON.stringify({ schemaVersion: 1, capturedAt: new Date().toISOString(), timeOrigin: performance.timeOrigin, url: location.href, startupReadyAt: latest.readyAt, now: latest.now, navigation: performance.getEntriesByType('navigation').map(entry => entry.toJSON()), resources: retainedResources, resourceCache: { ...summarizeResourceCache(retainedResources, { pageUrl: location.href }), scope: 'Retained Resource Timing entries only; initial navigation is separate.', droppedResources: latest.droppedResources, resourceObserverSupported: latest.resourceObserverSupported }, businessPhases: { version: 1, enabled: true, phases: latest.phases, activePhases: latest.active, droppedPhases: latest.dropped, droppedActivePhases: latest.droppedActive }, runtime: runtimeCollector.current?.snapshot() ?? null, droppedResources: droppedResources.current, limitations: ['CPU submission does not prove GPU completion or display presentation.', 'Concurrent and nested durations must not be added.', 'The UI cannot repaint during synchronous main-thread work.', 'Resource history starts from entries still retained by the browser when the panel loads.', 'Local resource reuse does not prove a Cache-Control freshness policy; Resource Timing revalidation is inference without wire-level 304 evidence.', 'Page Resource Timing cannot read arbitrary resource response headers; cache summaries cover retained resources only.', 'Runtime RAF rates are callback rates, not display FPS or GPU timings.', 'Runtime collection starts when this opt-in panel mounts; hidden and paused frame gaps are excluded.'] }, null, 2);
    clearTimeout(revokeTimer.current);
    if (downloadUrl.current) URL.revokeObjectURL(downloadUrl.current);
    const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
@@ -232,7 +239,7 @@ function Panel() {
   </header>
   {!collapsed && <div id="performance-panel-body" className="perf-panel-body">
    <fieldset className="perf-tabs" aria-label="性能诊断视图"><button type="button" data-perf-tab="runtime" aria-pressed={view === 'runtime'} onClick={() => setView('runtime')}>实时运行</button><button type="button" data-perf-tab="timeline" aria-pressed={view === 'timeline'} onClick={() => setView('timeline')}>加载时间线</button></fieldset>
-   {view === 'runtime' ? <PerformanceRuntimeView snapshot={runtime} startupLabel={startupLabel} startupTime={duration(startupEnd)} failed={runtimeFailed} onPause={() => changeRuntime('pause')} onResume={() => changeRuntime('resume')} onClear={() => changeRuntime('clear')} /> : <>
+   {view === 'runtime' ? <><PerformanceRuntimeView snapshot={runtime} startupLabel={startupLabel} startupTime={duration(startupEnd)} failed={runtimeFailed} onPause={() => changeRuntime('pause')} onResume={() => changeRuntime('resume')} onClear={() => changeRuntime('clear')} /><PerformanceCacheView summary={resourceCache} dropped={snapshot.droppedResources} observerSupported={snapshot.resourceObserverSupported} compact /></> : <>
    <div className="perf-overview"><div><span>{snapshot.readyAt !== undefined ? '首屏控件已就绪' : failed ? '本次初始化已中断' : '正在进入页面'}</span><strong>{duration(startupEnd)}</strong></div><p>从导航开始 · 就绪后冻结首屏时间</p>
     <Progress.Root value={snapshot.readyAt !== undefined ? 1 : null} max={1} aria-label="首屏控件就绪状态" aria-valuetext={snapshot.readyAt !== undefined ? '首屏控件已就绪' : failed ? '初始化已中断' : '进行中，无法预估剩余时间'} className={`perf-progress ${failed ? 'perf-progress-stopped' : ''}`}><Progress.Track className="perf-progress-track"><Progress.Indicator className="perf-progress-indicator" /></Progress.Track></Progress.Root>
    </div>
@@ -245,6 +252,7 @@ function Panel() {
    </section>
    <TimelineGroup title="浏览器导航" rows={navigation} scale={scale} query={query} />
    <TimelineGroup title="业务阶段" rows={completed} scale={scale} query={query} initiallyOpen />
+   <PerformanceCacheView summary={resourceCache} dropped={snapshot.droppedResources} observerSupported={snapshot.resourceObserverSupported} />
    <TimelineGroup title="网络资源 · JS / CSS / 模型 / 音频" rows={network} scale={scale} query={query} />
    <p className="perf-explanation">资源条仅表示浏览器记录了请求耗时，不能单凭此判断 HTTP 或业务是否成功。</p>
    {!snapshot.resourceObserverSupported && <p className="perf-warning">此浏览器未启用资源观察器；列表只包含面板启动时浏览器仍保留的资源记录。</p>}

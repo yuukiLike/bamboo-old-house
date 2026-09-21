@@ -81,6 +81,24 @@
 .perf-search-label input::placeholder { color: #829b8b; }
 .perf-section-heading { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 9px; }
 .perf-count { font-size: 10px; color: #adbfaf; background: #bdccbf14; padding: 1px 6px; border-radius: 4px; font-weight: 400; }
+.perf-cache { margin: 0 0 12px; padding: 11px 0 2px; border-top: 1px solid #bfd4c21f; }
+.perf-cache-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; color: #c9d9ca; font-size: 11px; font-weight: 600; }
+.perf-cache-heading > span:last-child { color: #91a898; font-size: 10px; font-weight: 400; }
+.perf-cache-counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; margin: 0 0 9px; }
+.perf-cache-counts > div { min-width: 0; padding: 7px 5px; border: 1px solid #b4d1be20; border-radius: 5px; background: #98bb9c08; }
+.perf-cache-counts dt { color: #a5bdac; font-size: 10px; white-space: nowrap; }
+.perf-cache-counts dd { margin: 3px 0 0; color: #d8e9d8; font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.perf-cache-counts > [data-cache-kind='unknown'] dd { color: #acbbae; }
+.perf-cache-rate { display: flex; gap: 5px 14px; flex-wrap: wrap; margin: 0 0 7px; color: #bacfbd; font-size: 11px; font-variant-numeric: tabular-nums; }
+.perf-cache .perf-explanation { margin-bottom: 7px; }
+.perf-cache-compact .perf-cache-counts > div { display: flex; align-items: center; justify-content: space-between; gap: 3px; padding: 5px; }
+.perf-cache-compact .perf-cache-counts dd { margin: 0; font-size: 13px; }
+.perf-resource-cache { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0 2px; font-size: 10px; color: #98b19f; font-variant-numeric: tabular-nums; }
+.perf-cache-badge { display: inline-block; border-radius: 3px; padding: 1px 5px; background: #98b8a51c; color: #afc6b5; white-space: nowrap; }
+.perf-cache-badge[data-cache-kind='local'] { color: #bce0ba; background: #9dc69320; }
+.perf-cache-badge[data-cache-kind='revalidated'] { color: #d4c9a0; background: #cfba7520; }
+.perf-cache-badge[data-cache-kind='network'] { color: #a7c6d0; background: #87b2c51a; }
+.perf-cache-badge[data-cache-kind='unknown'] { color: #a6b2a8; background: #b2beb412; }
 .perf-active { padding: 0 0 12px; }
 .perf-active ul, .perf-timeline { margin: 0; padding: 0; list-style: none; }
 .perf-active ul { max-height: 174px; overflow: auto; scrollbar-width: thin; }

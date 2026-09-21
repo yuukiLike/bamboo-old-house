@@ -1,6 +1,8 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { CACHE_LABELS, CACHE_COLORS, classifyResourceCache, summarizeResourceCache } from './resource-cache.mjs';
 
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const median = values => {
@@ -39,13 +41,15 @@ function frames(values, summary) {
     over33msPercent: sorted.length ? 100 * sorted.filter(value => value > 33.33).length / sorted.length : null };
 }
 
-function normalize(raw, file) {
+function normalize(raw, file, pageUrl) {
   if (!raw || typeof raw.alias !== 'string' || !raw.alias.trim() || !Number.isInteger(raw.iteration) || raw.iteration < 1) throw new Error('场景必须声明非空 alias 和正整数 iteration');
   if (!finite(raw.start?.nowMs) || raw.start.nowMs < 0 || !finite(raw.observedAtMs) || raw.observedAtMs < raw.start.nowMs) throw new Error('场景缺少有效的 performance.now() 采集时间窗口');
   const windowMs = raw.summary?.windowObservedMs;
   if (!finite(windowMs) || windowMs < 0 || Math.abs(windowMs - (raw.observedAtMs - raw.start.nowMs)) > 1 ||
     ['conditionObservedMs', 'stableObservedMs'].some(key => !finite(raw.summary?.[key]) || raw.summary[key] < 0 || raw.summary[key] > windowMs + 1)) throw new Error('场景 summary 缺少有效观察 / 就绪 / 稳定时长，或与采集窗口不一致');
   const initial = raw.alias === 'initial-3d';
+  const navigationLoad = initial || raw.alias === 'cache-revisit';
+  const finalPageUrl = raw.url ?? pageUrl;
   const frameWindowValid = raw.frameWindowValid !== false;
   const retainedFrames = raw.probe?.retention?.frames;
   const missingBrowserSummary = raw.probe?.frameSamplesTruncated && !finite(raw.probe?.frameSummary?.count);
@@ -63,7 +67,7 @@ function normalize(raw, file) {
   }));
   const metrics = {
     readyMs: raw.summary?.conditionObservedMs ?? null, windowMs: raw.summary?.windowObservedMs ?? null,
-    stableMs: raw.summary?.stableObservedMs ?? null, startupMs: initial ? raw.summary?.startupMs ?? null : null,
+    stableMs: raw.summary?.stableObservedMs ?? null, startupMs: navigationLoad ? raw.summary?.startupMs ?? null : null,
     p95Ms: appFrames?.p95Ms ?? null, stableP95Ms: stableFrames?.p95Ms ?? null,
     probeP95Ms: browserFrames?.p95Ms ?? null, over33msPercent: appFrames?.over33msPercent ?? null,
     maxRafMs: browserFrames?.maxMs ?? null,
@@ -71,17 +75,20 @@ function normalize(raw, file) {
     stableMeanHz: stableProbeValid && raw.probeStable?.frameSummary?.meanMs > 0 ? 1000 / raw.probeStable.frameSummary.meanMs : null,
     stableTypicalHz: stableFrames?.medianMs > 0 ? 1000 / stableFrames.medianMs : null,
   };
-  const sample = { alias: raw.alias ?? path.basename(file), label: raw.label ?? null, iteration: raw.iteration, initial, file, metrics, appFrames, stableFrames, browserFrames,
+  const sample = { alias: raw.alias ?? path.basename(file), label: raw.label ?? null, iteration: raw.iteration, initial, navigationLoad, file, metrics, appFrames, stableFrames, browserFrames,
+    cacheVisit: raw.cacheVisit ?? null, cacheCondition: raw.cacheCondition ?? null, url: finalPageUrl ?? null,
     startMs: raw.start?.nowMs, endMs: raw.observedAtMs, timeOrigin: raw.timeOrigin, completionRule: raw.completionRule, limitation: raw.limitation,
     frameWindowValid, frameDataAvailable: raw.frameDataAvailable !== false, browserFrameWindowValid, frameSamplesTruncated: !!raw.frameSamplesTruncated,
     adapter: raw.adapter ?? null,
     diagnostics: raw.diagnostics ?? {}, browserViewport: raw.browserViewport ?? null, startState: raw.startState ?? null, state: raw.endState ?? raw.state ?? null,
     workload: raw.workload ?? null, preparations: asArray(raw.preparations),
     businessPhases: raw.businessPhases ? { enabled: raw.businessPhases.enabled, version: raw.businessPhases.version, droppedPhases: raw.businessPhases.droppedPhases } : null,
-    measures, resources: asArray(raw.resources), probe: raw.probe ?? null, probeStable: raw.probeStable ?? null,
-    navigation: initial ? asArray(raw.navigation) : [], visibility: raw.visibility,
+    measures, resources: asArray(raw.resources).map(entry => ({ ...entry, cache: classifyResourceCache(entry, { pageUrl: finalPageUrl }) })), probe: raw.probe ?? null, probeStable: raw.probeStable ?? null,
+    navigation: navigationLoad ? asArray(raw.navigation).map(entry => ({ ...entry, cache: classifyResourceCache(entry, { pageUrl: finalPageUrl }) })) : [], visibility: raw.visibility,
+    networkCapture: raw.networkCapture ?? null,
   };
   sample.stutters = locateStutters(sample);
+  sample.resourceCache = summarizeResourceCache(sample.resources);
   return sample;
 }
 
@@ -131,7 +138,7 @@ async function loadRun(runDir) {
   catch (error) { warnings.push(`manifest.json 不可读取，无法确认采集条件与完成状态：${error.message}`); }
   const samples = [];
   for (const file of files.filter(name => /^scene-\d+-.+\.json$/.test(path.basename(name)))) {
-    try { samples.push(normalize(await json(path.join(runDir, file)), file)); }
+    try { samples.push(normalize(await json(path.join(runDir, file)), file, manifest.config?.url)); }
     catch (error) { warnings.push(`原始记录无法解析 ${file}：${error.message}`); }
   }
   samples.sort((a, b) => (Number(a.iteration) - Number(b.iteration)) || a.file.localeCompare(b.file));
@@ -163,13 +170,14 @@ async function loadRun(runDir) {
     const rows = samples.filter(sample => sample.alias === alias);
     const medians = Object.fromEntries(Object.keys(metricLabels).map(key => [key, median(rows.map(row => row.metrics[key]))]));
     const metricSampleCounts = Object.fromEntries(Object.keys(metricLabels).map(key => [key, rows.filter(row => finite(row.metrics[key])).length]));
-    return { alias, label: rows[0].label ?? sceneLabels[alias] ?? alias, initial: rows[0].initial, samples: rows, medians, metricSampleCounts };
+    return { alias, label: rows[0].label ?? sceneLabels[alias] ?? alias, initial: rows[0].initial, navigationLoad: rows[0].navigationLoad, samples: rows, medians, metricSampleCounts, resourceCache: summarizeResourceCache(rows.flatMap(sample => sample.resources)) };
   });
   const sceneOrder = expectedAliases.length ? expectedAliases : Object.keys(sceneLabels);
   groups.sort((a, b) => Number(b.initial) - Number(a.initial) || sceneOrder.indexOf(a.alias) - sceneOrder.indexOf(b.alias));
   const complete = samples.length > 0 && manifest.status === 'completed' && manifest.capture?.exitCode === 0 &&
     !warnings.some(warning => /：实际|无法解析|没有可用|缺少有效 probe/.test(warning));
   return { runDir, manifest, warnings, status: complete ? 'completed' : 'incomplete', coverageDeclared, groups,
+    resourceCache: summarizeResourceCache(samples.flatMap(sample => sample.resources)),
     artifacts: files.filter(file => file === 'index.html' || file === path.join('sitespeed', 'index.html') || /(?:trace|timeline|console|har)(?:[._-]|$)/i.test(path.basename(file))).slice(0, 100) };
 }
 
@@ -182,7 +190,7 @@ function compareSceneStates(current, baseline, adapter) {
   if (!fields.length) reasons.push('适配器未声明可核对的状态字段，无法确认操作条件一致');
   for (const [key, label] of [['startState', '操作前'], ['state', '操作后']]) {
     const now = current.samples.map(sample => sample[key]), before = baseline.samples.map(sample => sample[key]);
-    if (key === 'startState' && current.initial && now.every(state => state == null) && before.every(state => state == null)) { notes.push('首屏操作前尚无页面状态，记为未知且不参与状态比较'); continue; }
+    if (key === 'startState' && current.navigationLoad && now.every(state => state == null) && before.every(state => state == null)) { notes.push(current.initial ? '首屏操作前尚无页面状态，记为未知且不参与状态比较' : '复访导航前尚无页面状态，记为未知且不参与状态比较'); continue; }
     if ([...now, ...before].some(state => state == null)) { reasons.push(`${label}状态快照缺失，无法核对声音等可控条件`); continue; }
     for (const field of fields) {
       const a = now.map(state => get(state, field)), b = before.map(state => get(state, field));
@@ -222,6 +230,8 @@ function comparison(current, baseline) {
   if (current.manifest.config?.instrumentation === 'on' || baseline.manifest.config?.instrumentation === 'on') required.push('config.instrumentationSha256');
   if (current.manifest.config?.collectorSha256 || baseline.manifest.config?.collectorSha256) required.push('config.collectorSha256');
   if (current.manifest.config?.adapter || baseline.manifest.config?.adapter) required.push(...['id', 'version', 'sha256', 'stateFields', 'optionalStateFields'].map(key => `config.adapter.${key}`));
+  if (current.manifest.config?.networkCache || baseline.manifest.config?.networkCache) required.push('config.networkCache');
+  else notes.push('双方均为旧版采集，未声明 networkCache 采集器版本；原性能条件继续核对，缓存只按已保留 Resource Timing 解释，无法补证实际 304 或浏览器缓存层。');
   for (const key of required) {
     const a = get(current.manifest, key), b = get(baseline.manifest, key);
     if (a == null || b == null) reasons.push(`${key} 缺少记录`);
@@ -246,6 +256,7 @@ function comparison(current, baseline) {
   for (const run of [current, baseline]) {
     const samples = run.groups.flatMap(group => group.samples);
     if (run.manifest.config?.probe && samples.some(sample => !sample.probe)) reasons.push('已配置浏览器探针，但部分原始窗口缺少 probe');
+    if (run.manifest.config?.networkCache?.requested && samples.some(sample => sample.networkCapture?.available !== true)) reasons.push(`${run === current ? '当前' : '基线'}已要求 CDP 网络缓存采集，但部分窗口不可用或缺少实际采集状态；不能将失败降级与正常采集作为同条件比较`);
     if (run.manifest.config?.instrumentation === 'on' && samples.some(sample => !instrumentationKnown(samples, sample))) reasons.push('部分页面无法确认业务埋点已开启，无法确认采集开销条件一致');
     const adapter = run.manifest.config?.adapter;
     if (adapter && samples.some(sample => ['id', 'version', 'stateFields', 'optionalStateFields'].some(key => canonical(sample.adapter?.[key]) !== canonical(adapter[key])))) reasons.push('原始场景缺少匹配的适配器声明，不能确认自定义流程使用了指定适配器');
@@ -286,9 +297,73 @@ function waterfall(entries, label) {
   const last = Math.max(...entries.map(entry => entry.startTime + entry.duration));
   const width = Math.max(1, last - first);
   return `<p class="muted">相对导航起点；起点 ${fmt(first)}，终点 ${fmt(last)}。重叠时段不可相加。${entries.length > 120 ? `显示前 120 / ${entries.length} 条，全部条目见原始 JSON。` : ''}</p>` +
-    shown.map(entry => `<div class="waterfall"><span title="${esc(label(entry))}">${esc(label(entry))}</span><div class="track"><i style="left:${100 * (entry.startTime - first) / width}%;width:${Math.max(.3, 100 * entry.duration / width)}%"></i></div><span>${fmt(entry.duration)}</span></div>`).join('');
+    shown.map(entry => `<div class="waterfall${entry.cache ? ' resource-waterfall' : ''}">${entry.cache ? resourceName(entry) : `<span title="${esc(label(entry))}">${esc(label(entry))}</span>`}<div class="track"><i style="left:${100 * (entry.startTime - first) / width}%;width:${Math.max(.3, 100 * entry.duration / width)}%${entry.cache ? `;background:${cacheColor(entry.cache)}` : ''}"></i></div><span>${fmt(entry.duration)}</span></div>`).join('');
 }
 const resourceLabel = entry => { try { return new URL(entry.name).pathname; } catch { return String(entry.name ?? '未知资源'); } };
+
+function cacheEnvironmentNote(manifest) {
+  let url;
+  try { url = new URL(manifest.config?.url); } catch { return '页面地址未记录，无法判断采集的是本地服务还是实际部署。'; }
+  if (url.hostname === 'localhost' || url.hostname === '[::1]' || url.hostname.startsWith('127.')) return '当前目标是 localhost 本地预览：这里只证明浏览器与本地服务的 HTTP 缓存行为，不能外推到实际部署、CDN 或用户网络。';
+  if (!['http:', 'https:'].includes(url.protocol)) return '当前目标不是 HTTP(S) 页面，原生或本地协议的资源不能视作 HTTP 缓存命中。';
+  return '结果仅描述本次浏览器实际请求；不会额外请求资源，也不查询 CDN 平台。浏览器本地复用不代表本次访问经过 CDN。';
+}
+
+const cacheColor = cache => CACHE_COLORS[cache?.status] ?? CACHE_COLORS.unknown;
+const cacheBadge = cache => `<span class="cache-badge" style="--cache-color:${cacheColor(cache)}" title="${esc(cache?.evidence)}">${esc(cache?.label ?? '未知')}</span>`;
+const resourceName = entry => `<span class="resource-name" title="${esc(`${entry.name} · ${fmt(entry.startTime)} → ${fmt(entry.startTime + entry.duration)}`)}"><span>${esc(resourceLabel(entry))}</span>${cacheBadge(entry.cache)}</span>`;
+
+function cacheEvidenceRows(resources) {
+  return resources.map(entry => {
+    const network = entry.network;
+    const status = network ? `线端 ${fmt(network.wireStatus, '')} / 浏览器 ${fmt(network.responseStatus, '')}` : `Resource Timing ${fmt(entry.responseStatus > 0 ? entry.responseStatus : null, '')}`;
+    const allowed = new Set(['cache-control', 'etag', 'last-modified', 'expires', 'age', 'vary', 'content-length', 'content-type', 'content-encoding', 'timing-allow-origin']);
+    const headers = network ? Object.fromEntries(Object.entries({ ...network.responseHeaders, ...network.wireResponseHeaders }).filter(([name]) => allowed.has(name.toLowerCase()))) : null;
+    return [resourceName(entry), `${fmt(entry.startTime)} / ${fmt(entry.duration)}`, esc(status),
+      fmt(entry.cache?.transferBytes, ' B'), esc(entry.cache?.evidence || '没有可判定缓存的证据'),
+      headers && Object.keys(headers).length ? `<code>${esc(JSON.stringify(headers))}</code>` : '<span class="muted">未采集响应头</span>'];
+  });
+}
+
+function cacheEvidenceHtml(sample) {
+  const resources = sample.resources;
+  return `<details><summary>逐资源 HTTP 缓存证据 <span class="count">${resources.length} 条${resources.length > 200 ? ' · 显示前 200 条' : ''}</span></summary>
+    <p class="muted">线端状态来自 CDP ExtraInfo；浏览器状态可能已经合并 304 响应。0 字节不单独证明命中。仅展示安全白名单响应头，未保留 Cookie 或 Authorization。</p>
+    ${resources.length ? table(['资源 / 分类', '开始 / 耗时', 'HTTP 状态', '已知传输量', '判定依据', '安全响应头'], cacheEvidenceRows(resources.slice(0, 200))) : '<p class="empty">本窗口没有已记录资源，缓存复用比例与证据覆盖率均为 N/A。</p>'}
+    <p class="muted">全量分类与证据保存在 summary.json；原始浏览器字段保存在 <a href="${relativeLink(sample.file)}">本轮 JSON</a>。资源列表只覆盖已保留的完成条目，未完成、缓冲溢出或窗口前请求不在分母中。</p></details>`;
+}
+
+function cacheSummaryHtml(summary) {
+  const card = (label, value, note) => `<article class="metric-card"><span class="metric-label">${esc(label)}</span><strong>${value}</strong><span class="metric-note">${esc(note)}</span></article>`;
+  const counts = Object.entries(CACHE_LABELS).map(([status, label]) => ({ status, label, count: summary.counts[status] ?? 0 }));
+  return `<div class="metric-grid cache-metrics">
+    ${card('浏览器本地复用', fmt(summary.localHitRatePercent, '%'), `${summary.counts.local} 条 / ${summary.httpClassified} 条可判定 HTTP 记录；不包含 304`)}
+    ${card('协商复用', fmt(summary.revalidationRatePercent, '%'), `${summary.counts.revalidated} 条；含 Resource Timing 推断，实际 304 见 CDP`)}
+    ${card('分类证据覆盖率', fmt(summary.coveragePercent, '%'), `${summary.classified} / ${summary.total} 条可分类；未知 ${summary.unknown} 条`)}
+    ${card('已知传输体积', fmt(finite(summary.transferBytes) ? summary.transferBytes / 1024 : null, ' KiB'), `${summary.transferKnownCount} / ${summary.total} 条有可用字节证据；未知不计 0`)}
+    </div>
+    ${summary.total ? `<div class="cache-distribution" aria-label="资源记录缓存分类分布">${counts.filter(item => item.count).map(item => `<span style="width:${100 * item.count / summary.total}%;background:${CACHE_COLORS[item.status]}" title="${esc(item.label)}：${item.count} 条"></span>`).join('')}</div>` : '<p class="empty">没有已记录的资源；复用比例、证据覆盖率与传输量均为 N/A。</p>'}
+    <div class="cache-legend">${counts.map(item => `<span>${cacheBadge({ status: item.status, label: item.label })}<strong>${item.count}</strong><small>${summary.total ? fmt(100 * item.count / summary.total, '%') : 'N/A'}</small></span>`).join('')}</div>`;
+}
+
+function cacheOverview(run) {
+  const samples = run.groups.flatMap(group => group.samples);
+  const cdpSamples = samples.filter(sample => sample.networkCapture?.available === true);
+  const oldSamples = samples.filter(sample => !sample.networkCapture);
+  const requested = run.manifest.config?.networkCache?.requested === true;
+  const total = values => values.some(finite) ? values.filter(finite).reduce((sum, value) => sum + value, 0) : null;
+  const matched = total(samples.map(sample => sample.networkCapture?.entries?.matched));
+  const missing = total(samples.map(sample => sample.networkCapture?.missing));
+  return `<section id="resource-cache"><div class="section-heading"><div><p class="eyebrow">HTTP 缓存</p><h2>哪些资源复用了缓存</h2></div><span class="tag">${samples.length} 个采集窗口 · 非唯一 URL 去重</span></div>
+    <p class="boundary-note">${esc(cacheEnvironmentNote(run.manifest))}</p>
+    <div class="metadata" aria-label="全采集 CDP 网络匹配状态"><span>全采集 CDP 可用 ${cdpSamples.length} / ${samples.length} 个窗口</span><span>匹配 ${fmt(matched, ' 条')}</span><span>缺失 / 歧义 ${fmt(missing, ' 条')}</span></div>
+    ${requested && cdpSamples.length !== samples.length ? '<p class="warning">本次配置要求 CDP 网络采集，但部分窗口缺少可用网络证据。已保留的时序仍可阅读；基线比较会拒绝将本次降级采集与正常采集混比。</p>' : ''}
+    <div data-kpi="all">${cacheSummaryHtml(run.resourceCache)}</div>${run.groups.map(group => `<div data-kpi="${esc(group.alias)}" hidden>${cacheSummaryHtml(group.resourceCache)}</div>`).join('')}
+    <p class="muted">本地与协商复用比例的分母仅为“本地复用 + 协商复用 + 网络传输”；协商复用仍有网络往返，真实 304 与时序推断在逐资源证据中区分。Service Worker 和未知独立列出。分布条与证据覆盖率按全部已记录资源计数，多轮相同 URL 各算一条。无资源或无可判定 HTTP 记录时不显示 100%。</p>
+    <p class="muted">${oldSamples.length ? `${oldSamples.length} 个窗口没有网络采集记录${requested ? '' : '（旧版或自定义采集）'}，仅按已有 Resource Timing 解释，不能事后补出实际 304、内存 / 磁盘缓存细分或完整响应头。` : ''}普通页面内观测受同源与 Timing-Allow-Origin 限制；0 字节、很快完成或缓存响应头单独出现均不足以证明缓存命中。</p>
+    <details${run.manifest.config?.flow === 'cache' ? ' open' : ''}><summary>${run.manifest.config?.flow === 'cache' ? '首访与复访分别看 · 每轮缓存证据' : '每个窗口的缓存覆盖与采集状态'}</summary>${table(['场景 / 轮次', '资源数', '本地 / 协商 / 网络 / SW / 未知', '分类覆盖', '已知传输', '网络证据'], samples.map(sample => [esc(`${sample.label ?? sample.alias} / ${sample.iteration}`), String(sample.resourceCache.total), ['local', 'revalidated', 'network', 'service-worker', 'unknown'].map(status => sample.resourceCache.counts[status]).join(' / '), fmt(sample.resourceCache.coveragePercent, '%'), `${fmt(sample.resourceCache.transferBytes, ' B')} · ${sample.resourceCache.transferKnownCount} 条`, sample.networkCapture ? esc(`${sample.networkCapture.available ? 'CDP 已启用' : 'CDP 不可用'}${sample.networkCapture.reason ? ` · ${sample.networkCapture.reason}` : ''}${sample.networkCapture.truncated ? ' · 网络证据已截断' : ''}${sample.networkCapture.disconnected ? ' · 连接中断' : ''} · 匹配 ${sample.networkCapture.entries?.matched ?? 'N/A'} / 缺失 ${sample.networkCapture.missing ?? 'N/A'}`) : requested ? '缺少要求的 CDP 网络记录' : '旧 / 自定义记录 · 仅 Resource Timing']), samples.map(sample => sample.alias))}</details>
+    <p class="muted">传输体积采用 Resource Timing 的浏览器估算值，不等于网卡实际字节。以上分布计数不含主 HTML 文档，CDP 匹配计数包含文档；文档缓存证据在各轮导航详情单独列出。逐资源标签位于加载时间轴和各轮资源瀑布；每轮详情可展开 HTTP 状态、判定依据与安全响应头。</p></section>`;
+}
 function phaseRows(sample) {
   return [...sample.measures].sort((a, b) => b.duration - a.duration).slice(0, 12).map(entry => [esc(entry.phase), fmt(entry.startTime), fmt(entry.duration), esc(entry.detail?.status ?? '未标记')]);
 }
@@ -319,7 +394,7 @@ function stutterHtml(run) {
   const risks = samples.flatMap(sample => sample.stutters.risks.map(risk => ({ sample, risk })));
   const interval = entry => `+${fmt(entry.relativeStartMs)} → +${fmt(entry.relativeEndMs)}`;
   const phaseEvidence = entries => entries.slice(0, 10).map(entry => esc(phaseLabel(entry))).join('<br>') + (entries.length > 10 ? `<br>另 ${entries.length - 10} 项见 summary.json` : '');
-  const type = ({ sample, episode }) => sample.initial && episode.start < (sample.startMs ?? 0) + (sample.metrics.readyMs ?? 0) ? '加载阶段无响应风险' : '该操作期间帧调度停顿';
+  const type = ({ sample, episode }) => sample.navigationLoad && episode.start < (sample.startMs ?? 0) + (sample.metrics.readyMs ?? 0) ? '加载阶段无响应风险' : '该操作期间帧调度停顿';
   const rows = shown.map(item => {
     const { group, sample, episode } = item;
     const taskSupported = sample.probe?.supported?.longtask === true;
@@ -357,18 +432,18 @@ function stutterHtml(run) {
 }
 
 function initialTimeline(sample) {
-  if (!sample.initial) return '';
+  if (!sample.navigationLoad) return '';
   const navigation = [], boundaries = [];
   for (const entry of sample.navigation.slice(0, 1)) {
     for (const [name, from, to] of [['DNS 查询', 'domainLookupStart', 'domainLookupEnd'], ['连接建立', 'connectStart', 'connectEnd'], ['TLS 握手', 'secureConnectionStart', 'connectEnd'], ['请求至首字节', 'requestStart', 'responseStart'], ['HTML 响应接收', 'responseStart', 'responseEnd'], ['响应结束至 DOM 可交互', 'responseEnd', 'domInteractive']]) {
       if (finite(entry[from]) && finite(entry[to]) && entry[to] > entry[from] && (from !== 'secureConnectionStart' || entry[from] > 0)) navigation.push({ name, startTime: entry[from], duration: entry[to] - entry[from] });
     }
-    for (const [name, key] of [['DOM 可交互', 'domInteractive'], ['DOMContentLoaded 结束', 'domContentLoadedEventEnd'], ['页面 load 结束', 'loadEventEnd']]) if (entry[key] > 0 && finite(entry[key])) boundaries.push({ name, startTime: entry[key], duration: 0 });
+    for (const [name, key] of [['DOM 可交互', 'domInteractive'], ['DOMContentLoaded 结束', 'domContentLoadedEventEnd'], ['页面 load 结束', 'loadEventEnd']]) if (entry[key] > 0 && finite(entry[key])) boundaries.push({ name, startTime: entry[key], duration: 0, boundary: true });
   }
   const phases = sample.measures.filter(entry => String(entry.name).startsWith('bamboo:') || entry.detail?.phase).map(entry => ({ ...entry, name: phaseLabel(entry) }));
   const first = phases.find(entry => entry.detail?.phase === 'startup.initial-frame-submit');
-  if (first) boundaries.push({ name: '首帧提交结束', startTime: first.startTime + first.duration, duration: 0 });
-  if (finite(sample.metrics.readyMs)) boundaries.push({ name: '轮询确认画布及控件就绪', startTime: (sample.startMs ?? 0) + sample.metrics.readyMs, duration: 0 });
+  if (first) boundaries.push({ name: '首帧提交结束', startTime: first.startTime + first.duration, duration: 0, boundary: true });
+  if (finite(sample.metrics.readyMs)) boundaries.push({ name: '轮询确认画布及控件就绪', startTime: (sample.startMs ?? 0) + sample.metrics.readyMs, duration: 0, boundary: true });
   const resources = sample.resources.map(entry => ({ ...entry, name: resourceLabel(entry) }));
   const stalls = sample.stutters.episodes.map(entry => ({ name: `RAF 调度停顿 · 最长间隔 ${fmt(entry.maxGapMs)}${entry.crossesStart ? ' · 跨起点' : ''}`, startTime: entry.start, duration: entry.end - entry.start }));
   const valid = entries => entries.filter(entry => finite(entry.startTime) && entry.startTime >= 0 && finite(entry.duration) && entry.duration >= 0 && finite(entry.startTime + entry.duration));
@@ -384,7 +459,7 @@ function unifiedTimelineLayers(sample, navigation, boundaries, phases, resources
     const bars = within.slice(0, limit).map(entry => {
       const start = Math.min(end, entry.startTime), finish = Math.min(end, entry.startTime + entry.duration), marker = entry.duration === 0;
       const label = `${entry.name} · ${fmt(entry.startTime)} → ${fmt(entry.startTime + entry.duration)}`;
-      return `<div class='waterfall'><span title='${esc(label)}'>${esc(entry.name)}</span><div class='track timeline-track'><i style='left:${100 * start / end}%;width:${marker ? '2px' : `${100 * (finish - start) / end}%`};background:${color}${marker ? ';transform:translateX(-1px)' : ''}'></i></div><span>${marker ? '时间边界' : fmt(entry.duration)}</span></div>`;
+      return `<div class='waterfall${entry.cache ? ' resource-waterfall' : ''}'>${entry.cache ? resourceName(entry) : `<span title='${esc(label)}'>${esc(entry.name)}</span>`}<div class='track timeline-track'><i style='left:${100 * start / end}%;width:${marker ? '2px' : `${100 * (finish - start) / end}%`};background:${entry.cache ? cacheColor(entry.cache) : color}${marker ? ';transform:translateX(-1px)' : ''}'></i></div><span>${entry.boundary ? '时间边界' : fmt(entry.duration)}</span></div>`;
     });
     return `<details${open ? ' open' : ''}><summary>${esc(title)} · ${within.length} 条${within.length > limit ? `，显示前 ${limit} 条` : ''}</summary>${axis}${bars.join('') || `<p class='muted'>N/A · 未采集到对应条目</p>`}${within.length > limit ? `<p class='muted'>显示数量有界，全部保留记录见 <a href='${relativeLink(sample.file)}'>原始 JSON</a>。</p>` : ''}</details>`;
   };
@@ -401,7 +476,8 @@ function sampleHtml(sample) {
   return `<details><summary>第 ${esc(sample.iteration)} 轮 · ${fmt(sample.metrics.readyMs)} 近似就绪 · ${fmt(sample.metrics.p95Ms)} 应用 p95</summary>
     <p><a href="${relativeLink(sample.file)}">原始场景 JSON</a> · 窗口 ${fmt(sample.startMs)} → ${fmt(sample.endMs)} · 末端可见性 ${esc(sample.visibility ?? 'N/A')}</p>
     <p class="muted">完成条件：${esc(sample.completionRule ?? 'N/A')}</p>
-    ${sample.initial ? `<p><a href="#timeline" data-jump-timeline data-timeline-iteration="${esc(sample.iteration)}">查看本轮首屏统一时间轴 ↑</a></p>` : ''}
+    ${sample.navigationLoad ? `<p><a href="#timeline" data-jump-timeline data-timeline-scene="${esc(sample.alias)}" data-timeline-iteration="${esc(sample.iteration)}">查看本轮${sample.initial ? '首次加载' : '缓存复访'}统一时间轴 ↑</a></p>` : ''}
+    ${sample.cacheCondition ? `<p class="muted">访问条件：${esc(sample.cacheCondition)}</p>` : ''}
     ${sample.preparations.length ? `<p class="muted">窗口前准备（不计入本段性能）：${sample.preparations.map(preparation => `${esc(preparation.label)} / ${fmt(preparation.elapsedMs)}`).join('；')}。准备前后状态保留在 summary.json 与原始记录。</p>` : ''}
     <h4>操作前后状态</h4>${sample.state || sample.startState ? table(['状态', '操作前', '观察窗口结束'], stateRows(sample).map(row => row.map(esc))) : '<p class="muted">N/A · 此采集未记录按钮状态快照，不从帧率推断声音是否开启。</p>'}
     ${table(['帧来源', '样本数', '中位数', 'p95', 'p99', '最大值', '>33.33ms'], frameRows(sample))}
@@ -413,15 +489,16 @@ function sampleHtml(sample) {
     <h4>业务阶段</h4><p class="muted">阶段均为墙钟时间，不能解释为纯 CPU/GPU 耗时。view.capture 包含等候场景帧，view.reveal 包含等候目标帧和淡入；view.request-to-commit 的结束是状态请求与场景设置完成，startup.controls-ready 才确认 React 提交后控件就绪。</p>${waterfall(sample.measures, entry => entry.phase)}
     ${sample.measures.length ? table(['耗时较长的阶段', '开始', '耗时', '状态'], phaseRows(sample)) : `<p class="muted">${sample.businessPhases?.enabled ? '业务埋点已开启，本操作未产生业务阶段；面板或音量操作可以只有浏览器帧与主线程证据。' : '未收到业务阶段，不能将调用栈自动归因到模型解析或室内管线。'}</p>`}
     <h4>资源瀑布</h4>${waterfall(resources, resourceLabel)}
-    <h4>较大资源</h4>${table(['资源', '下载耗时', '编码体积', '传输体积'], largest.map(entry => [esc(resourceLabel(entry)), fmt(entry.duration), finite(entry.encodedBodySize) ? fmt(entry.encodedBodySize / 1024, ' KiB') : 'N/A', finite(entry.transferSize) ? fmt(entry.transferSize / 1024, ' KiB') : 'N/A']))}
-    <p class="muted">资源体积为浏览器记录；0 可能表示缓存、未传输或跨域信息不可见。资源条目只覆盖采集脚本保留的窗口，不代表所有启动依赖。</p>
-    ${sample.initial ? `<h4>初始导航</h4>${table(['DOMContentLoaded', 'loadEventEnd', 'responseStart'], sample.navigation.map(entry => [fmt(entry.domContentLoadedEventEnd), fmt(entry.loadEventEnd), fmt(entry.responseStart)]))}` : '<p class="muted">本段为同页交互，未重复展示初始 Navigation Timing。</p>'}
+    <h4>较大资源</h4>${table(['资源 / 缓存', '请求耗时', '编码体积', '已知传输体积'], largest.map(entry => [resourceName(entry), fmt(entry.duration), finite(entry.cache.encodedBodyBytes) ? fmt(entry.cache.encodedBodyBytes / 1024, ' KiB') : 'N/A', finite(entry.cache.transferBytes) ? fmt(entry.cache.transferBytes / 1024, ' KiB') : 'N/A']))}
+    <p class="muted">资源条目只覆盖采集脚本保留的窗口，不代表所有启动依赖。本轮分类 ${sample.resourceCache.classified} / ${sample.resourceCache.total} 条；已知传输 ${fmt(sample.resourceCache.transferBytes, ' B')}。未知体积不计 0。</p>
+    ${cacheEvidenceHtml(sample)}
+    ${sample.navigationLoad ? `<h4>${sample.initial ? '首次' : '复访'}页面导航</h4>${table(['DOMContentLoaded', 'loadEventEnd', 'responseStart'], sample.navigation.map(entry => [fmt(entry.domContentLoadedEventEnd), fmt(entry.loadEventEnd), fmt(entry.responseStart)]))}<h4>主 HTML 文档缓存（不计入资源分布）</h4>${table(['文档 / 分类', '开始 / 耗时', 'HTTP 状态', '已知传输量', '判定依据', '安全响应头'], cacheEvidenceRows(sample.navigation))}` : '<p class="muted">本段为同页交互，未重复展示初始 Navigation Timing。</p>'}
   </details>`;
 }
 
 function nextSteps(run) {
   const ranked = run.groups.filter(group => finite(group.medians.readyMs)).sort((a, b) => b.medians.readyMs - a.medians.readyMs);
-  const initial = ranked.find(group => group.initial), interaction = ranked.find(group => !group.initial);
+  const initial = ranked.find(group => group.initial), interaction = ranked.find(group => !group.navigationLoad);
   const notes = [];
   if (initial) notes.push(`首屏近似就绪中位数 ${fmt(initial.medians.readyMs)}。用 initial-3d 的 trace 检查导航、下载、主线程和业务阶段的重叠与关键路径。`);
   if (interaction) notes.push(`交互中近似就绪最长的是「${interaction.label}」：${fmt(interaction.medians.readyMs)}。先核对轮询与固定等待，再检查该视图 trace 中的长任务、绘制和管线准备。`);
@@ -446,7 +523,7 @@ function dashboardCards(run, selected) {
   const groups = selected ? [selected] : run.groups;
   const samples = groups.flatMap(group => group.samples);
   const initial = run.groups.find(group => group.initial);
-  const slowest = [...run.groups].filter(group => !group.initial && finite(group.medians.readyMs)).sort((a, b) => b.medians.readyMs - a.medians.readyMs)[0];
+  const slowest = [...run.groups].filter(group => !group.navigationLoad && finite(group.medians.readyMs)).sort((a, b) => b.medians.readyMs - a.medians.readyMs)[0];
   const longest = [...samples].filter(sample => finite(sample.browserFrames?.maxMs)).sort((a, b) => b.browserFrames.maxMs - a.browserFrames.maxMs)[0];
   const readyCount = groups.reduce((count, group) => count + group.metricSampleCounts.readyMs, 0);
   const card = (label, value, note, tone = '') => `<article class="metric-card ${tone}"><span class="metric-label">${esc(label)}</span><strong>${value}</strong><span class="metric-note">${esc(note)}</span></article>`;
@@ -466,16 +543,16 @@ function sceneOverview(run) {
     <p class="muted">同一指标的横条使用统一尺度。每个数字都是逐轮指标的中位数；下方停顿定位保留单次尖峰。首屏与交互分别命名，不重复使用导航指标。</p>
     <div class="scene-overview">${run.groups.map(group => {
       const compared = run.comparison?.scenes.find(scene => scene.alias === group.alias);
-      return `<article class="scene-card" data-scene="${esc(group.alias)}"><div class="scene-name"><span class="tag">${group.initial ? '初次加载' : '同页交互'}</span><h3>${esc(group.label)}</h3><p class="muted">${group.samples.length} 轮 · 就绪有效 n=${group.metricSampleCounts.readyMs}</p><a href="#details" data-pick-scene="${esc(group.alias)}">查看逐轮证据 →</a></div>
+      return `<article class="scene-card" data-scene="${esc(group.alias)}"><div class="scene-name"><span class="tag">${group.initial ? '初次加载' : group.navigationLoad ? '页面复访' : '同页交互'}</span><h3>${esc(group.label)}</h3><p class="muted">${group.samples.length} 轮 · 就绪有效 n=${group.metricSampleCounts.readyMs}</p><a href="#details" data-pick-scene="${esc(group.alias)}">查看逐轮证据 →</a></div>
       ${metrics.map(([key, label, unit]) => `<div class="scene-metric"><span class="metric-label">${esc(label)}</span>${bar(group.medians[key], scales[key], unit)}${compared?.comparable ? bar(compared.metrics[key].baseline, scales[key], unit, true) : ''}<small>${compared ? compared.comparable ? `差值 ${fmt(compared.metrics[key].delta, unit)}${compared.metrics[key].complete === false ? ' · 部分轮次无效' : ''}` : '基线不可比 · 原因见比较区' : `有效 n=${group.metricSampleCounts[key]}`}</small></div>`).join('')}</article>`;
     }).join('') || '<p class="empty">N/A · 未取得可展示的场景。</p>'}</div>
     <p class="boundary-note">间隔下降与回调频率上升是观察结果，不自动证明优化收益。N/A 不绘制横条；后台、截断和比较资格见下方证据。</p></section>`;
 }
 
 function timelineOverview(run) {
-  const initial = run.groups.find(group => group.initial);
-  return `<section id="timeline"${initial ? ` data-scene="${esc(initial.alias)}"` : ''}><div class="section-heading"><div><p class="eyebrow">首屏加载</p><h2>从进入页面到近似就绪</h2></div>${initial ? `<label class="control">轮次 <select id="timeline-selector">${initial.samples.map((sample, index) => `<option value="${index}" data-iteration="${esc(sample.iteration)}">第 ${esc(sample.iteration)} 轮 · ${fmt(sample.metrics.readyMs)}</option>`).join('')}</select></label>` : ''}</div>
-    ${initial ? initial.samples.map((sample, index) => `<div data-timeline-round="${index}"${index ? ' hidden' : ''}><div class="timeline-caption"><strong>${fmt(sample.metrics.readyMs)} <span class="muted">近似就绪</span></strong><a href="${relativeLink(sample.file)}">本轮原始 JSON ↗</a></div>${initialTimeline(sample)}</div>`).join('') : '<p class="empty">N/A · 未记录首屏数据。</p>'}</section>`;
+  const navigationGroups = run.groups.filter(group => group.navigationLoad);
+  return `<section id="timeline">${navigationGroups.map((group, groupIndex) => `<div data-scene="${esc(group.alias)}"><div class="section-heading"><div><p class="eyebrow">${group.initial ? '首次页面加载' : '同会话缓存复访'}</p><h2>${group.initial ? '从进入页面到近似就绪' : '再次导航的完整加载时间轴'}</h2></div><label class="control">轮次 <select id="${groupIndex ? `timeline-selector-${groupIndex}` : 'timeline-selector'}" data-timeline-selector data-group="${groupIndex}" data-scene-alias="${esc(group.alias)}">${group.samples.map((sample, index) => `<option value="${index}" data-iteration="${esc(sample.iteration)}">第 ${esc(sample.iteration)} 轮 · ${fmt(sample.metrics.readyMs)}</option>`).join('')}</select></label></div>
+    ${group.samples.map((sample, index) => `<div data-timeline-group="${groupIndex}" data-timeline-round="${index}"${index ? ' hidden' : ''}><div class="timeline-caption"><strong>${fmt(sample.metrics.readyMs)} <span class="muted">近似就绪</span></strong><a href="${relativeLink(sample.file)}">本轮原始 JSON ↗</a></div>${initialTimeline(sample)}</div>`).join('')}</div>`).join('') || '<p class="empty">N/A · 未记录页面导航数据。</p>'}</section>`;
 }
 
 const reportStyles = `
@@ -483,6 +560,8 @@ const reportStyles = `
 *{box-sizing:border-box}[hidden]{display:none!important}html{scroll-behavior:smooth;scroll-padding-top:95px}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.65 system-ui,-apple-system,'PingFang SC',sans-serif;font-variant-numeric:tabular-nums}main{max-width:1420px;margin:auto;padding:36px 40px 80px}h1,h2,h3,h4,p{margin-top:0}h1{font-size:30px;letter-spacing:.04em;line-height:1.3;margin-bottom:10px}h2{font-size:23px;line-height:1.35;margin-bottom:8px}h3{font-size:16px;margin:8px 0}h4{font-size:15px;margin-top:22px}a{color:var(--accent);text-underline-offset:4px}a:hover{color:#e4f0db}button,select{font:inherit}select{background:#0d1e17;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 30px 8px 10px;max-width:100%}select:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}section{margin-top:42px;scroll-margin-top:95px}.muted{color:var(--muted);font-size:12px}.caution{color:var(--amber)}.eyebrow{color:var(--accent);font-size:11px;letter-spacing:.16em;margin-bottom:8px}.report-header{display:flex;justify-content:space-between;gap:24px;align-items:flex-start}.header-aside{text-align:right;max-width:380px}.status{display:inline-flex;gap:7px;align-items:center;border:1px solid var(--border);background:var(--panel);border-radius:24px;padding:5px 12px;font-size:12px}.status:before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent)}.status.incomplete{color:var(--amber)}.status.incomplete:before{background:var(--amber)}.toolbar{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;gap:18px;align-items:center;padding:14px 0;margin:24px 0;background:#0c1915f5;backdrop-filter:blur(12px);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}.toolbar nav{display:flex;gap:20px;flex-wrap:wrap}.toolbar a{text-decoration:none;font-size:13px}.control{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:12px}.control select{max-width:340px}.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.metric-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:12px;min-height:160px}.metric-label{font-size:12px;color:var(--muted)}.metric-card strong{font-size:29px;font-weight:550;line-height:1.2;color:#e6efdf;white-space:nowrap}.metric-card small{font-size:17px;font-weight:400;color:var(--muted)}.metric-caution strong{color:var(--amber)}.metric-note{font-size:11px;color:var(--muted);line-height:1.5}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:12px}.legend{display:flex;gap:18px;font-size:12px;color:var(--muted)}.legend span{display:flex;gap:7px;align-items:center}.legend i{display:inline-block;width:18px;height:6px;background:var(--accent);border-radius:2px}.legend .baseline-bar,.bar-track .baseline-bar{background:#6d8c7b}.scene-overview{display:grid;gap:10px}.scene-card{display:grid;grid-template-columns:1.2fr repeat(3,1fr);gap:26px;align-items:center;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:18px 20px}.scene-name p{margin:0 0 5px}.scene-name a{font-size:11px;text-decoration:none}.tag,.count{font-size:10px;font-weight:400;background:#accab014;color:var(--muted);padding:3px 7px;border-radius:4px}.scene-metric small{display:block;font-size:10px;color:var(--muted);margin-top:6px}.bar-line{display:grid;grid-template-columns:1fr 82px;gap:10px;align-items:center;font-size:12px;margin-top:10px}.bar-track{position:relative;display:block;height:7px;background:#a8c3ae12;border-radius:2px;overflow:hidden}.bar-track i{display:block;height:100%;background:var(--accent)}.boundary-note{border-left:2px solid #587362;color:var(--muted);font-size:12px;padding:2px 0 2px 12px;margin:18px 0}.warning{border:1px solid #795f3e;background:#302a1c;border-radius:8px;padding:14px 18px;margin:18px 0;color:#e6c99f}.warning ul{margin-bottom:0}.warning details{background:transparent;border-color:#79644455;margin-bottom:0}.stall-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.stall-card{background:var(--panel);border:1px solid var(--border);border-left:3px solid #b68b61;border-radius:8px;padding:18px}.stall-heading{display:flex;justify-content:space-between;gap:18px;margin-bottom:6px;font-size:13px}.stall-heading strong{color:var(--amber);white-space:nowrap;font-size:19px;font-weight:550}.stall-card p{font-size:12px;margin:14px 0 12px;overflow-wrap:anywhere}.stall-foot{display:flex;justify-content:space-between;gap:12px;font-size:11px}.stall-foot a{white-space:nowrap}.empty{background:var(--panel);border:1px dashed var(--border);border-radius:8px;padding:24px;color:var(--muted)}details{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:15px 18px;margin:12px 0}summary{cursor:pointer;font-size:13px;font-weight:550;color:var(--text)}summary::marker{color:var(--accent)}details[open]>summary{margin-bottom:18px}summary .count{margin-left:8px}table{width:100%;border-collapse:collapse;background:var(--panel);font-size:12px}th,td{text-align:left;padding:11px 12px;border-bottom:1px solid #b9d1bd20;vertical-align:top}th{font-size:11px;color:var(--muted);font-weight:500}td{overflow-wrap:anywhere}tr:last-child td{border-bottom:0}.table-wrap{overflow-x:auto;margin:12px 0}.waterfall{display:grid;grid-template-columns:minmax(160px,34%) 1fr 105px;gap:14px;font-size:11px;align-items:center;margin:9px 0}.waterfall>span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.track{height:11px;position:relative;background:#b1c7b913;overflow:hidden;border-radius:2px}.track i{position:absolute;height:100%;background:#8db298;min-width:1px}.timeline-track{background:repeating-linear-gradient(to right,#b1c7b910 0,#b1c7b910 calc(25% - 1px),#8eaf9735 calc(25% - 1px),#8eaf9735 25%)}.timeline-caption{display:flex;justify-content:space-between;gap:20px;align-items:center;background:var(--panel-raised);padding:15px 18px;border:1px solid var(--border);border-radius:8px;margin-bottom:16px}.timeline-caption strong{font-size:22px;font-weight:500}.timeline-caption a{font-size:12px}.metadata{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.metadata span{background:var(--panel-raised);border:1px solid var(--border);padding:5px 9px;border-radius:4px;font-size:11px}code{overflow-wrap:anywhere;font-size:12px}.detail-scene{margin-top:18px}.footer-note{margin-top:34px;color:var(--muted);font-size:11px}.view-label{margin:12px 0;color:var(--muted);font-size:12px}
 @media(max-width:1050px){main{padding:26px 24px 60px}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.scene-card{grid-template-columns:repeat(3,1fr);gap:16px}.scene-name{grid-column:1/-1;display:flex;align-items:center;gap:12px;flex-wrap:wrap}.scene-name h3,.scene-name p{margin:0}.scene-name a{margin-left:auto}.toolbar{align-items:flex-start;flex-direction:column;gap:10px}.toolbar nav{gap:16px}html{scroll-padding-top:130px}section{scroll-margin-top:130px}}
 @media(max-width:650px){main{padding:20px 14px 45px}h1{font-size:25px}h2{font-size:20px}.report-header{display:block}.header-aside{text-align:left;margin-top:14px}.metric-card{padding:15px;min-height:155px}.metric-card strong{font-size:22px}.metric-grid{gap:10px}.section-heading{align-items:flex-start;flex-direction:column;gap:10px}.scene-card{grid-template-columns:1fr;padding:16px}.scene-name{display:block}.scene-name h3{margin:8px 0}.scene-name p{margin-bottom:5px}.scene-metric{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;align-items:center}.scene-metric small{grid-column:2}.bar-line{margin-top:0;grid-template-columns:1fr 75px}.stall-grid{grid-template-columns:1fr}.stall-heading{gap:10px}.stall-foot{flex-direction:column;gap:6px}.waterfall{grid-template-columns:115px minmax(90px,1fr) 78px;gap:8px;font-size:10px}.control select{max-width:calc(100vw - 110px)}.toolbar nav{gap:14px;font-size:12px}.timeline-caption{padding:12px}.timeline-caption strong{font-size:19px}.timeline-caption a{max-width:100px}details{padding:13px 12px}}
+.cache-badge{display:inline-flex;align-items:center;gap:5px;color:var(--cache-color,#89988e);font-size:10px;line-height:1.6;white-space:nowrap}.cache-badge:before{content:'';width:6px;height:6px;background:currentColor;border-radius:50%;flex-shrink:0}.resource-name{display:flex;align-items:center;gap:10px;min-width:0}.resource-name>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.resource-name>.cache-badge{flex-shrink:0}.resource-waterfall{grid-template-columns:minmax(235px,40%) 1fr 105px}.cache-distribution{display:flex;height:12px;border-radius:3px;overflow:hidden;background:#89988e22;margin:20px 0 14px}.cache-distribution span{height:100%;min-width:1px}.cache-legend{display:flex;gap:18px;flex-wrap:wrap}.cache-legend>span{display:flex;align-items:center;gap:7px}.cache-legend strong{font-size:12px;font-weight:500}.cache-legend small{font-size:10px;color:var(--muted)}.cache-metrics .metric-card{min-height:148px}
+@media(max-width:650px){.resource-waterfall{grid-template-columns:minmax(125px,1fr) minmax(65px,1fr) 68px}.resource-waterfall .resource-name{align-items:flex-start;flex-direction:column;gap:1px}.resource-waterfall .resource-name>span:first-child{max-width:100%}.cache-legend{gap:10px 18px}.cache-metrics .metric-card{min-height:148px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}`;
 
 function htmlReport(run) {
@@ -496,7 +575,7 @@ function htmlReport(run) {
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>页面性能记录 · ${esc(path.basename(run.runDir))}</title><style>${reportStyles}</style></head><body><main>
   <header class="report-header"><div><p class="eyebrow">性能诊断 / 离线采集报告</p><h1>页面性能记录</h1><p class="muted">${esc(path.basename(run.runDir))} · ${esc(manifest.config?.profile ?? '设备未知')} / ${esc(manifest.config?.mode ?? '模式未知')} · 每段观察 ${fmt(manifest.config?.observeMs)}</p></div>
   <div class="header-aside"><span class="status${run.status === 'completed' ? '' : ' incomplete'}">${run.status === 'completed' ? run.coverageDeclared ? '已完成声明场景' : '已结束 · 覆盖未声明' : '未完整完成 · 仅显示已有数据'}</span><p class="muted">报告生成于 ${esc(run.generatedAt)}<br>前台 RAF 调度证据 · 非 GPU 计时</p></div></header>
-  <div class="toolbar"><nav aria-label="报告章节"><a href="#overview">场景总览</a><a href="#timeline" data-jump-timeline>首屏时间轴</a><a href="#stutters">停顿定位</a><a href="#comparison">基线比较</a><a href="#evidence">原始证据</a></nav>
+  <div class="toolbar"><nav aria-label="报告章节"><a href="#overview">场景总览</a><a href="#timeline" data-jump-timeline>首屏时间轴</a><a href="#resource-cache">HTTP 缓存</a><a href="#stutters">停顿定位</a><a href="#comparison">基线比较</a><a href="#evidence">原始证据</a></nav>
   <label class="control">场景 <select id="scene-selector" data-initial="${esc(initial?.alias ?? '')}"><option value="all" data-raf="${anyRaf}">全部场景</option>${run.groups.map(group => `<option value="${esc(group.alias)}" data-raf="${group.samples.some(sample => sample.stutters.available)}">${esc(group.label)}</option>`).join('')}</select></label></div>
   <noscript><p class="warning">浏览器未启用 JavaScript：仍可展开原始表与时间轴，场景筛选和轮次切换不可用。</p></noscript>
   ${run.warnings.length ? `<aside class="warning"><strong>${run.warnings.length} 项数据边界与异常</strong><ul>${run.warnings.slice(0, 2).map(warning => `<li>${esc(warning)}</li>`).join('')}</ul>${run.warnings.length > 2 ? `<details><summary>展开全部说明</summary><ul>${run.warnings.map(warning => `<li>${esc(warning)}</li>`).join('')}</ul></details>` : ''}</aside>` : ''}
@@ -504,12 +583,13 @@ function htmlReport(run) {
   ${dashboardCards(run)}${run.groups.map(group => dashboardCards(run, group)).join('')}
   ${sceneOverview(run)}
   ${timelineOverview(run)}
+  ${cacheOverview(run)}
   ${stutterHtml(run)}
   <section id="comparison"><div class="section-heading"><div><p class="eyebrow">同条件复测</p><h2>和基线相比，变化在哪里</h2></div>${run.comparison ? `<span class="status${run.comparison.allScenesComparable ? '' : ' incomplete'}">${compareCount} / ${run.comparison.scenes.length} 个场景可比较</span>` : ''}</div>
   ${run.comparison ? '<p class="muted">场景总览已绘制可比基线横条；下表保留条件核对、差值和逐轮尖峰。配置或状态不同的场景不计算收益。</p><details><summary>查看比较资格、完整差值与逐轮记录</summary>' + comparisonHtml(run.comparison) + '</details>' : '<p class="empty">本报告未指定基线。下一次同条件采集时添加 --compare BASELINE_DIR，即可显示前后横条与差值。</p>'}</section>
   <section id="details"><div class="section-heading"><div><p class="eyebrow">完整记录</p><h2>逐轮与阶段详情</h2></div></div>
-  <details><summary>展开原始指标总表</summary><h3>初次加载</h3>${groupTable(run.groups.filter(group => group.initial))}<h3>同页交互</h3>${groupTable(run.groups.filter(group => !group.initial))}<p class="muted">p95 中位数是各轮 p95 的中位数，不是合并帧后的 p95。缺失不计 0，观察窗口不是纯加载耗时。</p></details>
-  ${run.groups.map(group => `<details class="detail-scene" data-scene="${esc(group.alias)}"><summary>${esc(group.label)} <span class="count">${group.samples.length} 轮 · ${esc(group.alias)}</span></summary>${table(['轮次', '采集窗口', '近似就绪', '稳定观察', 'startup 仅首屏'], group.samples.map(sample => [esc(sample.iteration), fmt(sample.metrics.windowMs), fmt(sample.metrics.readyMs), fmt(sample.metrics.stableMs), fmt(sample.metrics.startupMs)]))}${group.samples.map(sampleHtml).join('')}</details>`).join('')}
+  <details><summary>展开原始指标总表</summary><h3>页面加载（首次 / 复访）</h3>${groupTable(run.groups.filter(group => group.navigationLoad))}<h3>同页交互</h3>${groupTable(run.groups.filter(group => !group.navigationLoad))}<p class="muted">p95 中位数是各轮 p95 的中位数，不是合并帧后的 p95。缺失不计 0，观察窗口不是纯加载耗时。</p></details>
+  ${run.groups.map(group => `<details class="detail-scene" data-scene="${esc(group.alias)}"><summary>${esc(group.label)} <span class="count">${group.samples.length} 轮 · ${esc(group.alias)}</span></summary>${table(['轮次', '采集窗口', '近似就绪', '稳定观察', 'startup 仅页面加载'], group.samples.map(sample => [esc(sample.iteration), fmt(sample.metrics.windowMs), fmt(sample.metrics.readyMs), fmt(sample.metrics.stableMs), fmt(sample.metrics.startupMs)]))}${group.samples.map(sampleHtml).join('')}</details>`).join('')}
   <details><summary>下一步查看哪些证据</summary><ul>${nextSteps(run).map(note => `<li>${esc(note)}</li>`).join('')}</ul></details></section>
   <section id="evidence"><div class="section-heading"><div><p class="eyebrow">可追溯证据</p><h2>原始文件与采集条件</h2></div></div><p><a href="summary.json">汇总 JSON ↗</a> · <a href="report.md">Markdown 报告 ↗</a> · <a href="manifest.json">采集清单 ↗</a></p>
   <details><summary>原始工具报告、trace 与日志 <span class="count">${run.artifacts.length} 个链接</span></summary><ul>${run.artifacts.map(file => `<li><a href="${relativeLink(file)}">${esc(file)}</a></li>`).join('')}</ul></details>
@@ -518,19 +598,39 @@ function htmlReport(run) {
   <p class='muted'>适配器 ${esc(manifest.config?.adapter?.id ?? '未记录')} · 版本 ${esc(manifest.config?.adapter?.version ?? 'N/A')}；状态字段 ${esc(manifest.config?.adapter?.stateFields?.join(', ') ?? '旧版竹屋固定字段')}；可选字段 ${esc(manifest.config?.adapter?.optionalStateFields?.join(', ') ?? 'volume')}。就绪规则：${esc(manifest.config?.adapter?.readyDescription ?? '参见原始场景 completionRule')}。</p>
   <p>Git <code>${esc(manifest.git?.sha ?? 'N/A')}</code> · 工作区 ${manifest.git?.dirty === true ? '有未提交修改' : manifest.git?.dirty === false ? '干净' : '未知'}<br>地址 <code>${esc(manifest.config?.url ?? 'N/A')}</code><br>视口 ${esc(JSON.stringify(manifest.config?.viewport ?? null))} · Chrome ${esc(manifest.versions?.chrome ?? 'N/A')} · sitespeed ${esc(manifest.versions?.sitespeed ?? 'N/A')} · Browsertime ${esc(manifest.versions?.browsertime ?? 'N/A')}</p>
   <p class="muted">HAR ${manifest.config?.har === true ? '开启' : manifest.config?.har === false ? '关闭' : 'N/A'}；停用插件 ${esc(manifest.config?.disabledPlugins?.join(', ') ?? 'N/A')}。${esc(manifest.config?.harNote ?? '')}</p></details>
+  <details><summary>HTTP 缓存采集与解释配置</summary><p>采集时配置：<code>${esc(JSON.stringify(manifest.config?.networkCache ?? null))}</code></p><p>本次报告解释规则：<code>${esc(JSON.stringify(run.cacheInterpretation))}</code></p><p class="muted">缺少配置的历史采集仅按已有时序解释；新采集的版本、源码指纹和缓存策略均参加基线比较资格检查。报告按当前解释规则重算原始证据，解释指纹与采集时指纹分别保留。缓存分类仅描述已保留记录。</p></details>
   <details><summary>指标口径与工具开销</summary><p>${esc(applicationScope(manifest))}帧间隔和长任务描述浏览器观察，不等于 GPU 耗时或屏幕呈现。业务 measure 可嵌套、并行或跨窗口，保留完整区间，不累计成总加载耗时。</p><p>浏览器驱动、轮询、RAF 观察器，以及所选模式的 trace/JS 采样、截图和业务埋点都会引入开销。不同 mode 或 instrumentation 的数字不可直接解释为优化收益；先用同条件重复采集，再用诊断 trace 归因。</p></details></section>
   <p class="footer-note">单文件离线报告 · 所有数字来自本次采集文件 · 无外部字体、脚本或统计服务</p></main>
   <script id="report-data" type="application/json">${data}</script><script>
   const sceneSelect=document.getElementById('scene-selector'),stutterSelect=document.getElementById('stutter-selector');
   function filterStutters(){const scene=sceneSelect.value,mode=stutterSelect.value;let count=0;for(const card of document.querySelectorAll('[data-stutter-card]')){const matches=(scene==='all'||card.dataset.scene===scene)&&(mode!=='first'||card.dataset.first==='true')&&(mode!=='running'||card.dataset.running==='true');card.hidden=!matches||count>=6;if(matches)count++;}document.getElementById('stutter-count').textContent='当前筛选显示 '+Math.min(count,6)+' / '+count+' 个已保留片段；完整证据表按场景筛选，不受此预览模式限制。';const empty=document.getElementById('stutter-empty');empty.hidden=count>0;empty.textContent=sceneSelect.selectedOptions[0].dataset.raf==='true'?'当前选择未发现已保留的匹配 RAF 片段；不代表没有屏幕卡顿。':'N/A · 当前范围缺少浏览器 RAF 记录，无法定位帧调度停顿。';}
-  function filterScene(){const scene=sceneSelect.value;for(const node of document.querySelectorAll('[data-scene]'))if(!node.hasAttribute('data-stutter-card'))node.hidden=scene!=='all'&&node.dataset.scene!==scene;for(const node of document.querySelectorAll('[data-kpi]'))node.hidden=node.dataset.kpi!==scene;document.getElementById('view-label').textContent='当前范围：'+sceneSelect.selectedOptions[0].textContent+'。总览、停顿和逐轮详情同步筛选。';filterStutters();}
+  function filterScene(){const scene=sceneSelect.value;for(const node of document.querySelectorAll('[data-scene]'))if(!node.hasAttribute('data-stutter-card'))node.hidden=scene!=='all'&&node.dataset.scene!==scene;for(const node of document.querySelectorAll('[data-kpi]'))node.hidden=node.dataset.kpi!==scene;document.getElementById('view-label').textContent='当前范围：'+sceneSelect.selectedOptions[0].textContent+'。总览、缓存、停顿和逐轮详情同步筛选。';filterStutters();}
   sceneSelect.addEventListener('change',filterScene);stutterSelect.addEventListener('change',filterStutters);
   document.querySelectorAll('[data-pick-scene]').forEach(link=>link.addEventListener('click',()=>{sceneSelect.value=link.dataset.pickScene;filterScene();for(const node of document.querySelectorAll('.detail-scene'))if(!node.hidden)node.open=true;}));
-  const timelineSelect=document.getElementById('timeline-selector');
-  function filterTimeline(){if(timelineSelect)for(const node of document.querySelectorAll('[data-timeline-round]'))node.hidden=node.dataset.timelineRound!==timelineSelect.value;}
-  document.querySelectorAll('[data-jump-timeline]').forEach(link=>link.addEventListener('click',()=>{sceneSelect.value=sceneSelect.dataset.initial||'all';filterScene();if(timelineSelect&&link.dataset.timelineIteration){const option=Array.from(timelineSelect.options).find(item=>item.dataset.iteration===link.dataset.timelineIteration);if(option)timelineSelect.value=option.value;filterTimeline();}}));
-  timelineSelect?.addEventListener('change',filterTimeline);filterScene();
+  const timelineSelects=Array.from(document.querySelectorAll('[data-timeline-selector]'));
+  function filterTimeline(select){for(const node of document.querySelectorAll('[data-timeline-round]'))if(node.dataset.timelineGroup===select.dataset.group)node.hidden=node.dataset.timelineRound!==select.value;}
+  document.querySelectorAll('[data-jump-timeline]').forEach(link=>link.addEventListener('click',()=>{sceneSelect.value=link.dataset.timelineScene||sceneSelect.dataset.initial||'all';filterScene();const select=timelineSelects.find(item=>item.dataset.sceneAlias===sceneSelect.value);if(select&&link.dataset.timelineIteration){const option=Array.from(select.options).find(item=>item.dataset.iteration===link.dataset.timelineIteration);if(option)select.value=option.value;filterTimeline(select);}}));
+  timelineSelects.forEach(select=>select.addEventListener('change',()=>filterTimeline(select)));filterScene();
   </script></body></html>`;
+}
+
+function cacheMarkdown(run) {
+  const cache = run.resourceCache;
+  const lines = ['## HTTP 缓存', '', cacheEnvironmentNote(run.manifest), '',
+    `当前报告缓存解释规则：v${run.cacheInterpretation.version}；SHA-256 \`${run.cacheInterpretation.classifierSha256}\`。采集时网络配置另见 manifest.config.networkCache；报告重生成不会改写原始采集规则。`, '',
+    `资源 ${cache.total} 条；分类覆盖率 ${fmt(cache.coveragePercent, '%')}（${cache.classified} 条已分类，${cache.unknown} 条未知）。已知传输 ${fmt(cache.transferBytes, ' B')}，有字节证据 ${cache.transferKnownCount} / ${cache.total} 条。`, '',
+    `本地复用 ${fmt(cache.localHitRatePercent, '%')}；协商复用 ${fmt(cache.revalidationRatePercent, '%')}。分母为 ${cache.httpClassified} 条可判定 HTTP 记录，不含 Service Worker / 未知。协商仍有网络往返；Resource Timing 推断不等于已取得线端 304。`, '',
+    '计数按各轮已保留资源记录累加，不按唯一 URL 去重；不含主 HTML 文档。无资源、无可判定 HTTP 记录或无已知字节时为 N/A。传输体积为 Resource Timing 浏览器估算，不是网卡字节。旧采集只有 Resource Timing，不能事后补出 CDP 状态或响应头。页面内观测受同源与 Timing-Allow-Origin 限制，0 字节不能单独证明命中。', '',
+    '| 场景 / 轮次 | 本地复用 | 协商复用 | 网络 | Service Worker | 未知 | 分类覆盖 | 已知传输 |', '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |'];
+  for (const group of run.groups) for (const sample of group.samples) {
+    const item = sample.resourceCache;
+    lines.push(`| [${md(group.label)} / ${sample.iteration}](${relativeLink(sample.file)}) | ${item.counts.local} | ${item.counts.revalidated} | ${item.counts.network} | ${item.counts['service-worker']} | ${item.counts.unknown} | ${fmt(item.coveragePercent, '%')} | ${fmt(item.transferBytes, ' B')}（${item.transferKnownCount} 条） |`);
+  }
+  const resources = run.groups.flatMap(group => group.samples.flatMap(sample => [...sample.resources.map(entry => ({ group, sample, entry, document: false })), ...sample.navigation.map(entry => ({ group, sample, entry, document: true }))]));
+  lines.push('', '### 逐资源证据', '', '| 场景 / 轮次 | 资源 | 分类 / 来源 | 线端 / 浏览器状态 | 已知传输 | 判定依据 | Cache-Control / ETag / Last-Modified |', '| --- | --- | --- | --- | ---: | --- | --- |');
+  for (const { group, sample, entry, document } of resources.slice(0, 300)) lines.push(`| ${md(group.label)} / ${sample.iteration} | ${document ? '主文档：' : ''}${md(resourceLabel(entry))} | ${md(entry.cache.label)} / ${md(entry.cache.source)} | ${fmt(entry.cache.wireStatus, '')} / ${fmt(entry.cache.responseStatus, '')} | ${fmt(entry.cache.transferBytes, ' B')} | ${md(entry.cache.evidence)} | ${md([entry.cache.cacheControl, entry.cache.etag, entry.cache.lastModified].filter(Boolean).join(' / ') || '未采集')} |`);
+  lines.push('', `显示 ${Math.min(300, resources.length)} / ${resources.length} 条资源及主文档证据，全部保留在 summary.json。首次与复访各自为完整导航，HTML 报告提供各自时间轴。`, '');
+  return lines;
 }
 
 function markdownReport(run) {
@@ -540,13 +640,14 @@ function markdownReport(run) {
     `HAR：${run.manifest.config?.har === true ? '开启' : run.manifest.config?.har === false ? '关闭' : 'N/A'}。停用插件：${md(run.manifest.config?.disabledPlugins?.join(', ') ?? 'N/A')}。${md(run.manifest.config?.harNote ?? '')}`, '',
     '[交互式 HTML 报告](./report.html) · [汇总 JSON](./summary.json) · [采集清单](./manifest.json)', ''];
   if (run.warnings.length) lines.push('## 数据边界与异常', '', ...run.warnings.map(warning => `- ${md(warning)}`), '');
+  lines.push(...cacheMarkdown(run));
   lines.push('## 卡顿位置', '', '前台 RAF 间隔 ≥50ms 是诊断候选，50 / 100 / 300ms 为诊断分级；相隔 ≤20ms 合并。区间相对操作采集起点，首屏相对导航。跨起点只列窗口内重叠，完整间隔不能全归因当前操作。暂停动态不自动判为卡顿。', '', '| 操作 / 轮次 | 相对区间 | 最长间隔 | 重叠业务阶段 | 主线程证据 |', '| --- | --- | ---: | --- | --- |');
   const stalls = stutterItems(run);
   for (const { group, sample, episode } of stalls.slice(0, 160)) lines.push(`| [${md(group.label)} / ${md(sample.iteration)}](${relativeLink(sample.file)}) | +${fmt(episode.relativeStartMs)} → +${fmt(episode.relativeEndMs)} | ${fmt(episode.maxGapMs)}${episode.crossesStart ? ` 跨起点，窗口内最长重叠 ${fmt(episode.maxOverlapMs)}` : ''} | ${episode.phases.slice(0, 10).map(entry => md(phaseLabel(entry))).join('；') || 'N/A'} | 长任务 ${fmt(sample.probe?.supported?.longtask === true ? episode.longTasks.length : null, ' 条')}，LoAF ${fmt(sample.probe?.supported?.['long-animation-frame'] === true ? episode.longAnimationFrames.length : null, ' 条')} |`);
   lines.push('', `保留记录识别 ${stalls.length} 个片段。这里只报告已保留片段；样本截断、缓冲覆盖或窗口结束时仍未完成的间隔可能漏掉停顿，不证明屏幕冻结。孤立长任务、各操作最大间隔和稳定平均/典型回调率见 HTML 报告。`, '');
   for (const initial of [true, false]) {
-    lines.push(initial ? '## 初次加载' : '## 同页交互', '', '| 场景 | 轮数 | 近似就绪中位数 | 应用 p95 中位数 | 稳定段 p95 中位数 |', '| --- | ---: | ---: | ---: | ---: |');
-    for (const group of run.groups.filter(group => group.initial === initial)) lines.push(`| ${md(group.label)} | ${group.samples.length} | ${fmt(group.medians.readyMs)} (n=${group.metricSampleCounts.readyMs}) | ${fmt(group.medians.p95Ms)} (n=${group.metricSampleCounts.p95Ms}) | ${fmt(group.medians.stableP95Ms)} (n=${group.metricSampleCounts.stableP95Ms}) |`);
+    lines.push(initial ? '## 页面加载（首次 / 复访）' : '## 同页交互', '', '| 场景 | 轮数 | 近似就绪中位数 | 应用 p95 中位数 | 稳定段 p95 中位数 |', '| --- | ---: | ---: | ---: | ---: |');
+    for (const group of run.groups.filter(group => group.navigationLoad === initial)) lines.push(`| ${md(group.label)} | ${group.samples.length} | ${fmt(group.medians.readyMs)} (n=${group.metricSampleCounts.readyMs}) | ${fmt(group.medians.p95Ms)} (n=${group.metricSampleCounts.p95Ms}) | ${fmt(group.medians.stableP95Ms)} (n=${group.metricSampleCounts.stableP95Ms}) |`);
     lines.push('');
   }
   lines.push('## 基线比较', '');
@@ -562,7 +663,7 @@ function markdownReport(run) {
   }
   lines.push('', '## 逐轮记录', '');
   for (const group of run.groups) {
-    lines.push(`### ${md(group.label)}`, '', '| 轮次 | 采集窗口 | 近似就绪 | 稳定观察 | startup 仅首屏 | 帧数 | p95 | >33.33ms |', '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
+    lines.push(`### ${md(group.label)}`, '', '| 轮次 | 采集窗口 | 近似就绪 | 稳定观察 | startup 仅页面加载 | 帧数 | p95 | >33.33ms |', '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
     for (const sample of group.samples) lines.push(`| [${md(sample.iteration)}](${relativeLink(sample.file)}) | ${fmt(sample.metrics.windowMs)} | ${fmt(sample.metrics.readyMs)} | ${fmt(sample.metrics.stableMs)} | ${fmt(sample.metrics.startupMs)} | ${fmt(sample.appFrames?.count, '')} | ${fmt(sample.appFrames?.p95Ms)} | ${fmt(sample.appFrames?.over33msPercent, '%')} |`);
     lines.push('');
     for (const sample of group.samples) if (sample.state || sample.startState) lines.push(`- 第 ${md(sample.iteration)} 轮状态：${stateRows(sample).map(([key, before, after]) => `${md(key)} ${md(before)} → ${md(after)}`).join('；')}。`);
@@ -582,6 +683,7 @@ export async function generateReport(runDir, { compare } = {}) {
   const directory = path.resolve(runDir);
   const run = await loadRun(directory);
   run.generatedAt = new Date().toISOString();
+  run.cacheInterpretation = { version: 1, classifierSha256: createHash('sha256').update(await readFile(new URL('./resource-cache.mjs', import.meta.url))).digest('hex') };
   if (compare) {
     try { run.comparison = comparison(run, await loadRun(path.resolve(compare))); }
     catch (error) { run.comparison = { conditionsComparable: false, comparable: false, allScenesComparable: false, baselineDir: path.resolve(compare), reasons: [`基线不可读取：${error.message}`], notes: [], scenes: [] }; }

@@ -77,7 +77,9 @@ pnpm perf:report outputs/performance/desktop-views-after \
 | 页面适配器 | `adapters/bamboo.cjs`；参考 `adapters/three-example.cjs` | 声明就绪规则，读取渲染器 / 业务阶段 / 页面状态，列出必须保持一致的离散状态字段 |
 | 操作流程 | `scene-journey.cjs`、`view-journey.cjs`、`system-journey.cjs` 或自定义 `.cjs` | 用真实控件执行可重复路径，声明 expectedScenes |
 
-当前内置流程包括 `load`（首屏）、`journey`（室内外首次 / 重复）、`views`（PC 望月 / 听风）、`system`（系统控件与声音）。`load` 可搭配其它适配器；后三者的按钮选择器属于竹屋，搭配非竹屋适配器会在打开浏览器前提示提供 `--scenario`。换成另一个 Three.js 页面时，需要适配器和该项目的真实操作流程，不能只替换 URL。Blender 资产通过所在页面的实际下载、解析和渲染路径被观测，采集核心不依赖 Blender 文件结构。
+当前内置流程包括 `load`（首屏）、`cache`（新会话首访 / 同会话复访）、`journey`（室内外首次 / 重复）、`views`（PC 望月 / 听风）、`system`（系统控件与声音）。`load` / `cache` 可搭配其它适配器；后三者的按钮选择器属于竹屋，搭配非竹屋适配器会在打开浏览器前提示提供 `--scenario`。换成另一个 Three.js 页面时，需要适配器和该项目的真实操作流程，不能只替换 URL。Blender 资产通过所在页面的实际下载、解析和渲染路径被观测，采集核心不依赖 Blender 文件结构。
+
+缓存结果与测量条件分开记录：每条资源都有缓存分类、传输字节和判断依据；新会话首访与复访分别统计。本地 runner 可以直接观测线上 URL，`localhost` 的结果只代表预览服务。缓存分类、未知值、响应头证据与专用命令见 [HTTP 缓存流水线](./http-cache.md)。
 
 自定义入口使用 `--adapter /path/to/project.cjs --scenario /path/to/flow.cjs`；runner 通过绝对路径 `PERF_ADAPTER` 传给 helper，manifest 记录适配器 ID、版本、文件哈希和状态字段。比较不要求适配器文件存放在同一路径，但要求内容与契约一致。自定义脚本必须实际输出匹配的适配器元信息，不能只在命令行声明。接口与原始数据要求见[采集器契约](../../scripts/perf/README.md#自定义流程契约)。
 

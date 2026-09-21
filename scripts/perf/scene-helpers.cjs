@@ -2,6 +2,8 @@
 
 // oxlint-disable-next-line typescript/no-require-imports -- Browsertime loads navigation helpers as CommonJS.
 const path = require('node:path');
+// oxlint-disable-next-line typescript/no-require-imports -- Capture shares the scenario's existing CDP client.
+const { createNetworkCapture } = require('./network-cache.cjs');
 
 const TIMEOUT_MS = 120000;
 const SETTLE_MS = 500;
@@ -119,6 +121,7 @@ function loadAdapter(adapterPath = process.env.PERF_ADAPTER) {
 }
 
 async function createCollector(context, commands) {
+  const { classifyResourceCache, summarizeResourceCache } = await import('./resource-cache.mjs');
   const observationMs = Number(process.env.PERF_OBSERVE_MS || 5000);
   if (!Number.isFinite(observationMs) || observationMs < 1000 || observationMs > 30000) {
     throw new Error('PERF_OBSERVE_MS must be between 1000 and 30000');
@@ -136,6 +139,8 @@ async function createCollector(context, commands) {
     driverVersion: capabilities.get('chrome')?.chromedriverVersion ?? null,
     platform: capabilities.get('platformName'),
   };
+  // Install before initial navigation so document and early preload requests are included.
+  const networkCapture = createNetworkCapture(commands);
   const boundary = async () => JSON.parse(await commands.js.run(`return JSON.stringify({...(${readBoundary.toString()})(${readDiagnostics}, ${frameCapacity}), state: ${readState}});`));
   const state = async () => JSON.parse(await commands.js.run(`return JSON.stringify(${readState});`));
 
@@ -145,6 +150,13 @@ async function createCollector(context, commands) {
     const snapshot = JSON.parse(await commands.js.run(
       `const result = (${readSnapshot.toString()})(${JSON.stringify(start)}, ${JSON.stringify(stable)}, ${readDiagnostics}, ${readBusinessPhases}, ${frameCapacity}); result.endState = ${readState}; return JSON.stringify(result);`,
     ));
+    networkCapture.attach(snapshot);
+    const cacheOptions = { pageUrl: snapshot.url };
+    for (const entries of [snapshot.resources, snapshot.navigation]) {
+      for (const entry of entries) entry.cache = classifyResourceCache(entry, cacheOptions);
+    }
+    // Resource totals exclude navigation; the document retains its own evidence above.
+    snapshot.resourceCache = summarizeResourceCache(snapshot.resources, cacheOptions);
     const summary = {
       windowObservedMs: snapshot.observedAtMs - start.nowMs,
       conditionObservedMs: conditionObserved.nowMs - start.nowMs,
@@ -181,8 +193,7 @@ async function createCollector(context, commands) {
     console.log(`[scene-perf] ${alias}: ${Math.round(summary.windowObservedMs)}ms observation window; raw=${filename}`);
   }
 
-  async function initial() {
-    const initialAlias = 'initial-3d';
+  async function initial(initialAlias = 'initial-3d', details = {}) {
     console.log(`[scene-perf] ${initialAlias}: navigate ${url}`);
     await commands.measure.start(initialAlias);
     await commands.navigate(url);
@@ -191,10 +202,10 @@ async function createCollector(context, commands) {
     await commands.wait.byTime(observationMs);
     await finish(initialAlias, { nowMs: 0, frameIndex: 0, firstFrameMs: null },
       initialReady, initialReady,
-      adapter.metadata.readyDescription);
+      adapter.metadata.readyDescription, details);
   }
 
-  return { boundary, state, finish, initial, observationMs };
+  return { boundary, state, finish, initial, observationMs, dispose: networkCapture.dispose };
 }
 
 module.exports = { createCollector, loadAdapter, TIMEOUT_MS, SETTLE_MS };

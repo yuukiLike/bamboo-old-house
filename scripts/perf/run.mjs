@@ -19,6 +19,7 @@ const SITE_SPEED_VERSION = '42.7.0';
 const BUNDLED_SCENARIOS = {
   load: 'scene-journey.cjs', journey: 'scene-journey.cjs',
   system: 'system-journey.cjs', views: 'view-journey.cjs',
+  cache: 'cache-journey.cjs',
 };
 const HELP = `Usage: node scripts/perf/run.mjs [options]
 
@@ -26,7 +27,7 @@ const HELP = `Usage: node scripts/perf/run.mjs [options]
   --profile desktop|mobile  Default desktop; mobile emulates 402x874 at DPR 2
   --iterations N            Default 3; integer 1..30
   --mode baseline|diagnostic Default baseline; diagnostic adds Chrome trace
-  --flow load|journey|system|views Default journey; views isolates moon/breeze
+  --flow load|journey|system|views|cache Default journey; cache repeats navigation
   --observe-ms N            Default 5000; integer 1000..30000 per view
   --instrumentation on|off   Default on; controls perf=1 business markers
   --adapter FILE.cjs        Project data/ready adapter; default adapters/bamboo.cjs
@@ -232,8 +233,8 @@ async function main() {
   const adapter = { ...loadedAdapter.metadata, path: loadedAdapter.path,
     sha256: createHash('sha256').update(await readFile(loadedAdapter.path)).digest('hex') };
   const bundled = Object.values(BUNDLED_SCENARIOS).some(file => options.scenario === path.join(directory, file));
-  if (bundled && options.flow !== 'load' && adapter.id !== 'bamboo') {
-    throw new Error(`The bundled ${options.flow} flow uses Bamboo controls. Adapter ${adapter.id} requires --scenario with your project's UI actions; --flow load can use any adapter.`);
+  if (bundled && !['load', 'cache'].includes(options.flow) && adapter.id !== 'bamboo') {
+    throw new Error(`The bundled ${options.flow} flow uses Bamboo controls. Adapter ${adapter.id} requires --scenario with your project's UI actions; --flow load or cache can use any adapter.`);
   }
   const declaredScenes = bundled && options.flow === 'load' ? ['initial-3d'] : require(options.scenario).expectedScenes;
   if (declaredScenes !== undefined && (!Array.isArray(declaredScenes) || !declaredScenes.length ||
@@ -256,6 +257,7 @@ async function main() {
     ? { width: 402, height: 874, pixelRatio: 2, kind: 'emulated-viewport' }
     : { width: 1440, height: 900, pixelRatio: 1, kind: 'requested-browser-window' };
   const urlParameters = new URL(options.url).searchParams;
+  const captureHar = options.flow === 'load';
   const manifest = {
     schemaVersion: 1, status: 'running', startedAt: new Date().toISOString(),
     cli: process.argv.slice(2), git,
@@ -268,9 +270,22 @@ async function main() {
       screenshotLCP: options.mode === 'diagnostic', screenshotLS: options.mode === 'diagnostic',
       traceScreenshots: options.mode === 'diagnostic', expectedScenes,
       performancePanel: urlParameters.get('perf') === '1' && urlParameters.get('perfUI') === '1',
-      har: options.flow === 'load', disabledPlugins: ['coach'],
-      harNote: options.flow === 'load' ? 'HAR collected for initial navigation' :
-        'HAR disabled: this sitespeed version requires a HAR page for every measurement, while same-page WebGL view changes do not navigate. Resource Timing and diagnostic trace network events remain available.',
+      har: captureHar, disabledPlugins: ['coach'],
+      networkCache: {
+        version: 1, requested: true, source: 'browsertime-shared-cdp',
+        availability: 'See each scene.networkCapture; custom scenarios must use createCollector.',
+        session: 'new-ChromeDriver-session-and-temporary-profile-per-iteration',
+        browserCache: 'enabled', explicitClearCache: false, targetWarmup: false,
+        navigation: 'normal-navigation-without-cache-bypass',
+        withinIteration: options.flow === 'cache'
+          ? 'same URL revisited by normal navigation in the same profile; browser cache retained, document state recreated'
+          : 'same-page resources and application state retained',
+        network: 'native',
+        limitation: 'Browsertime starts a new ChromeDriver session per iteration; no user-data-dir is supplied. Operating-system and server caches are not cleared. Custom scenarios may change cache state.',
+      },
+      harNote: captureHar ? 'HAR collected for each measured navigation' : options.flow === 'cache'
+        ? 'HAR disabled for cache flow; CDP captures whitelisted cache headers and flags from existing requests without storing all request/response headers.'
+        : 'HAR disabled: this sitespeed version requires a HAR page for every measurement, while same-page WebGL view changes do not navigate. Resource Timing and diagnostic trace network events remain available.',
     },
     capture: { command: 'npx', args: [], exitCode: null, signal: null },
   };
@@ -290,6 +305,8 @@ async function main() {
     manifest.config.probeSha256 = createHash('sha256').update(probeSource).digest('hex');
     manifest.config.scenarioSha256 = createHash('sha256').update(await readFile(options.scenario)).digest('hex');
     manifest.config.collectorSha256 = createHash('sha256').update(await readFile(path.join(directory, 'scene-helpers.cjs'))).digest('hex');
+    manifest.config.networkCache.sha256 = createHash('sha256').update(await readFile(path.join(directory, 'network-cache.cjs'))).digest('hex');
+    manifest.config.networkCache.classifierSha256 = createHash('sha256').update(await readFile(path.join(directory, 'resource-cache.mjs'))).digest('hex');
     manifest.config.instrumentationSha256 = options.instrumentation === 'on' && adapter.id === 'bamboo'
       ? createHash('sha256').update(await readFile(path.resolve(directory, '../../src/lib/performance.ts'))).digest('hex') : null;
     if (options.instrumentation === 'on' && adapter.id !== 'bamboo') {
@@ -313,7 +330,7 @@ async function main() {
       '--browsertime.pageCompleteCheckPollTimeout', '200',
       '--video', 'false', '--visualMetrics', 'false',
       '--plugins.remove', 'coach',
-      '--browsertime.skipHar', String(options.flow !== 'load'),
+      '--browsertime.skipHar', String(!captureHar),
       '--connectivity.profile', 'native',
       '--outputFolder', path.join(options.out, 'sitespeed'),
     ];
