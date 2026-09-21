@@ -17,6 +17,43 @@ function severity(value: number | null | undefined) {
  return value !== null && value !== undefined && value >= 100 ? 'slow' : value !== null && value !== undefined && value >= 50 ? 'warning' : 'normal';
 }
 
+interface RuntimeHealth {
+ level: 'good' | 'warning' | 'slow' | 'unknown';
+ label: string;
+ reason: string;
+}
+
+// Presentation guidance for a 60 Hz reference, not measured display FPS.
+// Keep the raw collector values and the original stutter thresholds unchanged.
+export function getRuntimeHealth(snapshot: RuntimeSnapshot | null, failed = false): RuntimeHealth {
+ if (failed) return { level: 'unknown', label: '采集异常', reason: '读数可能已停止更新，暂不判断。' };
+ if (!snapshot) return { level: 'unknown', label: '采样中', reason: '等待浏览器提供帧间隔。' };
+ if (snapshot.status !== 'collecting') return { level: 'unknown', label: { paused: '已暂停', hidden: '页面隐藏', stopped: '已停止' }[snapshot.status], reason: '保留停止时的读数，暂不判断当前状态。' };
+ const { rafHz, p95Ms, maxMs, count, observedMs } = snapshot.window;
+ if (rafHz === null || p95Ms === null || maxMs === null || ![rafHz, p95Ms, maxMs, observedMs].every(Number.isFinite) || count < 1 || observedMs <= 0) {
+  return { level: 'unknown', label: '采样中', reason: '等待有效的前台帧间隔。' };
+ }
+ if (snapshot.now - snapshot.segmentStartedAt < snapshot.windowMs) {
+  // A short pause can leave old samples in the five-second window. Only a
+  // completed long gap from this new segment may bypass the warmup state.
+  const currentStall = snapshot.history.some(frame => frame.startTime >= snapshot.segmentStartedAt && frame.duration >= 100);
+  return currentStall
+   ? { level: 'slow', label: '卡顿', reason: '本次连续采样已出现 ≥ 100 ms 的停顿。' }
+   : { level: 'unknown', label: '采样中', reason: '积累约 5 秒连续前台样本后判断；明显停顿会提前提示。' };
+ }
+ // Compare the same precision the reader sees, so 29.97 displayed as 30.0
+ // does not turn red solely because of its hidden fractional digits.
+ const displayedHz = Number(rafHz.toFixed(1));
+ if (maxMs >= 100) return { level: 'slow', label: '卡顿', reason: `近 5 秒最大间隔 ${milliseconds(maxMs)}，已出现明显停顿。` };
+ if (observedMs < 1000) return { level: 'unknown', label: '采样中', reason: '有效帧间隔累计不足 1 秒，继续采样后判断。' };
+ if (p95Ms >= 50) return { level: 'slow', label: '卡顿', reason: `近 5 秒 p95 为 ${milliseconds(p95Ms)}，慢间隔较多。` };
+ if (displayedHz < 30) return { level: 'slow', label: '卡顿', reason: '近 5 秒回调频率低于 30 Hz，更新节奏偏慢。' };
+ if (maxMs >= 50) return { level: 'warning', label: '中等', reason: `近 5 秒最大间隔 ${milliseconds(maxMs)}，有短暂波动。` };
+ if (p95Ms > 25) return { level: 'warning', label: '中等', reason: `近 5 秒 p95 为 ${milliseconds(p95Ms)}，部分间隔偏长。` };
+ if (displayedHz < 55) return { level: 'warning', label: '中等', reason: '近 5 秒回调频率不足 55 Hz，未接近 60 Hz 参考目标。' };
+ return { level: 'good', label: '合适', reason: '近 5 秒更新节奏较稳定，未记录到 ≥ 50 ms 的慢间隔。' };
+}
+
 function stateDescription(state: RuntimeState) {
  const view = state.view ? VIEW_LABELS[state.view] ?? state.view : '视图未知';
  const place = state.place ? VIEW_LABELS[state.place] ?? state.place : '位置未知';
@@ -27,6 +64,8 @@ function stateDescription(state: RuntimeState) {
 function FrameRateGuide() {
  return <details className="perf-group perf-fps-guide" open>
   <summary>帧率怎么看？<span>60 FPS 是常见流畅目标</span></summary>
+  <p><strong>Hz 是什么？</strong>Hz 表示每秒多少次。上方读数是近 5 秒浏览器 RAF 回调的平均频率，<strong>60 Hz ≈ 每秒 60 次回调</strong>。每次回调都是一次准备下一帧的机会。</p>
+  <p>RAF 回调频率反映更新节奏，<strong>不是实际画面 FPS</strong>，也不代表检测到了屏幕刷新率。</p>
   <p>FPS 表示每秒画面更新多少帧。先以常见的 60 Hz 屏幕为参考：</p>
   <dl className="perf-fps-reference">
    <div><dt>约 60 FPS<small>16.7 ms / 帧</small></dt><dd><strong>流畅目标</strong>转动视角、场景运动通常更连贯。</dd></div>
@@ -34,9 +73,16 @@ function FrameRateGuide() {
    <div><dt>低于 30 FPS<small>大于 33.3 ms / 帧</small></dt><dd><strong>需要关注</strong>运动画面更容易感觉不连贯。</dd></div>
   </dl>
   <p>高刷新率屏幕可有更高目标，例如 120 Hz 对应 120 FPS（约 8.3 ms / 帧）。设备、节能设置和场景不同，没有统一的合格线。</p>
+  <div className="perf-health-rules">
+   <p><strong>数字颜色 · 以 60 Hz 为参考</strong></p>
+   <p><span data-health="good">绿色 · 合适</span> ≥ 55 Hz，且 p95 ≤ 25 ms、最大间隔 &lt; 50 ms。</p>
+   <p><span data-health="warning">黄色 · 中等</span> 介于绿色与红色条件之间。</p>
+   <p><span data-health="slow">红色 · 卡顿</span> &lt; 30 Hz，或 p95 ≥ 50 ms，或最大间隔 ≥ 100 ms。</p>
+   <p>样本足够时，任一红色条件优先；频率按显示的一位小数判断。暂停、隐藏、异常、连续采样不足 5 秒或有效间隔累计不足 1 秒时显示灰色；本段已完成的 ≥ 100 ms 停顿会提前标红。</p>
+  </div>
   <p><strong>判断卡顿：</strong>平均值正常也可能有停顿。p95 表示约 95% 的已记录间隔不超过该值；结合最大间隔和下方「最近卡顿」一起看。</p>
   <p className="perf-fps-thresholds"><span className="perf-chart-warning">≥ 50 ms 标黄</span><span className="perf-chart-slow">≥ 100 ms 标红</span></p>
-  <p>这是本工具的停顿提示线；未触发标记，也不代表每帧都达到 60 FPS 的目标。</p>
+  <p>图表按单个间隔提示停顿；上方数字综合近 5 秒判断。它们是本工具的参考规则。主线程卡住时面板也会停住，恢复后才会更新颜色。</p>
  </details>;
 }
 
@@ -73,8 +119,9 @@ function RuntimeChart({ snapshot }: { snapshot: RuntimeSnapshot }) {
  </figure>;
 }
 
-export function PerformanceRuntimeView({ snapshot, startupLabel, startupTime, failed, onPause, onResume, onClear }: {
+export function PerformanceRuntimeView({ snapshot, health, startupLabel, startupTime, failed, onPause, onResume, onClear }: {
  snapshot: RuntimeSnapshot | null;
+ health: RuntimeHealth;
  startupLabel: string;
  startupTime: string;
  failed: boolean;
@@ -93,15 +140,11 @@ export function PerformanceRuntimeView({ snapshot, startupLabel, startupTime, fa
  return <div className="perf-runtime-view">
   <div className="perf-runtime-status"><span><i aria-hidden="true" className={`perf-status-dot ${snapshot.status === 'collecting' ? 'perf-status-ready' : 'perf-status-idle'}`} />{status}</span><small>{startupLabel} · {startupTime}</small></div>
   <div className="perf-runtime-metrics">
-   <div className="perf-runtime-metric"><span>浏览器回调频率</span><strong>{snapshot.window.rafHz === null ? 'N/A' : snapshot.window.rafHz.toFixed(1)}{snapshot.window.rafHz !== null && <small>Hz</small>}</strong><span>近 5 秒 · RAF</span></div>
+   <div className="perf-runtime-metric" data-health={health.level} title={health.reason}><span>浏览器回调频率</span><strong>{snapshot.window.rafHz === null ? 'N/A' : snapshot.window.rafHz.toFixed(1)}{snapshot.window.rafHz !== null && <small>Hz</small>}</strong><span className="perf-health-label">{health.label}</span><span>近 5 秒 · RAF</span></div>
    <div className="perf-runtime-metric" data-severity={severity(snapshot.window.p95Ms)}><span>帧间隔 p95</span><strong>{snapshot.window.p95Ms === null ? 'N/A' : snapshot.window.p95Ms.toFixed(0)}{snapshot.window.p95Ms !== null && <small>ms</small>}</strong></div>
    <div className="perf-runtime-metric" data-severity={severity(snapshot.window.maxMs)}><span>最大帧间隔</span><strong>{snapshot.window.maxMs === null ? 'N/A' : snapshot.window.maxMs.toFixed(0)}{snapshot.window.maxMs !== null && <small>ms</small>}</strong></div>
   </div>
-  <aside className="perf-raf-guide" aria-label="浏览器回调频率说明">
-   <strong>这个 Hz 是什么意思？</strong>
-   <p>RAF 是浏览器安排页面准备下一帧的回调。这里显示近 5 秒的平均频率，例如 <strong>60 Hz ≈ 每秒 60 次回调</strong>。</p>
-   <p>它反映更新节奏，<strong>不是实际画面 FPS</strong>，也不代表屏幕刷新率。判断流畅度，还要看帧间隔和具体停顿。</p>
-  </aside>
+  <p className="perf-health-description" data-health={health.level}><strong>{health.label}</strong> · {health.reason}</p>
   <p className="perf-explanation">{snapshot.window.count} 个前台样本 · 完整间隔合计 {(snapshot.window.observedMs / 1000).toFixed(2)} s · 慢间隔 {snapshot.window.slowCount} 次。按近 5 秒内结束的完整间隔统计，长间隔可跨窗口起点。RAF 回调率不是屏幕 FPS。</p>
   <FrameRateGuide />
   <RuntimeChart snapshot={snapshot} />

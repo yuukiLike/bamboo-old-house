@@ -390,7 +390,8 @@ function stutterItems(run) {
 }
 function frameRateGuideHtml() {
   return `<details class="fps-guide" open><summary>帧率怎么看 <span class="count">新手参考</span></summary>
-    <p>FPS 是每秒画面更新的次数。先看屏幕刷新率，再看画面是否持续稳定。</p>
+    <p><strong>Hz 是每秒发生的次数。</strong>本工具的 RAF Hz 表示浏览器每秒调用「准备下一帧」回调的次数，例如 60 Hz 约为每秒 60 次；实时面板用近 5 秒的平均值观察浏览器调度。它不是屏幕实际呈现的 FPS，也不是检测到的屏幕刷新率。</p>
+    <p>FPS 是每秒画面更新的次数。下面的参考帮助理解时间尺度，也要看画面是否持续稳定。</p>
     <div class="fps-guide-grid">
       <div><strong>约 60 FPS</strong><span>16.7 ms / 帧</span><p>60 Hz 屏幕下，稳定接近此值是常见的流畅目标。</p></div>
       <div><strong>约 30 FPS</strong><span>33.3 ms / 帧</span><p>通常基本可用，但转动视角时，画面连续性较弱。</p></div>
@@ -399,7 +400,14 @@ function frameRateGuideHtml() {
     </div>
     <p class="muted">这些是理解体验的参考，不是统一合格线。实际目标取决于设备、屏幕刷新率、场景复杂度与节能设置。</p>
     <p><strong>平均值正常，也可能有瞬间卡顿。</strong>同时看 p95、最大间隔和停顿事件；p95 表示约 95% 的已记录间隔不超过该值。</p>
-    <div class="fps-guide-markers"><span class="fps-guide-warning">黄色 ≥50 ms</span><span class="fps-guide-danger">红色 ≥100 ms</span><span class="muted">实时面板的停顿候选标记；未触发标记，不代表每帧都达到 60 FPS。</span></div>
+    <p><strong>实时读数的颜色怎么判断？</strong>以固定的 60 Hz 为参考，结合近 5 秒的回调频率、p95 和最大间隔，取最严重的一档；主数字与折叠标题显示相同的颜色和状态。</p>
+    ${table(['实时状态', '判断条件'], [
+      ['<span class="fps-guide-good">绿色 · 合适</span>', '显示频率 ≥55.0 Hz，且 p95 ≤25 ms，且最大间隔 &lt;50 ms。'],
+      ['<span class="fps-guide-warning">黄色 · 中等</span>', '不满足绿色条件，也未达到红色条件；实时面板显示具体原因。'],
+      ['<span class="fps-guide-danger">红色 · 卡顿</span>', '显示频率 &lt;30.0 Hz，或 p95 ≥50 ms，或最大间隔 ≥100 ms；实时面板显示具体原因。'],
+    ])}
+    <p class="muted">样本足够时，频率按显示的一位小数判断，间隔按原始值判断。该分级不检测屏幕刷新率，也不是统一的流畅合格线。未采集、暂停、页面隐藏、异常、当前连续采集不足 5 秒或有效间隔累计不足 1 秒时为灰色；重开与恢复后会等待新的完整 5 秒。但本次连续段一旦记录到完整的 ≥100 ms 间隔，会提前显示红色。主线程阻塞期间面板也无法刷新，会在恢复后显示。</p>
+    <div class="fps-guide-markers"><span class="fps-guide-warning">单次间隔黄色 ≥50 ms</span><span class="fps-guide-danger">单次间隔红色 ≥100 ms</span><span class="muted">这是实时图表与事件中的停顿标记，区别于上面的实时综合状态；未触发标记，不代表每帧都达到 60 FPS。</span></div>
     <p class="boundary-note">本工具的 RAF 回调率用于观察浏览器调度，不是实际呈现 FPS；RAF 间隔也不是 CPU 或 GPU 单帧耗时。上面的 FPS 参考帮助理解时间尺度，不改变报告指标的测量口径。</p>
   </details>`;
 }
@@ -578,7 +586,7 @@ const reportStyles = `
 @media(max-width:650px){main{padding:20px 14px 45px}h1{font-size:25px}h2{font-size:20px}.report-header{display:block}.header-aside{text-align:left;margin-top:14px}.metric-card{padding:15px;min-height:155px}.metric-card strong{font-size:22px}.metric-grid{gap:10px}.section-heading{align-items:flex-start;flex-direction:column;gap:10px}.scene-card{grid-template-columns:1fr;padding:16px}.scene-name{display:block}.scene-name h3{margin:8px 0}.scene-name p{margin-bottom:5px}.scene-metric{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;align-items:center}.scene-metric small{grid-column:2}.bar-line{margin-top:0;grid-template-columns:1fr 75px}.stall-grid{grid-template-columns:1fr}.stall-heading{gap:10px}.stall-foot{flex-direction:column;gap:6px}.waterfall{grid-template-columns:115px minmax(90px,1fr) 78px;gap:8px;font-size:10px}.control select{max-width:calc(100vw - 110px)}.toolbar nav{gap:14px;font-size:12px}.timeline-caption{padding:12px}.timeline-caption strong{font-size:19px}.timeline-caption a{max-width:100px}details{padding:13px 12px}}
 .cache-badge{display:inline-flex;align-items:center;gap:5px;color:var(--cache-color,#89988e);font-size:10px;line-height:1.6;white-space:nowrap}.cache-badge:before{content:'';width:6px;height:6px;background:currentColor;border-radius:50%;flex-shrink:0}.resource-name{display:flex;align-items:center;gap:10px;min-width:0}.resource-name>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.resource-name>.cache-badge{flex-shrink:0}.resource-waterfall{grid-template-columns:minmax(235px,40%) 1fr 105px}.cache-distribution{display:flex;height:12px;border-radius:3px;overflow:hidden;background:#89988e22;margin:20px 0 14px}.cache-distribution span{height:100%;min-width:1px}.cache-legend{display:flex;gap:18px;flex-wrap:wrap}.cache-legend>span{display:flex;align-items:center;gap:7px}.cache-legend strong{font-size:12px;font-weight:500}.cache-legend small{font-size:10px;color:var(--muted)}.cache-metrics .metric-card{min-height:148px}
 @media(max-width:650px){.resource-waterfall{grid-template-columns:minmax(125px,1fr) minmax(65px,1fr) 68px}.resource-waterfall .resource-name{align-items:flex-start;flex-direction:column;gap:1px}.resource-waterfall .resource-name>span:first-child{max-width:100%}.cache-legend{gap:10px 18px}.cache-metrics .metric-card{min-height:148px}}
-.fps-guide{margin-bottom:20px}.fps-guide p{font-size:12px;margin-bottom:12px}.fps-guide-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}.fps-guide-grid>div{background:var(--panel-raised);border:1px solid var(--border);border-radius:6px;padding:14px}.fps-guide-grid strong{display:block;font-size:18px;font-weight:550}.fps-guide-grid span{display:block;color:var(--accent);font-size:11px;margin:3px 0 9px}.fps-guide-grid p{color:var(--muted);margin:0}.fps-guide-markers{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;font-size:11px}.fps-guide-warning{color:var(--amber)}.fps-guide-danger{color:var(--danger)}.fps-guide-warning:before,.fps-guide-danger:before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px}.fps-guide .boundary-note{margin-bottom:0}
+.fps-guide{margin-bottom:20px}.fps-guide p{font-size:12px;margin-bottom:12px}.fps-guide-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}.fps-guide-grid>div{background:var(--panel-raised);border:1px solid var(--border);border-radius:6px;padding:14px}.fps-guide-grid strong{display:block;font-size:18px;font-weight:550}.fps-guide-grid span{display:block;color:var(--accent);font-size:11px;margin:3px 0 9px}.fps-guide-grid p{color:var(--muted);margin:0}.fps-guide-markers{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;font-size:11px}.fps-guide-good{color:var(--accent)}.fps-guide-warning{color:var(--amber)}.fps-guide-danger{color:var(--danger)}.fps-guide-warning:before,.fps-guide-danger:before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px}.fps-guide .boundary-note{margin-bottom:0}
 @media(max-width:850px){.fps-guide-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:420px){.fps-guide-grid{grid-template-columns:1fr}.fps-guide-grid>div{padding:12px}.fps-guide-grid strong{font-size:16px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}`;
 

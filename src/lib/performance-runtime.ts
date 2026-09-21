@@ -37,6 +37,8 @@ export interface RuntimeSnapshot {
  chartEnd: number;
  startedAt: number;
  lastResetAt: number;
+ /** Start of the uninterrupted foreground segment; used for display warmup. */
+ segmentStartedAt: number;
  status: 'collecting' | 'paused' | 'hidden' | 'stopped';
  windowMs: number;
  historyMs: number;
@@ -238,7 +240,7 @@ export function createRuntimeCollector(): RuntimeCollector {
    const recentTasks = tasks.filter(entry => entry.startTime >= lastResetAt && entry.startTime + entry.duration > chartEnd - WINDOW_MS && entry.startTime + entry.duration <= chartEnd);
    if (collecting()) { cachedState = readState(); cachedRenderer = readRenderer(); }
    return {
-    version: 1, now, chartEnd, startedAt, lastResetAt,
+    version: 1, now, chartEnd, startedAt, lastResetAt, segmentStartedAt: segmentStart,
     status: disposed ? 'stopped' : paused ? 'paused' : hidden ? 'hidden' : 'collecting',
     windowMs: WINDOW_MS, historyMs: HISTORY_MS,
     window: { count: sorted.length, rafHz: observedMs > 0 ? sorted.length * 1000 / observedMs : null,

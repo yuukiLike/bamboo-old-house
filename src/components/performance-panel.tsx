@@ -5,7 +5,7 @@ import { Progress } from '@base-ui/react/progress';
 import type { ActivePhase, Phase } from '@/lib/performance';
 import { createRuntimeCollector, type RuntimeSnapshot } from '@/lib/performance-runtime';
 import { classifyResourceCache, summarizeResourceCache } from '../../scripts/perf/resource-cache.mjs';
-import { PerformanceRuntimeView } from './performance-runtime-view';
+import { getRuntimeHealth, PerformanceRuntimeView } from './performance-runtime-view';
 import { PerformanceCacheView, formatCacheBytes } from './performance-cache-view';
 import './performance-panel.css';
 
@@ -230,16 +230,17 @@ function Panel() {
  };
  const startupLabel = snapshot.readyAt !== undefined ? '首屏已就绪' : failed ? '初始化已中断' : '首屏加载中';
  const runtimeStatus = runtime?.status ?? 'stopped';
- const headerValue = view === 'timeline' ? duration(startupEnd) : runtimeStatus === 'collecting' ? (runtime?.window.rafHz === null || runtime?.window.rafHz === undefined ? '采集中' : `${runtime.window.rafHz.toFixed(1)} Hz`) : { paused: '已暂停', hidden: '页面隐藏', stopped: runtimeFailed ? '采集异常' : '准备采集' }[runtimeStatus];
+ const runtimeHealth = getRuntimeHealth(runtime, runtimeFailed);
+ const headerValue = view === 'timeline' ? duration(startupEnd) : runtimeStatus === 'collecting' && !runtimeFailed && runtime?.window.rafHz !== null && runtime?.window.rafHz !== undefined ? `${runtime.window.rafHz.toFixed(1)} Hz · ${runtimeHealth.label}` : runtimeHealth.label;
  const headerStatusClass = view === 'timeline' ? (failed ? 'perf-status-error' : snapshot.readyAt !== undefined ? 'perf-status-ready' : '') : runtimeFailed ? 'perf-status-error' : runtimeStatus === 'collecting' ? 'perf-status-ready' : 'perf-status-idle';
 
  return <aside className={`perf-panel ${collapsed ? 'perf-panel-collapsed' : ''}`} aria-label="页面性能诊断">
   <header className="perf-panel-header">
-   <button type="button" className="perf-panel-title" aria-expanded={!collapsed} aria-controls="performance-panel-body" onClick={() => setCollapsed(!collapsed)}><span className={`perf-status-dot ${headerStatusClass}`} /><span>{view === 'runtime' ? '实时性能' : '加载时间线'}</span><span className="perf-header-time">{headerValue}</span><span aria-hidden="true">{collapsed ? '＋' : '−'}</span></button>
+   <button type="button" className="perf-panel-title" aria-expanded={!collapsed} aria-controls="performance-panel-body" onClick={() => setCollapsed(!collapsed)}><span className={`perf-status-dot ${headerStatusClass}`} data-health={view === 'runtime' ? runtimeHealth.level : undefined} /><span>{view === 'runtime' ? '实时性能' : '加载时间线'}</span><span className="perf-header-time" data-health={view === 'runtime' ? runtimeHealth.level : undefined} title={view === 'runtime' ? runtimeHealth.reason : undefined}>{headerValue}</span><span aria-hidden="true">{collapsed ? '＋' : '−'}</span></button>
   </header>
   {!collapsed && <div id="performance-panel-body" className="perf-panel-body">
    <fieldset className="perf-tabs" aria-label="性能诊断视图"><button type="button" data-perf-tab="runtime" aria-pressed={view === 'runtime'} onClick={() => setView('runtime')}>实时运行</button><button type="button" data-perf-tab="timeline" aria-pressed={view === 'timeline'} onClick={() => setView('timeline')}>加载时间线</button></fieldset>
-   {view === 'runtime' ? <><PerformanceRuntimeView snapshot={runtime} startupLabel={startupLabel} startupTime={duration(startupEnd)} failed={runtimeFailed} onPause={() => changeRuntime('pause')} onResume={() => changeRuntime('resume')} onClear={() => changeRuntime('clear')} /><PerformanceCacheView summary={resourceCache} dropped={snapshot.droppedResources} observerSupported={snapshot.resourceObserverSupported} compact /></> : <>
+   {view === 'runtime' ? <><PerformanceRuntimeView snapshot={runtime} health={runtimeHealth} startupLabel={startupLabel} startupTime={duration(startupEnd)} failed={runtimeFailed} onPause={() => changeRuntime('pause')} onResume={() => changeRuntime('resume')} onClear={() => changeRuntime('clear')} /><PerformanceCacheView summary={resourceCache} dropped={snapshot.droppedResources} observerSupported={snapshot.resourceObserverSupported} compact /></> : <>
    <div className="perf-overview"><div><span>{snapshot.readyAt !== undefined ? '首屏控件已就绪' : failed ? '本次初始化已中断' : '正在进入页面'}</span><strong>{duration(startupEnd)}</strong></div><p>从导航开始 · 就绪后冻结首屏时间</p>
     <Progress.Root value={snapshot.readyAt !== undefined ? 1 : null} max={1} aria-label="首屏控件就绪状态" aria-valuetext={snapshot.readyAt !== undefined ? '首屏控件已就绪' : failed ? '初始化已中断' : '进行中，无法预估剩余时间'} className={`perf-progress ${failed ? 'perf-progress-stopped' : ''}`}><Progress.Track className="perf-progress-track"><Progress.Indicator className="perf-progress-indicator" /></Progress.Track></Progress.Root>
    </div>

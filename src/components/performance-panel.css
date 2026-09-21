@@ -17,7 +17,7 @@
 .perf-status-ready { background: #aad2a9; }
 .perf-status-error { background: #e0a197; }
 .perf-status-idle { background: #8fa69a; }
-.perf-panel-collapsed { width: 238px; }
+.perf-panel-collapsed { width: 280px; }
 .perf-panel-body { max-height: calc(100svh - 330px); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 15px 15px; }
 .perf-tabs { display: flex; gap: 4px; padding: 4px; margin: 1px 0 14px; border: 1px solid #bdd4c223; border-radius: 7px; background: #07130f66; }
 .perf-tabs button { flex: 1; padding: 7px 10px; border-radius: 4px; background: transparent; color: #a0b4a7; }
@@ -32,10 +32,17 @@
 .perf-runtime-metric strong small { margin-left: 3px; color: #9eb4a5; font-size: 10px; font-weight: 400; }
 .perf-runtime-metric[data-severity='warning'] strong { color: #e0bc7b; }
 .perf-runtime-metric[data-severity='slow'] strong { color: #eca99a; }
-.perf-raf-guide { margin: 0 0 10px; padding: 10px 11px; border-left: 2px solid #a9cbaa; border-radius: 0 5px 5px 0; background: #98bb9c0d; font-size: 11px; }
-.perf-raf-guide > strong { color: #dce8df; font-weight: 600; }
-.perf-raf-guide p { margin: 5px 0 0; color: #a9bcb0; line-height: 1.7; }
-.perf-raf-guide p strong { color: #cbdacb; font-weight: 500; }
+.perf-panel [data-health='good'] { --perf-health-color: #aad2a9; }
+.perf-panel [data-health='warning'] { --perf-health-color: #e0bc7b; }
+.perf-panel [data-health='slow'] { --perf-health-color: #eca99a; }
+.perf-panel [data-health='unknown'] { --perf-health-color: #9aac9f; }
+.perf-runtime-metric[data-health] strong, .perf-runtime-metric .perf-health-label, .perf-header-time[data-health], .perf-health-description strong, .perf-health-rules [data-health] { color: var(--perf-health-color); }
+.perf-runtime-metric[data-health] { border-color: var(--perf-health-color); }
+.perf-status-dot[data-health] { background: var(--perf-health-color); }
+.perf-health-description { margin: 0 0 10px; font-size: 11px; color: #b6cbb9; line-height: 1.7; }
+.perf-health-description strong { font-weight: 600; }
+.perf-health-rules { margin-bottom: 10px; padding-top: 9px; border-top: 1px solid #bdd1bd20; }
+.perf-health-rules [data-health] { display: block; font-weight: 500; }
 .perf-group.perf-fps-guide { margin: 0 0 14px; padding: 0 11px 2px; border: 1px solid #b4d1be2e; border-radius: 7px; background: #98bb9c09; }
 .perf-fps-guide summary { color: #dce8df; }
 .perf-fps-guide summary > span { display: block; margin: 3px 0 0 14px; color: #a9cbaa; font-size: 11px; font-weight: 400; }
@@ -149,6 +156,6 @@
 .perf-warning { display: block; color: #ddba90; font-size: 11px; margin: 8px 0 0; }
 .perf-panel-error { padding: 13px 15px; color: #ddba90; }
 @keyframes perf-progress-travel { from { transform: translateX(-100%); } to { transform: translateX(390%); } }
-@media (max-width: 1100px) { .perf-panel { width: 380px; } .perf-panel-collapsed { width: 228px; } }
-@media (max-width: 900px) { .perf-panel { top: 172px; right: 14px; width: 360px; max-width: calc(100vw - 28px); } .perf-panel-body { max-height: calc(100svh - 330px); } .perf-panel-collapsed { width: 224px; } }
+@media (max-width: 1100px) { .perf-panel { width: 380px; } .perf-panel-collapsed { width: 280px; } }
+@media (max-width: 900px) { .perf-panel { top: 172px; right: 14px; width: 360px; max-width: calc(100vw - 28px); } .perf-panel-body { max-height: calc(100svh - 330px); } .perf-panel-collapsed { width: 280px; } }
 @media (prefers-reduced-motion: reduce) { .perf-progress-indicator[data-indeterminate] { animation: none; opacity: .7; } }
