@@ -24,6 +24,22 @@ function stateDescription(state: RuntimeState) {
  return [view, place !== view ? place : null, sound, state.weatherPreset ?? '天气未知', state.paused ? '动态暂停' : null].filter(Boolean).join(' · ');
 }
 
+function FrameRateGuide() {
+ return <details className="perf-group perf-fps-guide" open>
+  <summary>帧率怎么看？<span>60 FPS 是常见流畅目标</span></summary>
+  <p>FPS 表示每秒画面更新多少帧。先以常见的 60 Hz 屏幕为参考：</p>
+  <dl className="perf-fps-reference">
+   <div><dt>约 60 FPS<small>16.7 ms / 帧</small></dt><dd><strong>流畅目标</strong>转动视角、场景运动通常更连贯。</dd></div>
+   <div><dt>约 30 FPS<small>33.3 ms / 帧</small></dt><dd><strong>基本可用</strong>移动或转动视角时，连续性较弱。</dd></div>
+   <div><dt>低于 30 FPS<small>大于 33.3 ms / 帧</small></dt><dd><strong>需要关注</strong>运动画面更容易感觉不连贯。</dd></div>
+  </dl>
+  <p>高刷新率屏幕可有更高目标，例如 120 Hz 对应 120 FPS（约 8.3 ms / 帧）。设备、节能设置和场景不同，没有统一的合格线。</p>
+  <p><strong>判断卡顿：</strong>平均值正常也可能有停顿。p95 表示约 95% 的已记录间隔不超过该值；结合最大间隔和下方「最近卡顿」一起看。</p>
+  <p className="perf-fps-thresholds"><span className="perf-chart-warning">≥ 50 ms 标黄</span><span className="perf-chart-slow">≥ 100 ms 标红</span></p>
+  <p>这是本工具的停顿提示线；未触发标记，也不代表每帧都达到 60 FPS 的目标。</p>
+ </details>;
+}
+
 function RuntimeChart({ snapshot }: { snapshot: RuntimeSnapshot }) {
  const bucketCount = 150;
  const plotWidth = 330;
@@ -77,11 +93,17 @@ export function PerformanceRuntimeView({ snapshot, startupLabel, startupTime, fa
  return <div className="perf-runtime-view">
   <div className="perf-runtime-status"><span><i aria-hidden="true" className={`perf-status-dot ${snapshot.status === 'collecting' ? 'perf-status-ready' : 'perf-status-idle'}`} />{status}</span><small>{startupLabel} · {startupTime}</small></div>
   <div className="perf-runtime-metrics">
-   <div className="perf-runtime-metric"><span>近 5 秒 RAF 回调</span><strong>{snapshot.window.rafHz === null ? 'N/A' : snapshot.window.rafHz.toFixed(1)}{snapshot.window.rafHz !== null && <small>Hz</small>}</strong></div>
+   <div className="perf-runtime-metric"><span>浏览器回调频率</span><strong>{snapshot.window.rafHz === null ? 'N/A' : snapshot.window.rafHz.toFixed(1)}{snapshot.window.rafHz !== null && <small>Hz</small>}</strong><span>近 5 秒 · RAF</span></div>
    <div className="perf-runtime-metric" data-severity={severity(snapshot.window.p95Ms)}><span>帧间隔 p95</span><strong>{snapshot.window.p95Ms === null ? 'N/A' : snapshot.window.p95Ms.toFixed(0)}{snapshot.window.p95Ms !== null && <small>ms</small>}</strong></div>
    <div className="perf-runtime-metric" data-severity={severity(snapshot.window.maxMs)}><span>最大帧间隔</span><strong>{snapshot.window.maxMs === null ? 'N/A' : snapshot.window.maxMs.toFixed(0)}{snapshot.window.maxMs !== null && <small>ms</small>}</strong></div>
   </div>
+  <aside className="perf-raf-guide" aria-label="浏览器回调频率说明">
+   <strong>这个 Hz 是什么意思？</strong>
+   <p>RAF 是浏览器安排页面准备下一帧的回调。这里显示近 5 秒的平均频率，例如 <strong>60 Hz ≈ 每秒 60 次回调</strong>。</p>
+   <p>它反映更新节奏，<strong>不是实际画面 FPS</strong>，也不代表屏幕刷新率。判断流畅度，还要看帧间隔和具体停顿。</p>
+  </aside>
   <p className="perf-explanation">{snapshot.window.count} 个前台样本 · 完整间隔合计 {(snapshot.window.observedMs / 1000).toFixed(2)} s · 慢间隔 {snapshot.window.slowCount} 次。按近 5 秒内结束的完整间隔统计，长间隔可跨窗口起点。RAF 回调率不是屏幕 FPS。</p>
+  <FrameRateGuide />
   <RuntimeChart snapshot={snapshot} />
   <div className="perf-runtime-actions">
    <button type="button" data-runtime-action="pause" onClick={snapshot.status === 'paused' ? onResume : onPause} disabled={snapshot.status === 'stopped'}>{snapshot.status === 'paused' ? '继续采集' : '暂停采集'}</button>

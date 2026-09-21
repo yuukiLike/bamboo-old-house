@@ -32,6 +32,24 @@
 .perf-runtime-metric strong small { margin-left: 3px; color: #9eb4a5; font-size: 10px; font-weight: 400; }
 .perf-runtime-metric[data-severity='warning'] strong { color: #e0bc7b; }
 .perf-runtime-metric[data-severity='slow'] strong { color: #eca99a; }
+.perf-raf-guide { margin: 0 0 10px; padding: 10px 11px; border-left: 2px solid #a9cbaa; border-radius: 0 5px 5px 0; background: #98bb9c0d; font-size: 11px; }
+.perf-raf-guide > strong { color: #dce8df; font-weight: 600; }
+.perf-raf-guide p { margin: 5px 0 0; color: #a9bcb0; line-height: 1.7; }
+.perf-raf-guide p strong { color: #cbdacb; font-weight: 500; }
+.perf-group.perf-fps-guide { margin: 0 0 14px; padding: 0 11px 2px; border: 1px solid #b4d1be2e; border-radius: 7px; background: #98bb9c09; }
+.perf-fps-guide summary { color: #dce8df; }
+.perf-fps-guide summary > span { display: block; margin: 3px 0 0 14px; color: #a9cbaa; font-size: 11px; font-weight: 400; }
+.perf-fps-guide p { margin: 0 0 9px; color: #a9bcb0; font-size: 11px; line-height: 1.7; }
+.perf-fps-guide p > strong { color: #cbdacb; font-weight: 500; }
+.perf-fps-reference { margin: 0 0 10px; }
+.perf-fps-reference > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid #bdd1bd12; }
+.perf-fps-reference dt { color: #dce8df; font-size: 13px; font-variant-numeric: tabular-nums; }
+.perf-fps-reference dt small { display: block; color: #91a898; font-size: 10px; }
+.perf-fps-reference dd { margin: 0; color: #a9bcb0; font-size: 11px; }
+.perf-fps-reference dd strong { display: block; color: #cbdacb; font-weight: 500; }
+.perf-fps-guide .perf-fps-thresholds { display: flex; flex-wrap: wrap; gap: 4px 15px; margin-bottom: 4px; }
+.perf-fps-thresholds .perf-chart-warning { color: #d0b37c; }
+.perf-fps-thresholds .perf-chart-slow { color: #d79887; }
 .perf-runtime-context { margin: 9px 0 13px; color: #b5c9b9; font-size: 11px; overflow-wrap: anywhere; }
 .perf-runtime-chart { margin: 0 0 14px; }
 .perf-runtime-chart figcaption { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 0 7px; color: #c9d9ca; font-size: 11px; }
