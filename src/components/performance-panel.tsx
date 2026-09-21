@@ -177,8 +177,10 @@ function Panel() {
    observer.observe({ type: 'resource', buffered: true });
   } catch { resourceObserverSupported.current = false; }
   const refresh = () => {
-   if (collectorFailed) setRuntimeFailed(true);
-   try { setRuntime(runtimeCollector.current?.snapshot() ?? null); }
+   try {
+    setRuntime(runtimeCollector.current?.snapshot() ?? null);
+    setRuntimeFailed(collectorFailed);
+   }
    catch { setRuntimeFailed(true); }
    if (!document.hidden) setSnapshot(readSnapshot(resources.current.slice(), droppedResources.current, resourceObserverSupported.current));
   };
@@ -232,7 +234,7 @@ function Panel() {
  const runtimeStatus = runtime?.status ?? 'stopped';
  const runtimeHealth = getRuntimeHealth(runtime, runtimeFailed);
  const headerValue = view === 'timeline' ? duration(startupEnd) : runtimeStatus === 'collecting' && !runtimeFailed && runtime?.window.rafHz !== null && runtime?.window.rafHz !== undefined ? `${runtime.window.rafHz.toFixed(1)} Hz · ${runtimeHealth.label}` : runtimeHealth.label;
- const headerStatusClass = view === 'timeline' ? (failed ? 'perf-status-error' : snapshot.readyAt !== undefined ? 'perf-status-ready' : '') : runtimeFailed ? 'perf-status-error' : runtimeStatus === 'collecting' ? 'perf-status-ready' : 'perf-status-idle';
+ const headerStatusClass = view === 'timeline' ? (failed ? 'perf-status-error' : snapshot.readyAt !== undefined ? 'perf-status-ready' : '') : '';
 
  return <aside className={`perf-panel ${collapsed ? 'perf-panel-collapsed' : ''}`} aria-label="页面性能诊断">
   <header className="perf-panel-header">

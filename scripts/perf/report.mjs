@@ -408,7 +408,7 @@ function frameRateGuideHtml() {
     ])}
     <p class="muted">样本足够时，频率按显示的一位小数判断，间隔按原始值判断。该分级不检测屏幕刷新率，也不是统一的流畅合格线。未采集、暂停、页面隐藏、异常、当前连续采集不足 5 秒或有效间隔累计不足 1 秒时为灰色；重开与恢复后会等待新的完整 5 秒。但本次连续段一旦记录到完整的 ≥100 ms 间隔，会提前显示红色。主线程阻塞期间面板也无法刷新，会在恢复后显示。</p>
     <div class="fps-guide-markers"><span class="fps-guide-warning">单次间隔黄色 ≥50 ms</span><span class="fps-guide-danger">单次间隔红色 ≥100 ms</span><span class="muted">这是实时图表与事件中的停顿标记，区别于上面的实时综合状态；未触发标记，不代表每帧都达到 60 FPS。</span></div>
-    <p class="boundary-note">本工具的 RAF 回调率用于观察浏览器调度，不是实际呈现 FPS；RAF 间隔也不是 CPU 或 GPU 单帧耗时。上面的 FPS 参考帮助理解时间尺度，不改变报告指标的测量口径。</p>
+    <p class="boundary-note">RAF 间隔也不是 CPU 或 GPU 单帧耗时。上述 FPS 参考不改变报告指标的测量口径。</p>
   </details>`;
 }
 function stutterHtml(run) {

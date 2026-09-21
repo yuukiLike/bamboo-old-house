@@ -17,7 +17,7 @@
 .perf-status-ready { background: #aad2a9; }
 .perf-status-error { background: #e0a197; }
 .perf-status-idle { background: #8fa69a; }
-.perf-panel-collapsed { width: 280px; }
+.perf-panel.perf-panel-collapsed { width: 280px; }
 .perf-panel-body { max-height: calc(100svh - 330px); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 15px 15px; }
 .perf-tabs { display: flex; gap: 4px; padding: 4px; margin: 1px 0 14px; border: 1px solid #bdd4c223; border-radius: 7px; background: #07130f66; }
 .perf-tabs button { flex: 1; padding: 7px 10px; border-radius: 4px; background: transparent; color: #a0b4a7; }
@@ -156,6 +156,6 @@
 .perf-warning { display: block; color: #ddba90; font-size: 11px; margin: 8px 0 0; }
 .perf-panel-error { padding: 13px 15px; color: #ddba90; }
 @keyframes perf-progress-travel { from { transform: translateX(-100%); } to { transform: translateX(390%); } }
-@media (max-width: 1100px) { .perf-panel { width: 380px; } .perf-panel-collapsed { width: 280px; } }
-@media (max-width: 900px) { .perf-panel { top: 172px; right: 14px; width: 360px; max-width: calc(100vw - 28px); } .perf-panel-body { max-height: calc(100svh - 330px); } .perf-panel-collapsed { width: 280px; } }
+@media (max-width: 1100px) { .perf-panel { width: 380px; } }
+@media (max-width: 900px) { .perf-panel { top: 172px; right: 14px; width: 360px; max-width: calc(100vw - 28px); } }
 @media (prefers-reduced-motion: reduce) { .perf-progress-indicator[data-indeterminate] { animation: none; opacity: .7; } }

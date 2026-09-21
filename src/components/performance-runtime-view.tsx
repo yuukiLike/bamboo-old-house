@@ -86,7 +86,7 @@ function FrameRateGuide() {
  </details>;
 }
 
-function RuntimeChart({ snapshot }: { snapshot: RuntimeSnapshot }) {
+function RuntimeChart({ snapshot, collecting }: { snapshot: RuntimeSnapshot; collecting: boolean }) {
  const bucketCount = 150;
  const plotWidth = 330;
  const plotHeight = 88;
@@ -113,7 +113,7 @@ function RuntimeChart({ snapshot }: { snapshot: RuntimeSnapshot }) {
    <line className="perf-chart-grid" x1={left} x2={left + plotWidth} y1={y(0)} y2={y(0)} />
    <text className="perf-chart-label" x="5" y="10">ms</text>
    {buckets.map((value, index) => value === null ? null : <rect key={index} className="perf-chart-bar" data-severity={severity(value)} x={left + index / bucketCount * plotWidth} y={y(value)} width={Math.max(1, plotWidth / bucketCount - .65)} height={Math.max(1, plotHeight + top - y(value))} rx=".5"><title>{`导航后 ${((chartStart + (index + 1) / bucketCount * snapshot.historyMs) / 1000).toFixed(1)} s 附近：${milliseconds(value)}${value > ceiling ? '（柱高已截顶）' : ''}`}</title></rect>)}
-   <text className="perf-chart-label" x={left} y="109">−30 s</text><text className="perf-chart-label" x={left + plotWidth} y="109" textAnchor="end">{snapshot.status === 'collecting' ? '现在' : '暂停边界'}</text>
+   <text className="perf-chart-label" x={left} y="109">−30 s</text><text className="perf-chart-label" x={left + plotWidth} y="109" textAnchor="end">{collecting ? '现在' : '最后采样'}</text>
   </svg>
   <p className="perf-chart-legend"><span className="perf-chart-warning">≥ 50 ms 慢间隔</span><span className="perf-chart-slow">≥ 100 ms 明显停顿</span><span>{maximum > ceiling ? `柱高上限 ${ceiling} ms` : '空白为无样本'}</span></p>
  </figure>;
@@ -131,29 +131,30 @@ export function PerformanceRuntimeView({ snapshot, health, startupLabel, startup
 }) {
  const [showAllStutters, setShowAllStutters] = useState(false);
  if (!snapshot) return <p className="perf-empty">{failed ? '实时采集未能启动；加载时间线仍可查看。' : '正在启动实时采集…'}</p>;
- const status = { collecting: '正在采集', paused: '已手动暂停', hidden: '页面隐藏 · 已停止采样', stopped: '采集已停止' }[snapshot.status];
+ const collecting = !failed && snapshot.status === 'collecting';
+ const status = failed ? '采集异常 · 读数可能未更新' : { collecting: '正在采集', paused: '已手动暂停', hidden: '页面隐藏 · 已停止采样', stopped: '采集已停止' }[snapshot.status];
  const recent = snapshot.stutters.slice().reverse();
  const visible = showAllStutters ? recent : recent.slice(0, 6);
  const renderer = snapshot.renderer;
  const number = (value: number | null | undefined) => value === null || value === undefined ? 'N/A' : value.toLocaleString('zh-CN');
  const stateChanged = (before: RuntimeState | null, after: RuntimeState) => before !== null && stateDescription(before) !== stateDescription(after);
  return <div className="perf-runtime-view">
-  <div className="perf-runtime-status"><span><i aria-hidden="true" className={`perf-status-dot ${snapshot.status === 'collecting' ? 'perf-status-ready' : 'perf-status-idle'}`} />{status}</span><small>{startupLabel} · {startupTime}</small></div>
+  <div className="perf-runtime-status"><span><i aria-hidden="true" className={`perf-status-dot ${collecting ? 'perf-status-ready' : 'perf-status-idle'}`} />{status}</span><small>{startupLabel} · {startupTime}</small></div>
   <div className="perf-runtime-metrics">
    <div className="perf-runtime-metric" data-health={health.level} title={health.reason}><span>浏览器回调频率</span><strong>{snapshot.window.rafHz === null ? 'N/A' : snapshot.window.rafHz.toFixed(1)}{snapshot.window.rafHz !== null && <small>Hz</small>}</strong><span className="perf-health-label">{health.label}</span><span>近 5 秒 · RAF</span></div>
    <div className="perf-runtime-metric" data-severity={severity(snapshot.window.p95Ms)}><span>帧间隔 p95</span><strong>{snapshot.window.p95Ms === null ? 'N/A' : snapshot.window.p95Ms.toFixed(0)}{snapshot.window.p95Ms !== null && <small>ms</small>}</strong></div>
    <div className="perf-runtime-metric" data-severity={severity(snapshot.window.maxMs)}><span>最大帧间隔</span><strong>{snapshot.window.maxMs === null ? 'N/A' : snapshot.window.maxMs.toFixed(0)}{snapshot.window.maxMs !== null && <small>ms</small>}</strong></div>
   </div>
   <p className="perf-health-description" data-health={health.level}><strong>{health.label}</strong> · {health.reason}</p>
-  <p className="perf-explanation">{snapshot.window.count} 个前台样本 · 完整间隔合计 {(snapshot.window.observedMs / 1000).toFixed(2)} s · 慢间隔 {snapshot.window.slowCount} 次。按近 5 秒内结束的完整间隔统计，长间隔可跨窗口起点。RAF 回调率不是屏幕 FPS。</p>
+  <p className="perf-explanation">{snapshot.window.count} 个前台样本 · 完整间隔合计 {(snapshot.window.observedMs / 1000).toFixed(2)} s · 慢间隔 {snapshot.window.slowCount} 次。按近 5 秒内结束的完整间隔统计，长间隔可跨窗口起点。</p>
   <FrameRateGuide />
-  <RuntimeChart snapshot={snapshot} />
+  <RuntimeChart snapshot={snapshot} collecting={collecting} />
   <div className="perf-runtime-actions">
    <button type="button" data-runtime-action="pause" onClick={snapshot.status === 'paused' ? onResume : onPause} disabled={snapshot.status === 'stopped'}>{snapshot.status === 'paused' ? '继续采集' : '暂停采集'}</button>
    <button type="button" data-runtime-action="clear" title="清空实时记录，保留加载时间线" onClick={onClear}>清空窗口</button>
   </div>
-  {snapshot.status !== 'collecting' && <p className="perf-explanation">读数与图表冻结在停止采样边界，恢复后继续记录；清空只影响实时窗口。</p>}
-  <p className="perf-runtime-context">{snapshot.status === 'collecting' ? '当前' : '停止时'}：{stateDescription(snapshot.state)}</p>
+  {!collecting && <p className="perf-explanation">读数与图表保留最后一次采样，恢复后继续记录；清空只影响实时窗口。</p>}
+  <p className="perf-runtime-context">{collecting ? '当前' : '最后采样时'}：{stateDescription(snapshot.state)}</p>
   <details className="perf-group" open>
    <summary><span>最近卡顿</span><span className="perf-count">{recent.length}</span></summary>
    {!recent.length ? <p className="perf-empty">保留窗口内尚无 ≥ 50 ms 的前台 RAF 间隔。</p> : <ol className="perf-runtime-list">{visible.map(event => <li key={event.id} data-severity={severity(event.duration)}>
@@ -167,7 +168,7 @@ export function PerformanceRuntimeView({ snapshot, health, startupLabel, startup
    <p className="perf-explanation">状态取间隔边界附近的快照，操作与业务重叠只提供线索，不证明因果。折叠面板仍继续采集。</p>
   </details>
   <details className="perf-group" open>
-   <summary>{snapshot.status === 'collecting' ? '当前渲染器快照' : '停止时渲染器快照'}</summary>
+   <summary>{collecting ? '当前渲染器快照' : '最后采样时渲染器快照'}</summary>
    {renderer ? <dl className="perf-runtime-diagnostics">
     <div><dt>Draw calls</dt><dd>{number(renderer.drawCalls)}</dd></div>
     <div><dt>Triangles</dt><dd>{number(renderer.triangles)}</dd></div>
