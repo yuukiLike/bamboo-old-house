@@ -51,9 +51,9 @@ GLB 已内嵌贴图与缓冲数据。声音在用户主动操作后播放，并�
 
 ## 性能采集
 
-`pnpm perf` 使用 sitespeed.io / Browsertime 批量采集生产预览，报告直接列出卡顿发生的操作、时间区间、帧间隔和对应业务阶段。支持首屏、首次/重复进屋、PC 望月与听风切换，以及声音、天气、昼夜和主要系统按钮流程；`?perf=1` 开启可选业务计时，另加 `&perfUI=1` 显示实时加载时间线面板。
+`pnpm perf` 使用 sitespeed.io / Browsertime 批量采集生产预览，报告以关键数字、场景横条和重点停顿展示结果，再展开原始证据。支持首屏、首次/重复进屋、PC 望月与听风切换，以及声音、天气、昼夜和主要系统按钮流程；`?perf=1` 开启可选业务计时，另加 `&perfUI=1` 显示运行时实时监测与加载时间线。实时页保留滚动帧间隔图、卡顿上下文和渲染器计数，支持暂停、清空和本地导出。
 
-从 [建立基线与一键复测](docs/performance/pipeline.md) 开始；运行条件和 Chrome Canary 配置见 [采集工具说明](scripts/perf/README.md)。换 Three.js / Blender 项目时参照 [适配器契约](docs/performance/adapter.md)。另有 [页面内进度与时间线](docs/performance/diagnostic-view.md)、[整体页面流程图](docs/performance/page-lifecycle.md)、[首次实测与瓶颈证据](docs/performance/first-capture.md) 和 [3D 专项开源工具对比](docs/performance/open-source-tools.md)。
+从 [建立基线与一键复测](docs/performance/pipeline.md) 开始；运行条件和 Chrome Canary 配置见 [采集工具说明](scripts/perf/README.md)。换 Three.js / Blender 项目时参照 [适配器契约](docs/performance/adapter.md)。另有 [实时运行与加载时间线](docs/performance/diagnostic-view.md)、[整体页面流程图](docs/performance/page-lifecycle.md)、[首次实测与瓶颈证据](docs/performance/first-capture.md) 和 [3D 专项开源工具对比](docs/performance/open-source-tools.md)。
 
 ## 预览与正式发布
 

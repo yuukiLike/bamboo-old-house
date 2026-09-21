@@ -2,7 +2,7 @@
 
 从导航之前开始录制，持续到三维画面出现，再通过真实控件记录首次进屋与再次进入。产出独立 HTML、Markdown、JSON，以及可导入 Chrome DevTools 的原始 trace。工具用于定位优化目标和复测，不修改画质，不自动判断某个函数就是瓶颈。
 
-[重复采集与对比流水线](../../docs/performance/pipeline.md) · [接入另一个 Three.js 项目](../../docs/performance/adapter.md) · [页面内实时进度](../../docs/performance/diagnostic-view.md) · [页面整体流程图](../../docs/performance/page-lifecycle.md) · [选型与设计依据](../../docs/plans/preview-performance-baseline.md) · [首次实测记录](../../docs/performance/first-capture.md) · [3D 专项开源仓库](../../docs/performance/open-source-tools.md)
+[重复采集与对比流水线](../../docs/performance/pipeline.md) · [接入另一个 Three.js 项目](../../docs/performance/adapter.md) · [实时运行与加载时间线](../../docs/performance/diagnostic-view.md) · [页面整体流程图](../../docs/performance/page-lifecycle.md) · [选型与设计依据](../../docs/plans/preview-performance-baseline.md) · [首次实测记录](../../docs/performance/first-capture.md) · [3D 专项开源仓库](../../docs/performance/open-source-tools.md)
 
 ## 开始使用
 

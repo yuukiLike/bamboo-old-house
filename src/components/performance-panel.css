@@ -16,8 +16,55 @@
 .perf-status-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: #dfba7f; }
 .perf-status-ready { background: #aad2a9; }
 .perf-status-error { background: #e0a197; }
+.perf-status-idle { background: #8fa69a; }
 .perf-panel-collapsed { width: 238px; }
 .perf-panel-body { max-height: calc(100svh - 330px); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 15px 15px; }
+.perf-tabs { display: flex; gap: 4px; padding: 4px; margin: 1px 0 14px; border: 1px solid #bdd4c223; border-radius: 7px; background: #07130f66; }
+.perf-tabs button { flex: 1; padding: 7px 10px; border-radius: 4px; background: transparent; color: #a0b4a7; }
+.perf-tabs button[aria-pressed='true'] { color: #e5f0e2; background: #a6cba823; box-shadow: inset 0 0 0 1px #b4d6b725; }
+.perf-runtime-status { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 12px; color: #afc3b3; font-size: 11px; }
+.perf-runtime-status > span:first-child { display: inline-flex; gap: 6px; align-items: center; }
+.perf-runtime-status small { color: #8ea496; font-size: 10px; }
+.perf-runtime-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 9px; }
+.perf-runtime-metric { display: grid; align-content: start; gap: 5px; padding: 10px 8px; border-radius: 6px; border: 1px solid #b4d1be20; background: #98bb9c09; min-width: 0; }
+.perf-runtime-metric > span { color: #a8c0ae; font-size: 10px; }
+.perf-runtime-metric strong { color: #e4efdf; font-size: 24px; line-height: 1.2; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.perf-runtime-metric strong small { margin-left: 3px; color: #9eb4a5; font-size: 10px; font-weight: 400; }
+.perf-runtime-metric[data-severity='warning'] strong { color: #e0bc7b; }
+.perf-runtime-metric[data-severity='slow'] strong { color: #eca99a; }
+.perf-runtime-context { margin: 9px 0 13px; color: #b5c9b9; font-size: 11px; overflow-wrap: anywhere; }
+.perf-runtime-chart { margin: 0 0 14px; }
+.perf-runtime-chart figcaption { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 0 7px; color: #c9d9ca; font-size: 11px; }
+.perf-runtime-chart figcaption > span { color: #91a898; font-size: 10px; }
+.perf-runtime-chart svg { display: block; width: 100%; height: 114px; background: #07140f50; border-radius: 5px; overflow: visible; }
+.perf-chart-grid { stroke: #a6c2ae28; stroke-width: .6; }
+.perf-chart-threshold { stroke: #ccab6959; stroke-width: .8; stroke-dasharray: 3 4; }
+.perf-chart-threshold-slow { stroke: #d2917f70; }
+.perf-chart-label { fill: #849d8d; font: 8px 'PingFang SC', sans-serif; }
+.perf-chart-bar { fill: #83b799; }
+.perf-chart-bar[data-severity='warning'] { fill: #cfad70; }
+.perf-chart-bar[data-severity='slow'] { fill: #d78e80; }
+.perf-chart-legend { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 3px 10px; margin: 5px 0 0; color: #92ac9b; font-size: 10px; }
+.perf-chart-legend .perf-chart-warning { color: #d0b37c; }
+.perf-chart-legend .perf-chart-slow { color: #d79887; }
+.perf-runtime-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 13px; }
+.perf-runtime-actions button { border-radius: 4px; padding: 6px 10px; background: #b6c9b51a; }
+.perf-runtime-actions button:hover { background: #b6c9b52e; }
+.perf-runtime-actions button:disabled { opacity: .4; cursor: default; }
+.perf-runtime-list { list-style: none; padding: 0; margin: 0 0 9px; }
+.perf-runtime-list > li { border-top: 1px solid #bdd1bd12; padding: 8px 0; }
+.perf-runtime-list .perf-row-heading { align-items: center; }
+.perf-runtime-list .perf-row-heading > span { color: #abc1b0; font-size: 10px; font-variant-numeric: tabular-nums; }
+.perf-runtime-list .perf-row-heading strong { color: #d7b680; }
+.perf-runtime-list > li[data-severity='slow'] .perf-row-heading strong { color: #e1a08f; }
+.perf-runtime-list p { margin: 4px 0 0; color: #acc1b1; font-size: 10px; overflow-wrap: anywhere; }
+.perf-runtime-list .perf-runtime-phases { color: #819c8a; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.perf-runtime-diagnostics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 16px; margin: 0 0 12px; font-size: 11px; }
+.perf-runtime-diagnostics > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 2px 8px; }
+.perf-runtime-diagnostics dt { color: #8fa999; }
+.perf-runtime-diagnostics dd { margin: 0; color: #d0dfce; font-variant-numeric: tabular-nums; }
+.perf-runtime-diagnostics > .perf-runtime-diagnostic-wide { grid-column: 1 / -1; }
+.perf-runtime-diagnostics .perf-runtime-diagnostic-wide dd { max-width: 100%; font-size: 10px; overflow-wrap: anywhere; }
 .perf-overview { padding: 13px 0 12px; border-top: 1px solid #d2e4d71b; }
 .perf-overview > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .perf-overview strong { color: #f1f5eb; font-size: 25px; line-height: 1.2; font-weight: 500; font-variant-numeric: tabular-nums; }

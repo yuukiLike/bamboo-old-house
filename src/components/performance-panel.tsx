@@ -3,6 +3,8 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Progress } from '@base-ui/react/progress';
 import type { ActivePhase, Phase } from '@/lib/performance';
+import { createRuntimeCollector, type RuntimeSnapshot } from '@/lib/performance-runtime';
+import { PerformanceRuntimeView } from './performance-runtime-view';
 import './performance-panel.css';
 
 const MAX_RESOURCES = 500;
@@ -130,6 +132,9 @@ function TimelineGroup({ title, rows, scale, query, initiallyOpen = false }: { t
 
 function Panel() {
  const [snapshot, setSnapshot] = useState<Snapshot>(readSnapshot);
+ const [runtime, setRuntime] = useState<RuntimeSnapshot | null>(null);
+ const [runtimeFailed, setRuntimeFailed] = useState(false);
+ const [view, setView] = useState<'runtime' | 'timeline'>('runtime');
  const [collapsed, setCollapsed] = useState(() => !matchMedia('(min-width: 901px)').matches);
  const [query, setQuery] = useState('');
  const [downloadError, setDownloadError] = useState(false);
@@ -139,8 +144,12 @@ function Panel() {
  const droppedResources = useRef(0);
  const downloadUrl = useRef<string | undefined>(undefined);
  const revokeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+ const runtimeCollector = useRef<ReturnType<typeof createRuntimeCollector> | null>(null);
 
  useEffect(() => {
+  let collectorFailed = false;
+  try { runtimeCollector.current = createRuntimeCollector(); }
+  catch { collectorFailed = true; }
   const append = (entries: PerformanceEntry[]) => {
    for (const entry of entries) {
     if (entry.entryType !== 'resource') continue;
@@ -162,9 +171,20 @@ function Panel() {
    observer = new PerformanceObserver(list => append(list.getEntries()));
    observer.observe({ type: 'resource', buffered: true });
   } catch { resourceObserverSupported.current = false; }
-  const timer = setInterval(() => { if (!document.hidden) setSnapshot(readSnapshot(resources.current.slice(), droppedResources.current, resourceObserverSupported.current)); }, 250);
+  const refresh = () => {
+   if (collectorFailed) setRuntimeFailed(true);
+   try { setRuntime(runtimeCollector.current?.snapshot() ?? null); }
+   catch { setRuntimeFailed(true); }
+   if (!document.hidden) setSnapshot(readSnapshot(resources.current.slice(), droppedResources.current, resourceObserverSupported.current));
+  };
+  const firstRefresh = setTimeout(refresh, 0);
+  const timer = setInterval(() => { if (!document.hidden) refresh(); }, 250);
+  document.addEventListener('visibilitychange', refresh);
   return () => {
    clearInterval(timer); observer?.disconnect();
+   clearTimeout(firstRefresh);
+   document.removeEventListener('visibilitychange', refresh);
+   runtimeCollector.current?.dispose(); runtimeCollector.current = null;
    clearTimeout(revokeTimer.current);
    if (downloadUrl.current) URL.revokeObjectURL(downloadUrl.current);
   };
@@ -183,7 +203,7 @@ function Panel() {
  const exportJson = () => {
   try {
    const latest = readSnapshot(resources.current.slice(), droppedResources.current, resourceObserverSupported.current);
-   const content = JSON.stringify({ schemaVersion: 1, capturedAt: new Date().toISOString(), timeOrigin: performance.timeOrigin, url: location.href, startupReadyAt: latest.readyAt, now: latest.now, navigation: performance.getEntriesByType('navigation').map(entry => entry.toJSON()), resources: resources.current.map(resource => resource.timing), businessPhases: { version: 1, enabled: true, phases: latest.phases, activePhases: latest.active, droppedPhases: latest.dropped, droppedActivePhases: latest.droppedActive }, droppedResources: droppedResources.current, limitations: ['CPU submission does not prove GPU completion or display presentation.', 'Concurrent and nested durations must not be added.', 'The UI cannot repaint during synchronous main-thread work.', 'Resource history starts from entries still retained by the browser when the panel loads.'] }, null, 2);
+   const content = JSON.stringify({ schemaVersion: 1, capturedAt: new Date().toISOString(), timeOrigin: performance.timeOrigin, url: location.href, startupReadyAt: latest.readyAt, now: latest.now, navigation: performance.getEntriesByType('navigation').map(entry => entry.toJSON()), resources: resources.current.map(resource => resource.timing), businessPhases: { version: 1, enabled: true, phases: latest.phases, activePhases: latest.active, droppedPhases: latest.dropped, droppedActivePhases: latest.droppedActive }, runtime: runtimeCollector.current?.snapshot() ?? null, droppedResources: droppedResources.current, limitations: ['CPU submission does not prove GPU completion or display presentation.', 'Concurrent and nested durations must not be added.', 'The UI cannot repaint during synchronous main-thread work.', 'Resource history starts from entries still retained by the browser when the panel loads.', 'Runtime RAF rates are callback rates, not display FPS or GPU timings.', 'Runtime collection starts when this opt-in panel mounts; hidden and paused frame gaps are excluded.'] }, null, 2);
    clearTimeout(revokeTimer.current);
    if (downloadUrl.current) URL.revokeObjectURL(downloadUrl.current);
    const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
@@ -195,11 +215,24 @@ function Panel() {
   } catch { setDownloadError(true); }
  };
 
+ const changeRuntime = (action: 'pause' | 'resume' | 'clear') => {
+  try {
+   runtimeCollector.current?.[action]();
+   setRuntime(runtimeCollector.current?.snapshot() ?? null);
+  } catch { setRuntimeFailed(true); }
+ };
+ const startupLabel = snapshot.readyAt !== undefined ? '首屏已就绪' : failed ? '初始化已中断' : '首屏加载中';
+ const runtimeStatus = runtime?.status ?? 'stopped';
+ const headerValue = view === 'timeline' ? duration(startupEnd) : runtimeStatus === 'collecting' ? (runtime?.window.rafHz === null || runtime?.window.rafHz === undefined ? '采集中' : `${runtime.window.rafHz.toFixed(1)} Hz`) : { paused: '已暂停', hidden: '页面隐藏', stopped: runtimeFailed ? '采集异常' : '准备采集' }[runtimeStatus];
+ const headerStatusClass = view === 'timeline' ? (failed ? 'perf-status-error' : snapshot.readyAt !== undefined ? 'perf-status-ready' : '') : runtimeFailed ? 'perf-status-error' : runtimeStatus === 'collecting' ? 'perf-status-ready' : 'perf-status-idle';
+
  return <aside className={`perf-panel ${collapsed ? 'perf-panel-collapsed' : ''}`} aria-label="页面性能诊断">
   <header className="perf-panel-header">
-   <button type="button" className="perf-panel-title" aria-expanded={!collapsed} aria-controls="performance-panel-body" onClick={() => setCollapsed(!collapsed)}><span className={`perf-status-dot ${failed ? 'perf-status-error' : snapshot.readyAt !== undefined ? 'perf-status-ready' : ''}`} /><span>加载时间线</span><span className="perf-header-time">{duration(startupEnd)}</span><span aria-hidden="true">{collapsed ? '＋' : '−'}</span></button>
+   <button type="button" className="perf-panel-title" aria-expanded={!collapsed} aria-controls="performance-panel-body" onClick={() => setCollapsed(!collapsed)}><span className={`perf-status-dot ${headerStatusClass}`} /><span>{view === 'runtime' ? '实时性能' : '加载时间线'}</span><span className="perf-header-time">{headerValue}</span><span aria-hidden="true">{collapsed ? '＋' : '−'}</span></button>
   </header>
   {!collapsed && <div id="performance-panel-body" className="perf-panel-body">
+   <fieldset className="perf-tabs" aria-label="性能诊断视图"><button type="button" data-perf-tab="runtime" aria-pressed={view === 'runtime'} onClick={() => setView('runtime')}>实时运行</button><button type="button" data-perf-tab="timeline" aria-pressed={view === 'timeline'} onClick={() => setView('timeline')}>加载时间线</button></fieldset>
+   {view === 'runtime' ? <PerformanceRuntimeView snapshot={runtime} startupLabel={startupLabel} startupTime={duration(startupEnd)} failed={runtimeFailed} onPause={() => changeRuntime('pause')} onResume={() => changeRuntime('resume')} onClear={() => changeRuntime('clear')} /> : <>
    <div className="perf-overview"><div><span>{snapshot.readyAt !== undefined ? '首屏控件已就绪' : failed ? '本次初始化已中断' : '正在进入页面'}</span><strong>{duration(startupEnd)}</strong></div><p>从导航开始 · 就绪后冻结首屏时间</p>
     <Progress.Root value={snapshot.readyAt !== undefined ? 1 : null} max={1} aria-label="首屏控件就绪状态" aria-valuetext={snapshot.readyAt !== undefined ? '首屏控件已就绪' : failed ? '初始化已中断' : '进行中，无法预估剩余时间'} className={`perf-progress ${failed ? 'perf-progress-stopped' : ''}`}><Progress.Track className="perf-progress-track"><Progress.Indicator className="perf-progress-indicator" /></Progress.Track></Progress.Root>
    </div>
@@ -215,10 +248,12 @@ function Panel() {
    <TimelineGroup title="网络资源 · JS / CSS / 模型 / 音频" rows={network} scale={scale} query={query} />
    <p className="perf-explanation">资源条仅表示浏览器记录了请求耗时，不能单凭此判断 HTTP 或业务是否成功。</p>
    {!snapshot.resourceObserverSupported && <p className="perf-warning">此浏览器未启用资源观察器；列表只包含面板启动时浏览器仍保留的资源记录。</p>}
-   <footer className="perf-panel-footer"><button type="button" onClick={exportJson}>导出 JSON</button><span>仅保存在本机</span></footer>
-   {downloadError && <output className="perf-warning">导出未成功，请再试一次。</output>}
    {(snapshot.dropped + snapshot.droppedActive + snapshot.droppedResources > 0) && <p className="perf-warning">保留最近记录：已丢弃 {snapshot.dropped} 条完成阶段、{snapshot.droppedActive} 条活动记录、{snapshot.droppedResources} 条资源。</p>}
-   <p className="perf-limitations">面板在 JavaScript 启动后显示，导航早期信息由浏览器回填。长同步任务会阻塞面板刷新，结束后才显示实际耗时。渲染提交不等于 GPU 完成或画面呈现；声音准备不等于首次发声。每 250 ms 刷新会增加采集开销，正式对比请去掉 perfUI=1。</p>
+   </>}
+   <footer className="perf-panel-footer"><button type="button" data-runtime-action="export" onClick={exportJson}>导出 JSON</button><span>加载与实时数据 · 仅本机</span></footer>
+   {downloadError && <output className="perf-warning">导出未成功，请再试一次。</output>}
+   {runtimeFailed && runtime && <output className="perf-warning">实时采集遇到异常，当前读数可能未更新。</output>}
+   <p className="perf-limitations">面板在 JavaScript 启动后显示，早期导航由浏览器回填；实时采集从面板挂载开始。长同步任务会阻塞面板刷新，结束后才显示耗时。渲染提交不等于 GPU 完成或画面呈现；声音准备不等于首次发声。每 250 ms 刷新有开销，正式对比请去掉 perfUI=1。</p>
   </div>}
  </aside>;
 }
