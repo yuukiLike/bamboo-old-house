@@ -1,13 +1,14 @@
+import type { Diagnostics } from './timings';
+
 /** Local, opt-in runtime observation. RAF gaps measure callback scheduling,
  * never display FPS or GPU execution. No scene function is replaced. */
-export interface RuntimeState {
- view: string | null;
- place: string | null;
- timeOfDay: string | null;
- weatherPreset: string | null;
- soundEnabled: boolean | null;
- paused: boolean | null;
- panorama: boolean | null;
+export type RuntimeState = Record<string, string | number | boolean | null>;
+export interface RuntimeAdapter {
+ readState?(): RuntimeState;
+ readRenderer?(): RendererSnapshot | null;
+ readBusinessPhases?(): Diagnostics | null;
+ /** Return null to omit an action; the default recognizes ordinary controls. */
+ describeAction?(event: Event): string | null;
 }
 
 interface Interval { startTime: number; duration: number; }
@@ -21,7 +22,7 @@ export interface RuntimeStutter extends Interval {
  recentAction: Action | null;
  phases: string[];
 }
-interface RendererSnapshot {
+export interface RendererSnapshot {
  drawCalls: number | null;
  triangles: number | null;
  textures: number | null;
@@ -40,6 +41,8 @@ export interface RuntimeSnapshot {
  /** Start of the uninterrupted foreground segment; used for display warmup. */
  segmentStartedAt: number;
  status: 'collecting' | 'paused' | 'hidden' | 'stopped';
+ /** Failed adapter readers; never interpret absent context as a healthy state. */
+ adapterErrors: string[];
  windowMs: number;
  historyMs: number;
  window: { count: number; rafHz: number | null; p95Ms: number | null; maxMs: number | null; observedMs: number; slowCount: number; };
@@ -58,57 +61,99 @@ export interface RuntimeCollector {
  clear(): void;
  dispose(): void;
 }
-declare global { interface Window { __BAMBOO_RUNTIME__?: RuntimeCollector; } }
 
 const WINDOW_MS = 5000;
 const HISTORY_MS = 30000;
 const FRAME_LIMIT = 12000;
 const EVENT_LIMIT = 120;
 const STUTTER_MS = 50;
-const numberOrNull = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
+const finiteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+function plainRecord(value: unknown): value is Record<string, unknown> {
+ if (value === null || typeof value !== 'object') return false;
+ const prototype = Object.getPrototypeOf(value);
+ return prototype === null || prototype === Object.prototype;
+}
 
-function readState(): RuntimeState {
- const scene = window.__BAMBOO__;
- const root = document.querySelector('.experience');
- const classes = root?.classList;
- const view = classes ? [...classes].find(name => name.startsWith('is-') && !['is-static', 'is-listening', 'is-panorama'].includes(name))?.slice(3) : undefined;
- const sound = document.querySelector('.sound-toggle');
- const pause = document.querySelector('.control-button[aria-label="静止观看"], .control-button[aria-label="让风继续"], .control-button[aria-label="已减少动态"]');
+function cloneState(state: RuntimeState): RuntimeState {
+ if (!plainRecord(state)) throw new TypeError('Runtime state must be a plain record.');
+ const entries = Object.entries(state);
+ for (const [, value] of entries) {
+  if (value !== null && typeof value !== 'string' && typeof value !== 'boolean' && !(typeof value === 'number' && Number.isFinite(value))) {
+   throw new TypeError('Runtime state values must be finite, serializable primitives.');
+  }
+ }
+ return Object.fromEntries(entries);
+}
+
+function cloneRenderer(value: RendererSnapshot | null): RendererSnapshot | null {
+ if (value === null) return null;
+ if (!plainRecord(value)
+  || ![value.drawCalls, value.triangles, value.textures, value.geometries, value.pixelRatio].every(item => item === null || finiteNumber(item))
+  || ![value.quality, value.gpu].every(item => item === null || typeof item === 'string')
+  || !Array.isArray(value.drawSize) || ![...value.drawSize].every(finiteNumber)) {
+  throw new TypeError('Renderer diagnostics must contain finite numbers, strings or explicit nulls.');
+ }
  return {
-  // DOM state reflects the user's requested view sooner than the renderer's
-  // diagnostic snapshot, which refreshes only every 15 application frames.
-  view: view ?? scene?.viewMode ?? null,
-  place: scene?.place ?? null,
-  timeOfDay: root?.getAttribute('data-time') ?? scene?.timeOfDay ?? null,
-  weatherPreset: document.querySelector('.weather-toggle span')?.textContent?.trim() || null,
-  soundEnabled: sound?.hasAttribute('aria-pressed') ? sound.getAttribute('aria-pressed') === 'true' : null,
-  paused: pause?.hasAttribute('aria-pressed') ? pause.getAttribute('aria-pressed') === 'true' : scene?.paused ?? null,
-  panorama: root ? classes?.contains('is-panorama') ?? null : scene?.panorama ?? null,
+  drawCalls: value.drawCalls, triangles: value.triangles,
+  textures: value.textures, geometries: value.geometries,
+  pixelRatio: value.pixelRatio, drawSize: [...value.drawSize],
+  quality: value.quality, gpu: value.gpu,
  };
 }
 
-function readRenderer(): RendererSnapshot | null {
- const scene = window.__BAMBOO__;
- if (!scene) return null;
- return {
-  drawCalls: numberOrNull(scene.drawCalls), triangles: numberOrNull(scene.triangles),
-  textures: numberOrNull(scene.textures), geometries: numberOrNull(scene.geometries),
-  pixelRatio: numberOrNull(scene.pixelRatio), drawSize: [...scene.drawSize],
-  quality: scene.quality || null, gpu: scene.gpu || null,
- };
+function validPhase(value: unknown, active: boolean): boolean {
+ return plainRecord(value) && finiteNumber(value.startTime) && value.startTime >= 0
+  && plainRecord(value.detail) && typeof value.detail.phase === 'string'
+  && (active || (finiteNumber(value.duration) && value.duration >= 0
+   && typeof value.detail.status === 'string'
+   && ['success', 'error', 'cancelled', 'superseded', 'skipped'].includes(value.detail.status)));
+}
+function validatePhases(data: Diagnostics): void {
+ if (!plainRecord(data) || data.version !== 1 || data.enabled !== true
+  || !Array.isArray(data.phases) || ![...data.phases].every(phase => validPhase(phase, false))
+  || (data.activePhases !== undefined && (!Array.isArray(data.activePhases) || ![...data.activePhases].every(phase => validPhase(phase, true))))) {
+  throw new TypeError('Business phases must be synchronous recorder diagnostics.');
+ }
 }
 
-function overlappingPhases(start: number, end: number): string[] {
- const data = window.__BAMBOO_PERF__;
- if (!data) return [];
- const complete = data.phases.filter(phase => phase.startTime < end && phase.startTime + phase.duration > start)
-  .map(phase => `${phase.detail.phase} (${phase.detail.status})`);
- const active = (data.activePhases ?? []).filter(phase => phase.startTime < end)
-  .map(phase => `${phase.detail.phase} (running)`);
- return [...new Set([...complete, ...active])].slice(0, 12);
+function defaultAction(event: Event): string | null {
+ if (!(event.target instanceof Element)) return null;
+ if (event.type === 'pointerdown') return event.target instanceof HTMLCanvasElement ? 'Canvas interaction' : null;
+ const control = event.target.closest('button, [role="button"], input, select, [role="option"], a');
+ if (!control) return null;
+ return control.getAttribute('aria-label') || control.getAttribute('title') || control.textContent?.trim() || control.id || control.tagName.toLowerCase();
 }
 
-export function createRuntimeCollector(): RuntimeCollector {
+export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCollector {
+ const adapterErrors = new Set<string>();
+ function readSafely<T>(name: keyof RuntimeAdapter, read: () => T, fallback: T): T {
+  try {
+   const value = read();
+   adapterErrors.delete(name);
+   return value;
+  } catch {
+   adapterErrors.add(name);
+   return fallback;
+  }
+ }
+ function readState(): RuntimeState {
+  return readSafely('readState', () => cloneState(adapter.readState ? adapter.readState() : {}), {});
+ }
+ function readRenderer(): RendererSnapshot | null {
+  return readSafely('readRenderer', () => cloneRenderer(adapter.readRenderer ? adapter.readRenderer() : null), null);
+ }
+ function overlappingPhases(start: number, end: number): string[] {
+  return readSafely('readBusinessPhases', () => {
+   const data = adapter.readBusinessPhases ? adapter.readBusinessPhases() : null;
+   if (data === null) return [];
+   validatePhases(data);
+   const complete = data.phases.filter(phase => phase.startTime < end && phase.startTime + phase.duration > start)
+    .map(phase => `${phase.detail.phase} (${phase.detail.status})`);
+   const active = (data.activePhases ?? []).filter(phase => phase.startTime < end)
+    .map(phase => `${phase.detail.phase} (running)`);
+   return [...new Set([...complete, ...active])].slice(0, 12);
+  }, []);
+ }
  const startedAt = performance.now();
  let lastResetAt = startedAt;
  let segmentStart = startedAt;
@@ -181,17 +226,14 @@ export function createRuntimeCollector(): RuntimeCollector {
  }
 
  function recordAction(event: Event) {
-  if (!collecting() || !(event.target instanceof Element) || event.target.closest('.perf-panel')) return;
+  if (!collecting() || !(event.target instanceof Element) || event.target.closest('[data-scene-perf]')) return;
   if (event instanceof KeyboardEvent && (!['Enter', ' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || event.repeat)) return;
-  if (event.type === 'pointerdown' && event.target instanceof HTMLCanvasElement) {
-   actions.push({ startTime: performance.now(), label: '拖动画面 / 环顾' });
-   if (actions.length > EVENT_LIMIT) actions.shift();
-   return;
-  }
-  if (event.type === 'pointerdown') return;
-  const control = event.target.closest('button, [role="button"], input, select, [role="option"], a');
-  if (!control) return;
-  const label = control.getAttribute('aria-label') || control.getAttribute('title') || control.textContent?.trim() || control.id || control.tagName.toLowerCase();
+  const label = readSafely('describeAction', () => {
+   const value = adapter.describeAction ? adapter.describeAction(event) : defaultAction(event);
+   if (value !== null && typeof value !== 'string') throw new TypeError('Action descriptions must be strings or null.');
+   return value;
+  }, null);
+  if (!label) return;
   actions.push({ startTime: performance.now(), label: label.slice(0, 100) });
   if (actions.length > EVENT_LIMIT) actions.shift();
   cachedState = readState(); stateReadAt = performance.now();
@@ -238,10 +280,15 @@ export function createRuntimeCollector(): RuntimeCollector {
    const sorted = selected.map(entry => entry.duration).sort((a, b) => a - b);
    const observedMs = sorted.reduce((sum, value) => sum + value, 0);
    const recentTasks = tasks.filter(entry => entry.startTime >= lastResetAt && entry.startTime + entry.duration > chartEnd - WINDOW_MS && entry.startTime + entry.duration <= chartEnd);
-   if (collecting()) { cachedState = readState(); cachedRenderer = readRenderer(); }
+   if (collecting()) {
+    cachedState = readState(); cachedRenderer = readRenderer();
+    // Poll the phase reader too, so a transient failure recovers without a new stutter.
+    overlappingPhases(chartEnd - WINDOW_MS, chartEnd);
+   }
    return {
     version: 1, now, chartEnd, startedAt, lastResetAt, segmentStartedAt: segmentStart,
     status: disposed ? 'stopped' : paused ? 'paused' : hidden ? 'hidden' : 'collecting',
+    adapterErrors: [...adapterErrors],
     windowMs: WINDOW_MS, historyMs: HISTORY_MS,
     window: { count: sorted.length, rafHz: observedMs > 0 ? sorted.length * 1000 / observedMs : null,
      p95Ms: sorted.length ? sorted[Math.ceil(sorted.length * .95) - 1] : null,
@@ -284,9 +331,7 @@ export function createRuntimeCollector(): RuntimeCollector {
    document.removeEventListener('keydown', recordAction, true);
    document.removeEventListener('input', recordAction, true);
    document.removeEventListener('pointerdown', recordAction, true);
-   if (window.__BAMBOO_RUNTIME__ === collector) delete window.__BAMBOO_RUNTIME__;
   },
  };
- window.__BAMBOO_RUNTIME__ = collector;
  return collector;
 }

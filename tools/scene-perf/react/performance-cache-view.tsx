@@ -1,4 +1,4 @@
-import { CACHE_LABELS, summarizeResourceCache } from '../../scripts/perf/resource-cache.mjs';
+import { CACHE_LABELS, summarizeResourceCache } from '../core/resource-cache.mjs';
 
 type CacheSummary = ReturnType<typeof summarizeResourceCache>;
 
@@ -13,10 +13,11 @@ function percent(value: number | null) {
  return value === null ? 'N/A' : `${value.toFixed(1)}%`;
 }
 
-export function PerformanceCacheView({ summary, dropped, observerSupported, compact = false }: {
+export function PerformanceCacheView({ summary, dropped, observerSupported, readErrors = 0, compact = false }: {
  summary: CacheSummary;
  dropped: number;
  observerSupported: boolean;
+ readErrors?: number;
  compact?: boolean;
 }) {
  const categories = [['local', '本地复用'], ['revalidated', '重新验证'], ['network', '网络传输'], ['unknown', '未知']] as const;
@@ -30,6 +31,7 @@ export function PerformanceCacheView({ summary, dropped, observerSupported, comp
    <p className="perf-explanation">可判定覆盖 {percent(summary.coveragePercent)}；比例分母为 {summary.httpClassified} 条 HTTP 资源，未知不参与。本地复用不直接证明 Cache-Control 强缓存策略；重新验证由资源计时推断，响应头和 304 可由外部采集核实。</p>
   </>}
   {compact && <p className="perf-explanation">分母 {summary.httpClassified} 条可判定 HTTP；缓存策略未由响应头验证。详见加载时间线。</p>}
+  {readErrors > 0 && <output className="perf-warning">资源采集异常：已发生 {readErrors} 次读取或序列化错误。资源时间线与 HTTP 缓存统计可能不完整，仅展示成功读取的记录。</output>}
   {(dropped > 0 || !observerSupported) && <p className="perf-warning">{dropped > 0 && `已淘汰 ${dropped} 条资源；当前比例只覆盖保留记录。`}{!observerSupported && '资源观察器不可用，只回填面板启动时浏览器保留的记录。'}</p>}
  </section>;
 }

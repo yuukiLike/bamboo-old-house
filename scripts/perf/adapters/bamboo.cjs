@@ -55,7 +55,10 @@ module.exports = {
   isReady,
   readyDescription: 'startupMs > 0, .scene-mount.ready opacity >= 0.999, free-view control enabled; then fixed observation',
   frameCapacity: 15000,
-  frameLimitation: 'With perf=1, successful view.reveal business measures record the actual transition completion; they do not change this polling condition. App frames omit its first 30 frames; diagnostics refresh every 15 frames.',
+  frameLimitation: 'startup 从 createScene 开始，不含先前导航与动态模块导入；应用帧跳过最初 30 帧，末端 renderer 计数约每 15 帧刷新。perf=1 下成功的 view.reveal 记录实际切换结束，不改变轮询就绪条件。',
+  phaseLimitation: 'view.capture 包含等候场景帧，view.reveal 包含等候目标帧和淡入；view.request-to-commit 的结束是状态请求与场景设置完成，startup.controls-ready 才确认 React 提交后控件就绪。',
+  measurePrefix: 'bamboo:',
   stateFields: ['view', 'place', 'timeOfDay', 'soundEnabled', 'soundBusy', 'soundError', 'paused', 'panorama', 'settingsPanel', 'weather.preset'],
   optionalStateFields: ['volume', 'weatherBusy', 'weatherError'],
+  nullableStateFields: ['settingsPanel'],
 };

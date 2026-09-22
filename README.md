@@ -51,7 +51,79 @@ GLB 已内嵌贴图与缓冲数据。声音在用户主动操作后播放，并�
 
 ## 性能采集
 
-`pnpm perf` 使用 sitespeed.io / Browsertime 批量采集生产预览，报告以关键数字、场景横条和重点停顿展示结果，再展开原始证据。支持首屏、首次/重复进屋、PC 望月与听风切换，以及声音、天气、昼夜和主要系统按钮流程；`?perf=1` 开启可选业务计时，另加 `&perfUI=1` 显示运行时实时监测与加载时间线。实时页保留滚动帧间隔图、卡顿上下文和渲染器计数，支持暂停、清空和本地导出。
+平时用页面内面板找出「哪里卡了」，优化前后用批量流水线比较「有没有改善」。工具只做观测，不改变画质、声音、加载顺序或转场行为。
+
+### 日常使用与开关
+
+在 Chrome Canary 使用生产预览，避免影响日常 Chrome，也避免把开发模式的开销当成产品性能：
+
+```sh
+pnpm build
+pnpm preview
+```
+
+- **打开面板**：[http://127.0.0.1:4175/?perf=1&perfUI=1](http://127.0.0.1:4175/?perf=1&perfUI=1)。
+- **普通页面**：[http://127.0.0.1:4175/](http://127.0.0.1:4175/)。可以把两个地址加入书签。
+- `?perf=1` 只开启业务阶段记录；同时添加 `&perfUI=1` 才加载实时面板。线上部署包含工具的版本后，也能使用 `https://yuuki.fans/?perf=1&perfUI=1`。
+
+目前没有页面内的一键诊断总开关；**完整退出需移除 `perf`、`perfUI` 参数并重新加载页面**。仅修改地址而不重新加载不会改变本项目的诊断模式。
+
+| 面板操作 | 实际效果 |
+| --- | --- |
+| 折叠 | 继续采集，标题保留当前频率与流畅状态 |
+| 暂停采集 | 冻结运行时读数与时间轴；不停止全部业务阶段与资源记录 |
+| 继续采集 | 开始新的连续采样，通常约 5 秒后给出流畅状态 |
+| 清空窗口 | 清除实时历史，保留加载时间线；不清浏览器缓存、不卸载模型或音频 |
+| 导出 JSON | 保存当前保留的卡顿、运行时、加载阶段和资源数据到本机 |
+
+推荐的日常检查顺序：
+
+1. 从诊断地址重新进入，查看「加载时间线」里的模型、模块、场景构建、着色器准备和 HTTP 缓存证据。
+2. 切到「实时运行」，保持页面前台约 5 秒，再做一个明确操作，例如「竹林望月 → 林间的风」、开启声音或切换天气。
+3. 查看绿色「合适」、黄色「中等」、红色「卡顿」，并打开「最近卡顿」确认操作后的停顿位置、时长及当时的声音和场景状态。上方 Hz 是浏览器 RAF 回调频率，不是屏幕实际呈现的 FPS；平均频率正常也要留意最大间隔。
+4. 复现后及时暂停、导出。图表保留最近 30 秒，卡顿记录最多 120 条；检查另一组操作前可以清空窗口。
+5. 分别观察首次和重复操作。首次开声的下载、解码与再次开声的资源复用是不同条件，清空窗口不会恢复首次加载状态。
+
+### 优化前后批量对比
+
+`pnpm perf` 使用 sitespeed.io / Browsertime 操作真实控件，产出独立 HTML、Markdown、JSON 和可选浏览器 trace。先按[采集工具说明](scripts/perf/README.md#开始使用)配置 Canary 与匹配的 ChromeDriver，然后选择专项：
+
+| `--flow` | 覆盖范围 |
+| --- | --- |
+| `load` | 从导航开始的首屏加载 |
+| `views` | PC 望月与听风的首次、重复双向切换，保留自动开声行为 |
+| `system` | 声音、音量、天气、昼夜及主要系统按钮 |
+| `journey` | 首屏、自由视角、首次进屋、返回、再次进屋 |
+| `cache` | 同会话首访与复访，记录本地缓存、协商验证及网络传输证据 |
+
+```sh
+# 优化前，保存三轮场景切换基线
+pnpm perf --flow views --profile desktop --mode baseline \
+  --iterations 3 --out outputs/performance/views-before
+
+# 优化并重新构建后，用相同条件采集、对比
+pnpm perf --flow views --profile desktop --mode baseline \
+  --iterations 3 --out outputs/performance/views-after \
+  --compare outputs/performance/views-before
+```
+
+打开新目录内的 `report.html`。输出目录必须尚不存在，后续复测使用新的名字。固定设备、浏览器、画质、声音、天气和采集配置；正式比较使用不显示实时面板的默认配置。需要调用栈时使用 `--mode diagnostic --iterations 1` 单独定位，不与 baseline 混算收益。工具会检查条件，缺失或不一致时拒绝输出可比的收益百分比。
+
+### 用于其他 3D 项目或拆卸
+
+通用工具位于 [`tools/scene-perf/`](tools/scene-perf/README.md)，可整体复制到其他项目，无须复制竹屋场景、模型或页面组件：
+
+| 层 | 接入方式 | 依赖与用途 |
+| --- | --- | --- |
+| 浏览器核心 | `createRuntimeCollector(adapter)`、`createPhaseRecorder(options)` | 不依赖 React 或 Three.js；RAF、长任务、业务阶段和明确的 `dispose()` |
+| 页面面板 | `usePerformancePanel(adapter, { enabled })` | React hook；按需加载面板，关闭或卸载时清理采集资源；面板使用 Base UI Progress |
+| 批量流水线 | CLI `--adapter`、`--scenario` | Node、Canary、ChromeDriver；适配就绪条件、状态和真实控件操作 |
+
+本项目差异集中在 [`src/performance/bamboo-adapter.ts`](src/performance/bamboo-adapter.ts)、[`src/lib/performance.ts`](src/lib/performance.ts) 和 [`scripts/perf/`](scripts/perf/README.md) 的项目适配器／操作流程。通用核心不读取竹屋 DOM 或 `__BAMBOO__`，也不接管项目的渲染循环。
+
+可以复用到 Three.js、React Three Fiber 及其他浏览器 3D 项目；渲染器指标由项目显式提供。Blender 导出的 GLB/glTF 在网页中的加载和渲染适用，Blender 桌面软件内的建模、烘焙、离线渲染不在覆盖范围内。WebGPU 项目可复用浏览器指标，但不能把 WebGL 的读取方法直接套用到 WebGPU。
+
+**可拆卸分为两层**：卸载面板／关闭 hook 会释放 RAF、观察器、监听器和定时器；若要彻底移除源码，还需移除集中入口与业务计时调用，再删除工具目录。保留埋点但令 recorder 禁用时，业务函数仍照常执行。完整的复制、最小接入、清理边界与限制见[独立工具 README](tools/scene-perf/README.md)。
 
 从 [建立基线与一键复测](docs/performance/pipeline.md) 开始；运行条件和 Chrome Canary 配置见 [采集工具说明](scripts/perf/README.md)。换 Three.js / Blender 项目时参照 [适配器契约](docs/performance/adapter.md)。另有 [实时运行与加载时间线](docs/performance/diagnostic-view.md)、[HTTP 缓存与首访／复访](docs/performance/http-cache.md)、[整体页面流程图](docs/performance/page-lifecycle.md)、[首次实测与瓶颈证据](docs/performance/first-capture.md) 和 [3D 专项开源工具对比](docs/performance/open-source-tools.md)。
 

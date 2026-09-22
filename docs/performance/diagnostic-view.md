@@ -14,6 +14,12 @@ http://127.0.0.1:4175/?perf=1&perfUI=1
 
 面板默认打开 **实时运行**，可切换回 **加载时间线**。折叠面板或切换页签不会停止实时采集；显式暂停、页面隐藏或卸载面板才会停止。
 
+## 挂载与拆卸
+
+页面通过 `usePerformancePanel(bambooPerformanceAdapter)` 按需挂载工具。通用核心和组件位于 [`tools/scene-perf/`](../../tools/scene-perf/README.md)，项目状态读取、场景标签和渲染器口径集中在 `src/performance/bamboo-adapter.ts`。宿主可显式传 `{ enabled: false }` 卸载面板；这与暂停不同，会释放该面板的 RAF、观察器、监听器和定时器，重新开启创建新的运行时窗口。业务 recorder 生命周期独立，不因面板卸载而销毁。
+
+本项目仍使用启动 URL 开关，尚未增加页面内总开关。要完整退出本项目诊断模式，移除 `perf` / `perfUI` 后重新加载；清空窗口不清资源缓存。日常操作步骤已放入[项目 README](../../README.md#性能采集)。
+
 ## 实时运行
 
 实时页提供：

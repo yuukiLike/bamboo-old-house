@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUpRight, Pause, Play, Compass, RotateCcw, Sun, SunMedium, Moon, Scan, X, DoorOpen, Sunrise, Sunset, Volume2, VolumeX, SlidersHorizontal, Wind, CloudRain, Droplets } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -8,6 +8,8 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGr
 import { createSoundscape } from './scene/soundscape';
 import { createSceneTransition } from './scene-transition';
 import { beginPhase, phaseStatus, type FinishPhase } from '@/lib/performance';
+import { usePerformancePanel } from '../../tools/scene-perf/react/use-performance-panel';
+import { bambooPerformanceAdapter } from '../performance/bamboo-adapter';
 import { DEFAULT_WEATHER, WEATHER_PRESETS, type WeatherSettings } from './scene/weather-state';
 import type { SceneHandle } from './scene/scene';
 import { ROOM_VIEWS, OUTDOOR_VIEWS, PLACE_VIEWS, type PlaceId, type TimeOfDay, type ViewMode } from './scene/config';
@@ -21,14 +23,7 @@ const chapters = [
 ];
 
 export default function Experience() {
- const [PerformancePanel,setPerformancePanel] = useState<ComponentType | null>(null);
- useEffect(()=>{
-   const params=new URLSearchParams(location.search);
-   if(params.get('perf')!=='1'||params.get('perfUI')!=='1')return;
-   let disposed=false;
-   void import('./performance-panel').then(module=>{if(!disposed)setPerformancePanel(()=>module.default);}).catch(error=>console.warn('性能面板未载入',error));
-   return()=>{disposed=true;};
- },[]);
+ const performancePanel = usePerformancePanel(bambooPerformanceAdapter);
  const mount = useRef<HTMLDivElement>(null);
  const engine = useRef<SceneHandle | null>(null);
  const sceneTransition = useRef<ReturnType<typeof createSceneTransition> | null>(null);
@@ -233,7 +228,7 @@ export default function Experience() {
  const weatherLabel=weather.rain>.7?'暴雨':weather.rain>0?'细雨':(weather.autumn??0)>.5?'大风':weather.wind===0?'无风':'晴风';
  const listeningCopy=weather.rain>.7?'雨落屋檐 · 一场夏日大雨':weather.rain>0?(view==='well-rain'?'井边细雨 · 檐下滴答':'细雨轻落 · 叶间滴答'):(weather.autumn??0)>.5?'风起竹海 · 带一点秋凉':view==='breeze'?'风从身旁经过 · 叶片轻轻响':{dawn:'晨鸟初醒 · 叶间微风',day:'风过竹叶 · 远处鸟鸣',noon:'竹荫正浓 · 远处夏声',dusk:'晚风渐柔 · 虫声初起',night:'月下虫鸣 · 风过竹梢'}[timeOfDay];
  return <div className={`experience is-${view} ${panorama?'is-panorama':''} ${staticMode?'is-static':''} ${soundEnabled?'is-listening':''} ${settingsPanel?'settings-open':''}`} data-time={timeOfDay}>
-  {PerformancePanel && <PerformancePanel />}
+  {performancePanel}
   <a className="skip-link" href="#return" onClick={(e)=>{e.preventDefault();chooseView('walk',()=>navigate(4));}}>跳到结束</a>
   <div className="scene-shell" aria-hidden={!panorama}>
    <picture><source media="(max-width:700px)" srcSet="/scene-poster-mobile.webp"/><img className="fallback-view" src="/scene-poster.webp" alt="" /></picture>

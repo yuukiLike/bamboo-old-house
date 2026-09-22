@@ -1,12 +1,5 @@
 import { useState } from 'react';
-import type { RuntimeSnapshot, RuntimeState } from '@/lib/performance-runtime';
-
-const VIEW_LABELS: Record<string, string> = {
- moon: '竹林望月', breeze: '林间的风', well: '井边', 'well-rain': '井旁听雨', porch: '木廊',
- walk: '步行', free: '自由看看', outdoor: '院坝', interior: '楼上',
- courtyard: '屋前空地', 'yard-edge': '院边竹荫', upstairs: '二层厅堂', store: '仓库',
- 'room-one': '住屋一', 'room-two': '住屋二', hall: '一楼堂屋', kitchen: '一楼厨房',
-};
+import type { RuntimeSnapshot, RuntimeState } from '../core/runtime';
 
 function milliseconds(value: number | null | undefined) {
  if (value === null || value === undefined || !Number.isFinite(value)) return 'N/A';
@@ -25,9 +18,10 @@ interface RuntimeHealth {
 
 // Presentation guidance for a 60 Hz reference, not measured display FPS.
 // Keep the raw collector values and the original stutter thresholds unchanged.
-export function getRuntimeHealth(snapshot: RuntimeSnapshot | null, failed = false): RuntimeHealth {
+export function getRuntimeHealth(snapshot: RuntimeSnapshot | null, failed = false, businessFailed = false): RuntimeHealth {
  if (failed) return { level: 'unknown', label: '采集异常', reason: '读数可能已停止更新，暂不判断。' };
  if (!snapshot) return { level: 'unknown', label: '采样中', reason: '等待浏览器提供帧间隔。' };
+ if (businessFailed || snapshot.adapterErrors.length) return { level: 'unknown', label: '上下文异常', reason: '项目上下文读取失败；RAF 读数仍可用，暂不作完整状态判断。' };
  if (snapshot.status !== 'collecting') return { level: 'unknown', label: { paused: '已暂停', hidden: '页面隐藏', stopped: '已停止' }[snapshot.status], reason: '保留停止时的读数，暂不判断当前状态。' };
  const { rafHz, p95Ms, maxMs, count, observedMs } = snapshot.window;
  if (rafHz === null || p95Ms === null || maxMs === null || ![rafHz, p95Ms, maxMs, observedMs].every(Number.isFinite) || count < 1 || observedMs <= 0) {
@@ -54,11 +48,8 @@ export function getRuntimeHealth(snapshot: RuntimeSnapshot | null, failed = fals
  return { level: 'good', label: '合适', reason: '近 5 秒更新节奏较稳定，未记录到 ≥ 50 ms 的慢间隔。' };
 }
 
-function stateDescription(state: RuntimeState) {
- const view = state.view ? VIEW_LABELS[state.view] ?? state.view : '视图未知';
- const place = state.place ? VIEW_LABELS[state.place] ?? state.place : '位置未知';
- const sound = state.soundEnabled === null ? '声音未知' : state.soundEnabled ? '声音开' : '声音关';
- return [view, place !== view ? place : null, sound, state.weatherPreset ?? '天气未知', state.paused ? '动态暂停' : null].filter(Boolean).join(' · ');
+function defaultStateDescription(state: RuntimeState) {
+ return Object.entries(state).map(([key, value]) => `${key}=${value === null ? '未知' : String(value)}`).join(' · ') || '未提供项目状态';
 }
 
 function FrameRateGuide() {
@@ -119,12 +110,14 @@ function RuntimeChart({ snapshot, collecting }: { snapshot: RuntimeSnapshot; col
  </figure>;
 }
 
-export function PerformanceRuntimeView({ snapshot, health, startupLabel, startupTime, failed, onPause, onResume, onClear }: {
+export function PerformanceRuntimeView({ snapshot, health, startupLabel, startupTime, failed, describeState, rendererDescription, onPause, onResume, onClear }: {
  snapshot: RuntimeSnapshot | null;
  health: RuntimeHealth;
  startupLabel: string;
  startupTime: string;
  failed: boolean;
+ describeState?: (state: RuntimeState) => string;
+ rendererDescription?: string;
  onPause: () => void;
  onResume: () => void;
  onClear: () => void;
@@ -137,9 +130,14 @@ export function PerformanceRuntimeView({ snapshot, health, startupLabel, startup
  const visible = showAllStutters ? recent : recent.slice(0, 6);
  const renderer = snapshot.renderer;
  const number = (value: number | null | undefined) => value === null || value === undefined ? 'N/A' : value.toLocaleString('zh-CN');
+ const stateDescription = (state: RuntimeState) => {
+  try { return describeState?.(state) ?? defaultStateDescription(state); }
+  catch { return defaultStateDescription(state); }
+ };
  const stateChanged = (before: RuntimeState | null, after: RuntimeState) => before !== null && stateDescription(before) !== stateDescription(after);
  return <div className="perf-runtime-view">
   <div className="perf-runtime-status"><span><i aria-hidden="true" className={`perf-status-dot ${collecting ? 'perf-status-ready' : 'perf-status-idle'}`} />{status}</span><small>{startupLabel} · {startupTime}</small></div>
+  {snapshot.adapterErrors.length > 0 && <p className="perf-warning">项目上下文读取失败：{snapshot.adapterErrors.join('、')}。RAF 仍在独立采样，相关状态与归因暂不可用。</p>}
   <div className="perf-runtime-metrics">
    <div className="perf-runtime-metric" data-health={health.level} title={health.reason}><span>浏览器回调频率</span><strong>{snapshot.window.rafHz === null ? 'N/A' : snapshot.window.rafHz.toFixed(1)}{snapshot.window.rafHz !== null && <small>Hz</small>}</strong><span className="perf-health-label">{health.label}</span><span>近 5 秒 · RAF</span></div>
    <div className="perf-runtime-metric" data-severity={severity(snapshot.window.p95Ms)}><span>帧间隔 p95</span><strong>{snapshot.window.p95Ms === null ? 'N/A' : snapshot.window.p95Ms.toFixed(0)}{snapshot.window.p95Ms !== null && <small>ms</small>}</strong></div>
@@ -179,7 +177,7 @@ export function PerformanceRuntimeView({ snapshot, health, startupLabel, startup
     <div className="perf-runtime-diagnostic-wide"><dt>画质模式</dt><dd>{renderer.quality ?? 'N/A'}</dd></div>
     <div className="perf-runtime-diagnostic-wide"><dt>图形后端</dt><dd>{renderer.gpu ?? 'N/A'}</dd></div>
    </dl> : <p className="perf-empty">渲染器尚未提供诊断信息。</p>}
-   <p className="perf-explanation">应用提供的最新计数，每 15 帧刷新；纹理和几何体是数量，不是显存。未测量 GPU 时间。</p>
+   <p className="perf-explanation">{rendererDescription ?? '应用提供的最新计数；更新频率由宿主决定。纹理和几何体是数量，不是显存。未测量 GPU 时间。'}</p>
   </details>
   <p className="perf-explanation">{snapshot.longTasks.supported ? `近 5 秒主线程长任务 ${snapshot.longTasks.recentCount ?? 0} 次，最长 ${milliseconds(snapshot.longTasks.recentMaxMs)}。` : '此浏览器未提供 Long Tasks 记录。'} {snapshot.interruptions > 0 ? `已排除 ${snapshot.interruptions} 次暂停或隐藏边界。` : '页面隐藏时停止采样，恢复后排除跨界间隔。'}</p>
   {(snapshot.dropped.frames + snapshot.dropped.stutters + snapshot.dropped.longTasks > 0) && <p className="perf-warning">有界保留已移除：{snapshot.dropped.frames} 个帧样本、{snapshot.dropped.stutters} 条卡顿、{snapshot.dropped.longTasks} 条长任务。导出包含当前保留窗口。</p>}

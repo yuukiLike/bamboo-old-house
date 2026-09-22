@@ -1,5 +1,7 @@
 # 3D 页面性能采集与分析
 
+这是竹屋的项目入口：`run.mjs` 注入项目适配器、业务计时来源和操作流程；通用实现已移入可整体复制的 [`tools/scene-perf/`](../../tools/scene-perf/README.md)。`pnpm perf` / `pnpm perf:report` 命令保持不变。
+
 从导航之前开始录制，持续到三维画面出现，再通过真实控件记录首次进屋与再次进入。产出独立 HTML、Markdown、JSON，以及可导入 Chrome DevTools 的原始 trace。工具用于定位优化目标和复测，不修改画质，不自动判断某个函数就是瓶颈。
 
 [重复采集与对比流水线](../../docs/performance/pipeline.md) · [接入另一个 Three.js 项目](../../docs/performance/adapter.md) · [实时运行与加载时间线](../../docs/performance/diagnostic-view.md) · [页面整体流程图](../../docs/performance/page-lifecycle.md) · [选型与设计依据](../../docs/plans/preview-performance-baseline.md) · [首次实测记录](../../docs/performance/first-capture.md) · [3D 专项开源仓库](../../docs/performance/open-source-tools.md)
@@ -52,10 +54,11 @@ python3 -m http.server 4180 --bind 127.0.0.1 --directory outputs/performance
 | `--profile` | `desktop` | `desktop` 请求 1440×900 外窗、DPR 1；`mobile` 模拟 402×874 视口、DPR 2 |
 | `--iterations` | `3` | 独立浏览器轮次，1–30 |
 | `--mode` | `baseline` | 轻量采集；`diagnostic` 加 trace、JS 采样和截图 |
-| `--flow` | `journey` | 五段视图；`load` 仅首屏；`system` 覆盖系统按钮；`views` 采集望月与听风切换；`cache` 对照新会话首访与同会话复访 |
+| `--flow` | `journey` | 五段视图；`load` 仅首屏；`system` 覆盖系统按钮；`views` 采集望月与听风切换；`cache` 对照新会话首访与同会话复访；`custom` 需指定自定义脚本 |
 | `--observe-ms` | `5000` | 就绪后每段观察 1,000–30,000 ms |
 | `--instrumentation` | `on` | `on` 添加 `?perf=1`；`off` 移除该参数；浏览器通用探针始终存在 |
-| `--scenario` | `scene-journey.cjs` | 自定义 Browsertime 流程及对应数据导出 |
+| `--instrumentation-source` | 项目 wrapper + 通用 recorder | 可重复指定实际业务计时源文件，内容参与比较指纹；路径不影响指纹 |
+| `--scenario` | 按 flow 选择 | 自定义 Browsertime 流程及对应数据导出 |
 | `--adapter` | `adapters/bamboo.cjs` | 项目的就绪、诊断与状态读取适配器；传入 `.cjs` 文件 |
 | `--out` | 时间戳目录 | 必须是新目录，防止覆盖历史证据 |
 | `--compare` | 不比较 | 采集结束后与指定目录比较；启动前检查其 manifest，不继承基线配置 |
@@ -112,13 +115,13 @@ HTTP 缓存另有独立的 `--flow cache`，在同一浏览器会话正常导航
 
 业务标记使用唯一操作 ID，按 `entry.detail.phase` 聚合；不能直接按带 `#ID` 的 entry.name 分组。业务记录最多保留 500 条，浏览器 RAF 内部最多 12,000 条，输出每段最多 2,000 条帧样本，同时保留完整保留窗口的汇总与截断说明。没有逐帧写 User Timing，也没有全局替换 `fetch` 或 renderer。
 
-移植到另一个项目时，通过 `--adapter` 提供项目的就绪、诊断与状态读取，通过 `--scenario` 提供真实控件流程；通用采集与报告无需修改。`adapters/three-example.cjs` 和[接入说明](../../docs/performance/adapter.md)给出最小契约，示例尚未在第二个项目验证。需要精确归因时，在该项目加载/视图切换边界加入小型 User Timing helper；不必安装监控 SDK。
+移植到另一个项目时，复制独立工具目录，通过 `--adapter` 提供项目的就绪、诊断与状态读取，通过 `--scenario` 提供真实控件流程；通用采集与报告无需修改。`tools/scene-perf/examples/three-adapter.cjs` 和[接入说明](../../docs/performance/adapter.md)给出最小契约，示例尚未在第二个项目验证。需要精确归因时，在该项目加载/视图切换边界加入小型 User Timing helper；不必安装监控 SDK。
 
 ## 自定义流程契约
 
-`--scenario` 接受标准 `module.exports = async (context, commands) => {}`。用 `commands.measure.start(alias)` 开始区间，执行真实操作、等待并读取快照，再 `commands.measure.stop()`。`measure.start(URL, alias)` 会自动导航并结束，不适合扩展业务等待。
+`--flow custom --scenario FILE.cjs` 接受标准 `module.exports = async (context, commands) => {}`。单独指定 `--scenario` 而未指定 `--flow` 时自动使用 custom，关闭不适合多窗口录制的 HAR，保留 CDP 缓存数据。用 `commands.measure.start(alias)` 开始区间，执行真实操作、等待并读取快照，再 `commands.measure.stop()`。`measure.start(URL, alias)` 会自动导航并结束，不适合扩展业务等待。
 
-自定义报告需要每个阶段通过 `context.storageManager.writeJson()` 输出 `scene-<iteration>-<alias>.json`。最简单的方式是修改内置场景脚本的操作部分，复用 `scene-helpers.cjs` 的 `createCollector()`、`finish()` 与快照格式；换项目时替换适配器中的业务诊断和 DOM 状态读取。核心字段：
+自定义报告需要每个阶段通过 `context.storageManager.writeJson()` 输出 `scene-<iteration>-<alias>.json`。最简单的方式是修改内置场景脚本的操作部分，并在 `finally` 中释放 collector，复用 `tools/scene-perf/cli/scene-helpers.cjs` 的 `createCollector()`、`finish()` 与快照格式；换项目时替换适配器中的业务诊断和 DOM 状态读取。核心字段：
 
 ```js
 {
@@ -206,3 +209,7 @@ sitespeed 42.7.0 对没有真实导航的多段 WebGL 交互会产生 HAR 页索
 本实现不新增测试用例。使用已有类型检查、lint、生产构建、现有渲染回归检查，以及实际浏览器采集来验证。完整性检查和参数校验用于防止坏数据进入报告，不接入测试运行器。
 
 `outputs/performance/` 已被 Git 忽略。将选定采集目录与匹配构建归档到自己的证据存储，在 `docs/performance/` 保留配置、摘要和文件哈希；本地目录不是永久外部存储，也不会由 `git push` 自动上传。manifest 的工作区 fingerprint 包括 tracked diff 和未忽略的 untracked 文件哈希，用于区分同一个 HEAD 下的本地改动；它不能证明目标 URL 正在服务该构建，仍需保留实际 JS、maps 或部署版本。
+
+## 工具拆分后的基线
+
+通用核心、适配器和操作流程迁移会改变采集器与业务计时指纹。本次拆分后应重新采集基线，再比较产品优化；不要把旧工具版本和新工具版本的耗时差算成优化收益。历史原始数据和报告仍可打开、重生成，同一旧工具条件下的历史对比仍保留。

@@ -84,7 +84,7 @@ function readSnapshot(start, stable, source, business, frameCapacity) {
 }
 
 function loadAdapter(adapterPath = process.env.PERF_ADAPTER) {
-  const resolved = adapterPath || path.join(__dirname, 'adapters/bamboo.cjs');
+  const resolved = adapterPath || path.join(__dirname, '../examples/browser-adapter.cjs');
   if (!path.isAbsolute(resolved)) throw new Error('PERF_ADAPTER must be an absolute path to a CommonJS adapter');
   // oxlint-disable-next-line typescript/no-require-imports -- Adapters use the same CommonJS runtime as Browsertime scenarios.
   const definition = require(resolved);
@@ -93,6 +93,12 @@ function loadAdapter(adapterPath = process.env.PERF_ADAPTER) {
   }
   for (const field of ['readyDescription', 'frameLimitation']) {
     if (typeof definition[field] !== 'string' || !definition[field].trim()) throw new Error(`Performance adapter requires ${field}`);
+  }
+  if (definition.phaseLimitation !== undefined && typeof definition.phaseLimitation !== 'string') {
+    throw new Error('Performance adapter phaseLimitation must be a string when provided');
+  }
+  if (definition.measurePrefix !== undefined && (typeof definition.measurePrefix !== 'string' || !definition.measurePrefix)) {
+    throw new Error('Performance adapter measurePrefix must be a nonempty string when provided');
   }
   if (definition.frameCapacity !== null && (!Number.isInteger(definition.frameCapacity) || definition.frameCapacity <= 0)) {
     throw new Error('Performance adapter frameCapacity must be a positive integer, or null when application frames are unavailable');
@@ -105,6 +111,11 @@ function loadAdapter(adapterPath = process.env.PERF_ADAPTER) {
   if (!definition.stateFields.length) throw new Error('Performance adapter must declare at least one required state field');
   const fields = [...definition.stateFields, ...definition.optionalStateFields];
   if (new Set(fields).size !== fields.length) throw new Error('Performance adapter state fields must be unique');
+  const nullableStateFields = definition.nullableStateFields === undefined ? [] : definition.nullableStateFields;
+  if (!Array.isArray(nullableStateFields) || nullableStateFields.some(field => !fields.includes(field)) ||
+    new Set(nullableStateFields).size !== nullableStateFields.length) {
+    throw new Error('Performance adapter nullableStateFields must be a unique subset of declared state fields');
+  }
   const browser = {};
   for (const field of ['readDiagnostics', 'readBusinessPhases', 'readState', 'isReady']) {
     if (typeof definition[field] !== 'function') throw new Error(`Performance adapter requires ${field}()`);
@@ -116,12 +127,14 @@ function loadAdapter(adapterPath = process.env.PERF_ADAPTER) {
     }
     browser[field] = source;
   }
-  const metadata = Object.fromEntries(['version', 'id', 'readyDescription', 'frameCapacity', 'frameLimitation', 'stateFields', 'optionalStateFields'].map(field => [field, definition[field]]));
+  const metadata = Object.fromEntries(['version', 'id', 'readyDescription', 'frameCapacity', 'frameLimitation', 'stateFields', 'optionalStateFields', 'phaseLimitation', 'measurePrefix']
+    .filter(field => definition[field] !== undefined).map(field => [field, definition[field]]));
+  metadata.nullableStateFields = nullableStateFields;
   return { path: resolved, definition, browser, metadata };
 }
 
 async function createCollector(context, commands) {
-  const { classifyResourceCache, summarizeResourceCache } = await import('./resource-cache.mjs');
+  const { classifyResourceCache, summarizeResourceCache } = await import('../core/resource-cache.mjs');
   const observationMs = Number(process.env.PERF_OBSERVE_MS || 5000);
   if (!Number.isFinite(observationMs) || observationMs < 1000 || observationMs > 30000) {
     throw new Error('PERF_OBSERVE_MS must be between 1000 and 30000');
