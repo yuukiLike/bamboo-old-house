@@ -85,7 +85,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
  try{renderer=measurePhase('startup.webgl-renderer',()=>new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'}),{mobile});}catch{throw new Error('WEBGL_UNAVAILABLE');}
  renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
  let renderSettings:RenderSettings={...DEFAULT_RENDER_SETTINGS};
- // Preserve the authored resolution unless the user explicitly changes it.
+ // Use the selected configuration from startup; never adapt it to frame time.
  renderer.setPixelRatio(scenePixelRatio(devicePixelRatio,mobile,renderSettings));renderer.setSize(innerWidth,innerHeight);
  renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
  renderer.info.autoReset=false;

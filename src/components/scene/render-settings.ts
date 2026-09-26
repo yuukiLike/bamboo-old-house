@@ -4,10 +4,12 @@ export interface RenderSettings {
  resolution:'full'|'reduced';
  shadows:'full'|'alternate';
 }
-export const DEFAULT_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'full',shadows:'full'};
+export const FULL_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'full',shadows:'full'};
+// User-approved starting point; complete effects remain independently selectable.
+export const DEFAULT_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'reduced',shadows:'alternate'};
 
-/** Only an explicit setting changes the authored resolution. Frame timings
- * never select a setting. CSS/UI resolution is unaffected. */
+/** The selected configuration controls resolution. Frame timings never
+ * select a setting. CSS/UI resolution is unaffected. */
 export function scenePixelRatio(deviceRatio:number,mobile:boolean,settings:RenderSettings){
  return Math.min(deviceRatio,mobile?1.25:1.6)*(settings.resolution==='reduced'?.85:1);
 }

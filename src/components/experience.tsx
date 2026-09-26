@@ -11,7 +11,7 @@ import { beginPhase, phaseStatus, type FinishPhase } from '@/lib/performance';
 import { usePerformancePanel } from '../../tools/scene-perf/react/use-performance-panel';
 import { bambooPerformanceAdapter } from '../performance/bamboo-adapter';
 import { DEFAULT_WEATHER, WEATHER_PRESETS, type WeatherSettings } from './scene/weather-state';
-import { DEFAULT_RENDER_SETTINGS, type RenderSettings } from './scene/render-settings';
+import { DEFAULT_RENDER_SETTINGS, FULL_RENDER_SETTINGS, type RenderSettings } from './scene/render-settings';
 import type { SceneHandle } from './scene/scene';
 import { ROOM_VIEWS, OUTDOOR_VIEWS, PLACE_VIEWS, type PlaceId, type TimeOfDay, type ViewMode } from './scene/config';
 
@@ -268,18 +268,18 @@ export default function Experience() {
     <Button ref={renderButton} className="control-button render-toggle" aria-label="画面设置" title="画面设置" aria-expanded={settingsPanel==='render'} aria-controls="render-settings" disabled={!ready||staticMode} onClick={()=>setSettingsPanel(settingsPanel==='render'?null:'render')}><Monitor size={16}/></Button>
     {settingsPanel==='render'&&<dialog open ref={renderPanel} id="render-settings" className="settings-panel render-panel" aria-labelledby="render-title" onKeyDown={event=>event.stopPropagation()}>
      <div className="settings-heading"><h2 id="render-title">画面设置</h2><Button className="settings-close" variant="ghost" aria-label="收起画面设置" onClick={()=>{setSettingsPanel(null);renderButton.current?.focus({preventScroll:true});}}><X size={15}/></Button></div>
-     <p className="settings-description">默认保留完整效果。以下选择适用于所有视角、时段与天气，不会自动调整。</p>
+     <p className="settings-description">默认使用性能设置，也可随时恢复完整效果。以下选择适用于所有视角、时段与天气，不会自动调整。</p>
      <fieldset className="render-options" aria-describedby="resolution-note"><legend>画面清晰度</legend>
-      <Button variant="ghost" aria-pressed={renderSettings.resolution==='full'} onClick={()=>setRenderSettings(value=>({...value,resolution:'full'}))}>完整清晰（默认）</Button>
-      <Button variant="ghost" aria-pressed={renderSettings.resolution==='reduced'} onClick={()=>setRenderSettings(value=>({...value,resolution:'reduced'}))}>稍柔和</Button>
+      <Button variant="ghost" aria-pressed={renderSettings.resolution==='full'} onClick={()=>setRenderSettings(value=>({...value,resolution:'full'}))}>完整清晰</Button>
+      <Button variant="ghost" aria-pressed={renderSettings.resolution==='reduced'} onClick={()=>setRenderSettings(value=>({...value,resolution:'reduced'}))}>稍柔和（默认）</Button>
      </fieldset>
      <p id="resolution-note" className="settings-description">“稍柔和”可减轻绘制负担，细竹叶和远处纹理会略柔和。</p>
      <fieldset className="render-options" aria-describedby="shadows-note"><legend>日光与月光下的动态阴影</legend>
-      <Button variant="ghost" aria-pressed={renderSettings.shadows==='full'} onClick={()=>setRenderSettings(value=>({...value,shadows:'full'}))}>每帧跟随（默认）</Button>
-      <Button variant="ghost" aria-pressed={renderSettings.shadows==='alternate'} onClick={()=>setRenderSettings(value=>({...value,shadows:'alternate'}))}>隔帧更新</Button>
+      <Button variant="ghost" aria-pressed={renderSettings.shadows==='full'} onClick={()=>setRenderSettings(value=>({...value,shadows:'full'}))}>每帧跟随</Button>
+      <Button variant="ghost" aria-pressed={renderSettings.shadows==='alternate'} onClick={()=>setRenderSettings(value=>({...value,shadows:'alternate'}))}>隔帧更新（默认）</Button>
      </fieldset>
      <p id="shadows-note" className="settings-description">“隔帧更新”可减轻阴影绘制负担，大风时竹影可能稍显不连贯。</p>
-     <Button className="render-reset" variant="ghost" onClick={()=>setRenderSettings({...DEFAULT_RENDER_SETTINGS})}>恢复完整效果</Button>
+     <Button className="render-reset" variant="ghost" onClick={()=>setRenderSettings({...FULL_RENDER_SETTINGS})}>恢复完整效果</Button>
     </dialog>}
    </div>
    <Button className="control-button" onClick={()=>setPaused(!paused)} aria-label={reduced?'已减少动态':paused?'让风继续':'静止观看'} aria-pressed={paused || reduced} disabled={reduced || staticMode}>

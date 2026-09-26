@@ -4,7 +4,7 @@ import * as T from 'three';
 import { WebGLShadowMap } from 'three/src/renderers/webgl/WebGLShadowMap.js';
 import type { WebGLObjects } from 'three/src/renderers/webgl/WebGLObjects.js';
 import type { WebGLCapabilities } from 'three/src/renderers/webgl/WebGLCapabilities.js';
-const {DEFAULT_RENDER_SETTINGS,scenePixelRatio,createDirectionalShadowUpdates}:typeof import('../src/components/scene/render-settings')=
+const {DEFAULT_RENDER_SETTINGS,FULL_RENDER_SETTINGS,scenePixelRatio,createDirectionalShadowUpdates}:typeof import('../src/components/scene/render-settings')=
  await import(new URL('../src/components/scene/render-settings.ts',import.meta.url).href);
 const {skipZeroPointLightContributions}:typeof import('../src/components/scene/point-light-shading')=
  await import(new URL('../src/components/scene/point-light-shading.ts',import.meta.url).href);
@@ -41,19 +41,21 @@ function setup(){
  return {scene,parent,sun,lamp,camera,updates,frame,draws,dispose};
 }
 
-await test('complete effect is the default for every device ratio and settings restore exactly',()=>{
- assert.deepEqual(DEFAULT_RENDER_SETTINGS,{resolution:'full',shadows:'full'});
+await test('performance settings are the default and complete effects restore exactly on every device ratio',()=>{
+ assert.deepEqual(DEFAULT_RENDER_SETTINGS,{resolution:'reduced',shadows:'alternate'});
+ assert.deepEqual(FULL_RENDER_SETTINGS,{resolution:'full',shadows:'full'});
  for(const mobile of [false,true])for(const ratio of [.75,1,1.25,1.5,2,3]){
   const full=Math.min(ratio,mobile?1.25:1.6);
   for(const shadows of ['full','alternate'] as const){
    assert.equal(scenePixelRatio(ratio,mobile,{resolution:'full',shadows}),full);
    assert.equal(scenePixelRatio(ratio,mobile,{resolution:'reduced',shadows}),full*.85);
   }
-  assert.equal(scenePixelRatio(ratio,mobile,{...DEFAULT_RENDER_SETTINGS}),full);
+  assert.equal(scenePixelRatio(ratio,mobile,{...DEFAULT_RENDER_SETTINGS}),full*.85);
+  assert.equal(scenePixelRatio(ratio,mobile,{...FULL_RENDER_SETTINGS}),full);
  }
 });
 
-await test('default shadows draw every animated frame and reuse only unchanged depth inputs',()=>{
+await test('complete-effect shadows draw every animated frame and reuse only unchanged depth inputs',()=>{
  const h=setup();
  try{
   assert.deepEqual(h.frame(0).clears,['sun.shadowMap',...Array<string>(6).fill('lamp.shadowMap')]);
