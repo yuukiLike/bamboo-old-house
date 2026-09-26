@@ -53,7 +53,7 @@ export function addEnvironment(scene:T.Scene,renderer:T.WebGLRenderer,mobile:boo
  addUnderstory(scene,mobile);
  const terrainArt=addTerrainArt(scene,mobile,groundHeight,pathClearance);
  const cycle=addDayCycle(scene,renderer,sky,sun,ambient,night,time,mobile,noon,dawn,dusk,weather);
- return {update:()=>{cycle.update();reservoirWater.update();},dispose:()=>{terrainArt.dispose();env.dispose();}};
+ return {sun,update:()=>{cycle.update();reservoirWater.update();},dispose:()=>{terrainArt.dispose();env.dispose();}};
 }
 export function addUnderstory(scene:T.Scene,mobile:boolean){
  const rand=seeded(207),dummy=new T.Object3D();
