@@ -67,6 +67,10 @@ export function createSoundscape(): Soundscape {
   let layers: Layer[] = [];
   const loading = new Map<RecordingGroup, Promise<void>>();
   const loadAborts = new Map<RecordingGroup, AbortController>();
+  // Phones share a small thermal/memory budget with the renderer. Preserve
+  // source rate/channels, but never run multiple whole-file decoders at once.
+  const mobile = matchMedia('(max-width:700px), (hover:none) and (pointer:coarse)').matches;
+  let decodeQueue: Promise<void> = Promise.resolve();
   let scheduler: ReturnType<typeof setInterval> | null = null;
   let suspendTimer: ReturnType<typeof setTimeout> | null = null;
   let enabled = false;
@@ -247,6 +251,7 @@ export function createSoundscape(): Soundscape {
 
   function schedule() {
     if (!context || context.state !== 'running' || !enabled || document.hidden) return;
+    scheduler ??= setInterval(schedule, 1500);
     updateMix();
     for (const layer of layers) {
       if (layer.recording.group === 'frog') {
@@ -306,8 +311,15 @@ export function createSoundscape(): Soundscape {
         if (!response.ok) throw new Error(`自然声加载失败（${recording.file} / ${response.status}）`);
         const data = await response.arrayBuffer();
         finish(disposed ? 'cancelled' : 'success', { bytes: data.byteLength });
-        finish = beginPhase('audio.decode', { group, file });
-        const buffer = await audioContext.decodeAudioData(data);
+        const decode = async () => {
+          if (disposed || controller.signal.aborted) throw new DOMException('Audio load cancelled', 'AbortError');
+          finish = beginPhase('audio.decode', { group, file });
+          return audioContext.decodeAudioData(data);
+        };
+        const decoded = mobile ? decodeQueue.then(decode) : decode();
+        if (mobile) decodeQueue = decoded.then(() => {}, () => {});
+        const buffer = await decoded;
+        if (disposed || controller.signal.aborted) throw new DOMException('Audio load cancelled', 'AbortError');
         if (buffer.duration < (group === 'frog' ? .3 : CROSSFADE_SECONDS * 3)) {
           throw new Error(`自然声片段不完整（${recording.file}）`);
         }
@@ -387,6 +399,8 @@ export function createSoundscape(): Soundscape {
 
   function suspendAfterFade() {
     clearSuspendTimer();
+    if (scheduler !== null) clearInterval(scheduler);
+    scheduler = null;
     if (!context || context.state !== 'running') return;
     suspendTimer = setTimeout(() => {
       suspendTimer = null;
@@ -464,7 +478,6 @@ export function createSoundscape(): Soundscape {
           roomFilter.connect(master);
           master.connect(context.destination);
           document.addEventListener('visibilitychange', visibilityChanged);
-          scheduler = setInterval(schedule, 1500);
         }
         // Resume synchronously in the gesture, before waiting for network/decode.
         await Promise.all([
@@ -533,7 +546,7 @@ export function createSoundscape(): Soundscape {
       if (next === gust || next > 0 && Math.abs(next - gust) < .002) return;
       gust = next;
       const leaves = layers.find(layer => layer.recording.file === 'bamboo-wind');
-      if (!leaves || !context) return;
+      if (!leaves || !context || !enabled || document.hidden || context.state !== 'running') return;
       // The visual gust is the only envelope clock; leaves react without a howl.
       ease(leaves.gain.gain, windAmount() * leaves.recording.trim, .12);
       if (autumn > 0) {
@@ -547,7 +560,7 @@ export function createSoundscape(): Soundscape {
       if (next === roofRunoff) return;
       roofRunoff = next;
       const eaves = layers.find(layer => layer.recording.file === 'rain-eaves');
-      if (!eaves || !context) return;
+      if (!eaves || !context || !enabled || document.hidden || context.state !== 'running') return;
       ease(eaves.gain.gain, eavesAmount() * eaves.recording.trim, .35);
     },
     setVolume(value) {

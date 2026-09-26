@@ -1,0 +1,295 @@
+{
+  "browser": "156.0.8074.0",
+  "samples": [
+    {
+      "place": "courtyard",
+      "view": "free",
+      "time": "day",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 7792450,
+      "draws": 396,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "yard-edge",
+      "view": "free",
+      "time": "day",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 8725343,
+      "draws": 414,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "upstairs",
+      "view": "free",
+      "time": "day",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 8580938,
+      "draws": 362,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "store",
+      "view": "free",
+      "time": "day",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 9191106,
+      "draws": 345,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "room-one",
+      "view": "free",
+      "time": "day",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 5146059,
+      "draws": 272,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "room-two",
+      "view": "free",
+      "time": "day",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 5048445,
+      "draws": 267,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "hall",
+      "view": "free",
+      "time": "day",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 7205670,
+      "draws": 331,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "kitchen",
+      "view": "free",
+      "time": "day",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 6159722,
+      "draws": 307,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "courtyard",
+      "view": "free",
+      "time": "night",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 7793764,
+      "draws": 396,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "yard-edge",
+      "view": "free",
+      "time": "night",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 8726601,
+      "draws": 414,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "upstairs",
+      "view": "free",
+      "time": "night",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 8582066,
+      "draws": 362,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "store",
+      "view": "free",
+      "time": "night",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 9191666,
+      "draws": 345,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "room-one",
+      "view": "free",
+      "time": "night",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 5147105,
+      "draws": 271,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "room-two",
+      "view": "free",
+      "time": "night",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 5049017,
+      "draws": 266,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "hall",
+      "view": "free",
+      "time": "night",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 7206916,
+      "draws": 331,
+      "yaw": 0.2,
+      "static": false
+    },
+    {
+      "place": "kitchen",
+      "view": "free",
+      "time": "night",
+      "size": [
+        804,
+        1748
+      ],
+      "settings": {
+        "resolution": "full",
+        "shadows": "full",
+        "frameRate": "display"
+      },
+      "triangles": 6161830,
+      "draws": 306,
+      "yaw": 0.2,
+      "static": false
+    }
+  ],
+  "errors": [],
+  "note": "Headed M4 Canary with mobile touch emulation; all eight free-view destinations, day/night, rain and complete-effect settings. Functional shader/interaction checks, not iPhone performance evidence."
+}

@@ -496,17 +496,18 @@ function weatherSurfaces(scene:T.Scene,roof:HeightField,weather:WeatherUniforms,
     if(/Reservoir_water|lamp|bulb|flame|contact|Moon|sky/i.test(object.name))return;
     const candidates=(Array.isArray(object.material)?object.material:[object.material]).filter((material):material is T.MeshStandardMaterial=>material instanceof T.MeshStandardMaterial&&!/glass|bulb|lamp|flame|emissive/i.test(material.name));
     if(!candidates.length)return;
-    if(!geometries.has(object.geometry)){
+    // Instanced plants have always used exposure=1 and ingress=0. Keep those
+    // constants in the shader, freeing two vertex inputs for their wind cache.
+    if(!(object instanceof T.InstancedMesh)&&!geometries.has(object.geometry)){
       if(candidates.some(m=>m.name.startsWith('Interior_floor_'))||((object.name.startsWith('Architecture__')||object.name.startsWith('Props__'))&&object.geometry.attributes.position.count<12000&&candidates.some(m=>/lime|plaster|cement|cotton|linen/i.test(m.name)))){refined.set(object,object.geometry);object.geometry=refineRainFloor(object.geometry,object.matrixWorld);}
       else if(object.name.startsWith('Architecture__Reference_')&&candidates.some(m=>m.name.includes('aged_timber'))){refined.set(object,object.geometry);object.geometry=refineRainFloor(object.geometry,object.matrixWorld,true);}
-      else if(!(object instanceof T.InstancedMesh)&&(usage.get(object.geometry)??0)>1){refined.set(object,object.geometry);object.geometry=object.geometry.clone();}
+      else if((usage.get(object.geometry)??0)>1){refined.set(object,object.geometry);object.geometry=object.geometry.clone();}
       const positions=object.geometry.attributes.position,exposure=new Float32Array(positions.count),ingress=new Float32Array(positions.count*3);
       const normals=object.geometry.attributes.normal;normalMatrix.getNormalMatrix(object.matrixWorld);
       // A floor's sparse outer vertices may lie just beyond a raster cell at
       // the wall. Its explicit interior designation takes precedence there.
       const interior=candidates.every(material=>/^(Interior_|Kitchen_)/.test(material.name));
       for(let i=0;i<positions.count;i++){
-        if(object instanceof T.InstancedMesh){exposure[i]=1;continue;}
         point.fromBufferAttribute(positions,i).applyMatrix4(object.matrixWorld);
         const cover=roof.sample(point.x,point.z);
         exposure[i]=interior||cover>point.y+.16?0:1;
@@ -535,13 +536,20 @@ function weatherSurfaces(scene:T.Scene,roof:HeightField,weather:WeatherUniforms,
         shader.uniforms.weatherRain=weather.rain;shader.uniforms.weatherNight=weather.night;
         shader.uniforms.weatherIngressWater=surfaceWeather.ingressWater;shader.uniforms.weatherRainTime=surfaceWeather.rainTime;shader.uniforms.weatherAbsorptionActivity=surfaceWeather.activity;
         shader.vertexShader=shader.vertexShader
-          .replace('#include <common>','#include <common>\nattribute float rainExposure;attribute vec3 rainIngress;varying vec3 weatherIngress;varying float weatherExposure;varying vec3 weatherWorld;')
+          .replace('#include <common>',`#include <common>
+            #ifndef USE_INSTANCING
+            attribute float rainExposure;attribute vec3 rainIngress;
+            #endif
+            varying vec3 weatherIngress;varying float weatherExposure;varying vec3 weatherWorld;`)
           .replace('#include <worldpos_vertex>',`#include <worldpos_vertex>
             vec4 rainWorld=vec4(transformed,1.);
             #ifdef USE_INSTANCING
             rainWorld=instanceMatrix*rainWorld;
+            weatherExposure=1.;weatherIngress=vec3(0.);
+            #else
+            weatherExposure=rainExposure;weatherIngress=rainIngress;
             #endif
-            weatherWorld=(modelMatrix*rainWorld).xyz;weatherExposure=rainExposure;weatherIngress=rainIngress;`);
+            weatherWorld=(modelMatrix*rainWorld).xyz;`);
         shader.fragmentShader=shader.fragmentShader
           .replace('#include <common>','#include <common>\n#define weatherSurface '+surface.toFixed(1)+'\n'+WET_GLSL)
           // Terrain-art expands the roughness chunk with its final dry
@@ -609,7 +617,7 @@ function weatherSurfaces(scene:T.Scene,roof:HeightField,weather:WeatherUniforms,
             }
             #include <opaque_fragment>`);
       };
-      material.customProgramCacheKey=()=>key+'|weather-open-edge-rain-5|'+surface;
+      material.customProgramCacheKey=()=>key+'|weather-open-edge-rain-6|'+surface;
       material.needsUpdate=true;
     }
   });

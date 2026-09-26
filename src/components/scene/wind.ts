@@ -57,44 +57,60 @@ export function forestWindTip(time:number,x:number,z:number,height:number,wind:n
  return result;
 }
 
-/** Install after visibility batching. Only root force is cached: the authored
- * per-vertex curvature, leaf hinges and normal deformation still run on GPU.
+/** Install after visibility batching. Cache shared root force and bound-branch
+ * parent state; per-vertex curvature, leaf hinges and normals still run on GPU.
  * Each batch owns its derived attribute, so visibility reordering and shared
  * LOD geometry cannot mix up plants or disconnect their animated shadows. */
 export function createInstanceWind(scene:T.Scene,maxAttributes=16){
- const entries:{mesh:T.InstancedMesh;source:T.BufferGeometry;attribute:T.InstancedBufferAttribute;height:number;branch:boolean;version:number;time:number;wind:number}[]=[];
+ const entries:{mesh:T.InstancedMesh;source:T.BufferGeometry;attribute:T.InstancedBufferAttribute;secondary?:T.InstancedBufferAttribute;curves?:CulmCurve[];height:number;branch:boolean;version:number;time:number;wind:number}[]=[];
  const materials=new Map<T.Material,{compile:T.Material['onBeforeCompile'];key:T.Material['customProgramCacheKey']}>();
  const force:[number,number]=[0,0];
  scene.traverse(object=>{
   if(!(object instanceof T.InstancedMesh))return;
   const surface:T.Material=Array.isArray(object.material)?object.material[0]:object.material;
-  const settings=surface.userData.instanceWind as {height:number;branch?:boolean}|undefined;
+  const settings=surface.userData.instanceWind as {height:number;branch?:boolean;curves?:CulmCurve[]}|undefined;
   if(!settings)return;
   const source:T.BufferGeometry=object.geometry;
-  // Bound porch leaves already occupy all 16 vertex inputs (including their
-  // tangent, hinge and parent frame). Retain the analytic shader on those.
+  // Count matrix/color slots too. Fall back to the analytic shader if a
+  // future asset uses more inputs than this device can supply.
   const slots=Object.values(source.attributes).reduce((sum,attribute)=>sum+Math.ceil(attribute.itemSize/4),0)+4+Number(!!object.instanceColor);
   if(slots+1>maxAttributes)return;
+  const cacheBranch=!!(settings.branch&&settings.curves&&slots+2<=maxAttributes);
   const geometry=new T.BufferGeometry();
   for(const [name,attribute]of Object.entries(source.attributes))geometry.setAttribute(name,attribute);
   geometry.setIndex(source.index);geometry.groups=source.groups.map(group=>({...group}));
   geometry.setDrawRange(source.drawRange.start,source.drawRange.count);
   geometry.boundingBox=source.boundingBox?.clone()??null;geometry.boundingSphere=source.boundingSphere?.clone()??null;
-  const attribute=new T.InstancedBufferAttribute(new Float32Array(object.instanceMatrix.count*2),2).setUsage(T.DynamicDrawUsage);
+  const width=cacheBranch?4:2;
+  const attribute=new T.InstancedBufferAttribute(new Float32Array(object.instanceMatrix.count*width),width).setUsage(T.DynamicDrawUsage);
   geometry.setAttribute('aInstanceWind',attribute);object.geometry=geometry;
-  entries.push({mesh:object,source,attribute,height:settings.height,branch:!!settings.branch,version:-1,time:NaN,wind:NaN});
+  let secondary:T.InstancedBufferAttribute|undefined,curves:CulmCurve[]|undefined;
+  if(cacheBranch){
+   secondary=new T.InstancedBufferAttribute(new Float32Array(object.instanceMatrix.count*3),3).setUsage(T.DynamicDrawUsage);
+   geometry.setAttribute('aBranchWindSecondary',secondary);
+   const shape=geometry.getAttribute('aBranchShape'),frame=geometry.getAttribute('aBranchFrame');
+   curves=Array.from({length:object.instanceMatrix.count},(_,i)=>{
+    const q=new T.Quaternion(shape.getX(i),shape.getY(i),shape.getZ(i),0);
+    q.w=Math.sqrt(Math.max(0,1-q.x*q.x-q.y*q.y-q.z*q.z));
+    return settings.curves![Math.round(shape.getW(i))].map(c=>new T.Vector3(...c).applyQuaternion(q).multiplyScalar(frame.getW(i)/14).toArray());
+   });
+  }
+  entries.push({mesh:object,source,attribute,secondary,curves,height:settings.height,branch:!!settings.branch,version:-1,time:NaN,wind:NaN});
   for(const material of [surface,object.customDepthMaterial,object.customDistanceMaterial]){
    if(!material||materials.has(material))continue;
-   materials.set(material,{compile:material.onBeforeCompile.bind(material),key:material.customProgramCacheKey.bind(material)});
+   // Restore the original methods on this same material; binding them changes
+   // Three's default cache key, which uses onBeforeCompile.toString().
+   // eslint-disable-next-line @typescript-eslint/unbound-method
+   materials.set(material,{compile:material.onBeforeCompile,key:material.customProgramCacheKey});
    const compile=material.onBeforeCompile.bind(material),key=material.customProgramCacheKey();
-   material.onBeforeCompile=(shader:T.WebGLProgramParametersWithUniforms,renderer:T.WebGLRenderer)=>{compile(shader,renderer);shader.vertexShader='#define USE_CACHED_INSTANCE_WIND\n'+shader.vertexShader;};
-   material.customProgramCacheKey=()=>key+'|cached-root-wind';
+   material.onBeforeCompile=(shader:T.WebGLProgramParametersWithUniforms,renderer:T.WebGLRenderer)=>{compile(shader,renderer);shader.vertexShader='#define USE_CACHED_INSTANCE_WIND\n'+(cacheBranch?'#define USE_CACHED_BRANCH_WIND\n':'')+shader.vertexShader;};
+   material.customProgramCacheKey=()=>key+(cacheBranch?'|cached-branch-wind':'|cached-root-wind');
   }
  });
  return {
   update(time:number,wind:number){
    for(const entry of entries){
-    const {mesh,attribute,height,branch}=entry;
+    const {mesh,attribute,secondary,curves,height,branch}=entry;
     if(!mesh.visible||mesh.count===0)continue;
     if(time===entry.time&&wind===entry.wind&&entry.version===mesh.instanceMatrix.version)continue;
     entry.version=mesh.instanceMatrix.version;entry.time=time;entry.wind=wind;
@@ -104,8 +120,14 @@ export function createInstanceWind(scene:T.Scene,maxAttributes=16){
      const x=branch?root.getX(i):matrices[offset+12],z=branch?root.getZ(i):matrices[offset+14];
      const fullHeight=branch?frame.getW(i):height*Math.hypot(matrices[offset+4],matrices[offset+5],matrices[offset+6]);
      forestWindTip(time,x,z,fullHeight,wind,force);attribute.setXY(i,force[0],force[1]);
+     if(secondary&&curves){
+      const bend=forestWindBend(time,x,z,root.getW(i),fullHeight,wind,[frame.getX(i),frame.getY(i),frame.getZ(i)],curves[i]);
+      attribute.setZ(i,bend.shortening);attribute.setW(i,bend.verticalSlope);
+      secondary.setXYZ(i,...forestBranchSecondary(time,x,z,wind));
+     }
     }
-    attribute.clearUpdateRanges();attribute.addUpdateRange(0,mesh.count*2);attribute.needsUpdate=true;
+    attribute.clearUpdateRanges();attribute.addUpdateRange(0,mesh.count*attribute.itemSize);attribute.needsUpdate=true;
+    if(secondary){secondary.clearUpdateRanges();secondary.addUpdateRange(0,mesh.count*3);secondary.needsUpdate=true;}
    }
   },
   dispose(){
@@ -146,7 +168,7 @@ export function forestWindBend(time:number,x:number,z:number,height:number,lengt
   const dots=curve.map(c=>c[0]*tip[0]+c[1]*tip[1]+c[2]*tip[2]),strain=curveStrain(u,squaredTip,dots,h);
   shortening=curvedShortening(u,squaredTip,dots,h);verticalSlope=-strain*.5-strain*strain*.125;
  }
- return {offset:tip.map((v,i)=>v*shape-axis[i]*shortening) as [number,number,number],derivative:tip.map((v,i)=>v*slope+axis[i]*verticalSlope) as [number,number,number]};
+ return {shortening,verticalSlope,offset:tip.map((v,i)=>v*shape-axis[i]*shortening) as [number,number,number],derivative:tip.map((v,i)=>v*slope+axis[i]*verticalSlope) as [number,number,number]};
 }
 
 // GPU formulation follows the CPU counterpart above. Shared by foliage,
@@ -155,7 +177,12 @@ export const FOREST_WIND_GLSL=`
 uniform float uWindTime;
 uniform float uWindStrength;
 #ifdef USE_CACHED_INSTANCE_WIND
+ #ifdef USE_CACHED_BRANCH_WIND
+ attribute vec4 aInstanceWind;
+ attribute vec3 aBranchWindSecondary;
+ #else
 attribute vec2 aInstanceWind;
+ #endif
 #endif
 float forestGustAge(vec3 root,float t){return t+3.4-root.x*.105-root.z*.042;}
 float forestGustAmplitude(float cycle){return .8+.17*sin(cycle*1.71+.8);}
@@ -190,7 +217,7 @@ float forestWindEnvelope(vec3 root){
 }
 vec2 forestWindTip(vec3 root,float fullHeight){
 #ifdef USE_CACHED_INSTANCE_WIND
- return aInstanceWind;
+ return aInstanceWind.xy;
 #else
  float phase=root.x*.17+root.z*.11;
  float delayed=uWindTime-(.45+fullHeight*.024+.18*sin(phase));

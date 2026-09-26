@@ -79,3 +79,29 @@ await test('runtime collection remains bounded over sustained stutters and dispo
   }
  }
 });
+
+await test('a fresh collection discards old history and cannot be contaminated by pending work from earlier runs', () => {
+ const recorder = createPhaseRecorder({ namespace: 'restart-test', enabled: true, readyPhase: 'ready' });
+ try {
+  recorder.beginPhase('ready')();
+  const oldRequest = recorder.beginPhase('slow-download');
+  recorder.stop();
+  const oldSnapshot = JSON.stringify(recorder.read());
+  recorder.restart();
+  assert.equal(recorder.enabled(), true);
+  assert.deepEqual(recorder.read()?.phases, []);
+  assert.equal(recorder.read()?.startupReadyAt, undefined);
+  oldRequest();
+  assert.deepEqual(recorder.read()?.phases, []);
+  const freshRequest = recorder.beginPhase('new-view');
+  freshRequest();
+  assert.deepEqual(recorder.read()?.phases.map(phase => phase.detail.phase), ['new-view']);
+  assert.notEqual(JSON.stringify(recorder.read()), oldSnapshot);
+  const nextOldRequest = recorder.beginPhase('pending-again');
+  recorder.stop();recorder.restart();nextOldRequest();
+  assert.deepEqual(recorder.read()?.phases, []);
+  assert.equal(performance.getEntriesByType('measure').filter(entry => entry.name.startsWith('restart-test:')).length, 0);
+  recorder.dispose();recorder.restart();
+  assert.equal(recorder.enabled(), false);
+ } finally { recorder.dispose(); }
+});

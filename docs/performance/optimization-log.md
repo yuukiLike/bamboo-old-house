@@ -2,7 +2,7 @@
 
 这是本项目后续性能优化的固定记录入口。每一阶段先写具体假设与验收方式，再补充实际改动、同条件数据、失败尝试和验证边界。详细过程与小型证据保存在 `optimizations/`，不只留在聊天记录中。
 
-本系列来源：[Tidewater 源码分析](../research/tidewater-performance-analysis.md)。系列分支统一使用 `perf/tidewater-scene-optimizations` 前缀；后续阶段在上一阶段提交上创建，使用阶段编号及主题后缀。
+本系列来源：[Tidewater 源码分析](../research/tidewater-performance-analysis.md)。系列分支统一使用 `perf/tidewater-scene-optimizations` 前缀；后续阶段在上一阶段提交上创建，使用阶段编号及主题后缀。第五阶段按用户直接合入并推送 `main` 的授权，在已合并的第四阶段之后继续；关联仍以阶段编号及父提交记录。
 
 | 阶段 | 分支 | 内容与结果 | 详细记录 |
 | --- | --- | --- | --- |
@@ -10,6 +10,7 @@
 | 02 | `perf/tidewater-scene-optimizations-02-rain-index` | 实现提交 `0be5bec`。相对父阶段，遮雨相关 CPU 中位数 −21.51%，候选引用 −30.94%，索引数组容量 84.01 → 71.11 MiB；雨水属性哈希一致。用户实看反馈“有显著提升”，原始截图与读数已归档。 | [第二阶段](./optimizations/002-rain-index.md) |
 | 03 | `perf/tidewater-scene-optimizations-03-global-rendering` | 跳过零贡献点光源计算、复用输入未变的方向光阴影；真实模型夹具覆盖 2,720 个组合。用户认可后，默认改为性能设置（稍柔和＋隔帧阴影），保留一键恢复完整效果。30 次提交中，动态阴影完整档为 30 次、性能档为 15 次；静止输入均为 1 次。这些是工作量计数，不是 FPS 提升。 | [第三阶段](./optimizations/003-global-rendering.md) |
 | 04 | `perf/tidewater-scene-optimizations-04-mobile-runtime` | 从合并后的 `main@8a9033d` 排查移动端约 30 秒后发热、掉帧。记录原已有限额，未发现无限增长证据；新增完全停止检测、降低面板刷新开销。移动端默认 DPR 提升至 1.5，保留 1.0625 与完整 2.0；增加明确的 30 / 60 / 跟随屏幕选项。真机热状态尚待复测。 | [第四阶段](./optimizations/004-mobile-runtime.md) |
+| 05 | `main`（承接已合入的 04） | 移动端仍约 10 秒后发热、11–13 Hz，停止检测无恢复。补齐采集清空重启；音频串行解码和静音停调度；释放植被常量雨水属性，缓存枝条共有风动；合并和跳过重复 resize。保留画质及默认配置，真机温控与长期帧率仍待复测。 | [第五阶段](./optimizations/005-mobile-load.md) |
 
 阶段 01 的基线是 `3f382ac0fb84e35ca52593e2630c660c078d723d`。测量未使用 computer-use，不代表浏览器 FPS 或 GPU 帧时；画质、模型、DPR 与阴影设置保持原配置。方向索引在阶段 01 占约 84.01 MiB 数组容量，阶段 02 收紧为约 71.11 MiB。
 

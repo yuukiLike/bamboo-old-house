@@ -152,7 +152,7 @@ export function PerformanceRuntimeView({ snapshot, health, startupLabel, startup
    <button type="button" data-runtime-action="pause" onClick={snapshot.status === 'paused' ? onResume : onPause} disabled={snapshot.status === 'stopped'}>{snapshot.status === 'paused' ? '继续实时采样' : '暂停实时采样'}</button>
    <button type="button" data-runtime-action="clear" title="清空实时记录，保留加载时间线" onClick={onClear} disabled={snapshot.status === 'stopped'}>清空窗口</button>
   </div>
-  {!collecting && <p className="perf-explanation">{snapshot.status === 'stopped' ? '读数与图表已冻结，刷新页面可重新检测。' : '读数与图表保留最后一次采样，恢复后继续记录；清空只影响实时窗口。'}</p>}
+  {!collecting && <p className="perf-explanation">{snapshot.status === 'stopped' ? '读数与图表已冻结；可从面板顶部清空并重新检测。' : '读数与图表保留最后一次采样，恢复后继续记录；清空只影响实时窗口。'}</p>}
   <p className="perf-runtime-context">{collecting ? '当前' : '最后采样时'}：{stateDescription(snapshot.state)}</p>
   <details className="perf-group" open>
    <summary><span>最近卡顿</span><span className="perf-count">{recent.length}</span></summary>

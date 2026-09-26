@@ -38,8 +38,10 @@ export interface PhaseRecorder {
  measurePhase<T>(name: string, run: () => T, detail?: PhaseDetail): T;
  /** The owned live store, or the final frozen store after stop(). */
  read(): Diagnostics | null;
- /** Terminal stop: preserve exportable history, discard unfinished spans. */
+ /** Preserve exportable history and discard unfinished spans. */
  stop(): void;
+ /** Discard history and start a fresh collection. Disposal remains terminal. */
+ restart(): void;
  dispose(): void;
 }
 
@@ -52,6 +54,7 @@ let nextOperationId = 0;
 export function createPhaseRecorder(options: PhaseRecorderOptions): PhaseRecorder {
  let disposed = false;
  let stopped = false;
+ let generation = 0;
  let diagnostics: Diagnostics | null = null;
 
  function enabled(): boolean {
@@ -62,7 +65,7 @@ export function createPhaseRecorder(options: PhaseRecorderOptions): PhaseRecorde
  function beginPhase(name: string, detail: PhaseDetail = {}): FinishPhase {
   if (!enabled()) return noop;
   try {
-   const startTime = performance.now(), id = ++nextOperationId;
+   const startTime = performance.now(), id = ++nextOperationId, startedGeneration = generation;
    const entryName = `${options.namespace}:${name}#${id}`;
    const data = diagnostics ??= { version: 1, enabled: true, phases: [], droppedPhases: 0 };
    const active = data.activePhases ??= [];
@@ -73,7 +76,7 @@ export function createPhaseRecorder(options: PhaseRecorderOptions): PhaseRecorde
    }
    let finished = false;
    return (status = 'success', extra = {}) => {
-    if (finished || disposed || stopped) return;
+    if (finished || disposed || stopped || startedGeneration !== generation) return;
     finished = true;
     // Monitoring must never turn a completed operation into a product failure.
     try {
@@ -119,12 +122,22 @@ export function createPhaseRecorder(options: PhaseRecorderOptions): PhaseRecorde
   stop() {
    if (disposed || stopped) return;
    stopped = true;
+   generation++;
    if (!diagnostics) return;
    diagnostics.enabled = false;
    if (diagnostics.activePhases) diagnostics.activePhases.length = 0;
    for (const phase of diagnostics.phases) {
     try { performance.clearMeasures(phase.entryName); } catch { /* Leave unrelated recorders alone. */ }
    }
+  },
+  restart() {
+   if (disposed) return;
+   generation++;
+   for (const phase of diagnostics?.phases ?? []) {
+    try { performance.clearMeasures(phase.entryName); } catch { /* Only clear owned entries. */ }
+   }
+   diagnostics = null;
+   stopped = false;
   },
   dispose() {
    if (disposed) return;

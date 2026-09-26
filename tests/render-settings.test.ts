@@ -4,7 +4,7 @@ import * as T from 'three';
 import { WebGLShadowMap } from 'three/src/renderers/webgl/WebGLShadowMap.js';
 import type { WebGLObjects } from 'three/src/renderers/webgl/WebGLObjects.js';
 import type { WebGLCapabilities } from 'three/src/renderers/webgl/WebGLCapabilities.js';
-const {DEFAULT_RENDER_SETTINGS,FULL_RENDER_SETTINGS,scenePixelRatio,createDirectionalShadowUpdates,createFramePacer}:typeof import('../src/components/scene/render-settings')=
+const {DEFAULT_RENDER_SETTINGS,FULL_RENDER_SETTINGS,scenePixelRatio,resizeSceneRenderer,createDirectionalShadowUpdates,createFramePacer}:typeof import('../src/components/scene/render-settings')=
  await import(new URL('../src/components/scene/render-settings.ts',import.meta.url).href);
 const {skipZeroPointLightContributions}:typeof import('../src/components/scene/point-light-shading')=
  await import(new URL('../src/components/scene/point-light-shading.ts',import.meta.url).href);
@@ -177,4 +177,18 @@ await test('zero-contribution point-light guard preserves original nonzero path,
  assert.equal(T.ShaderChunk.shadowmap_pars_fragment,shadowOriginal);
  scene.traverse(object=>{if(object instanceof T.Mesh)object.geometry.dispose();});
  for(const material of [standard,physical,raw,basic])material.dispose();
+});
+
+await test('repeated mobile resize events avoid buffer resets; real size and quality changes still apply',()=>{
+ let width=402,height=874,ratio=1.5,resets=0;
+ const renderer={getSize:(out:T.Vector2)=>out.set(width,height),getPixelRatio:()=>ratio,
+  setPixelRatio:(value:number)=>{ratio=value;resets++;},
+  setSize:(w:number,h:number)=>{width=w;height=h;resets++;},
+ } as unknown as T.WebGLRenderer;
+ for(let i=0;i<30;i++)assert.equal(resizeSceneRenderer(renderer,402,874,1.5),false);
+ assert.equal(resets,0);
+ assert.equal(resizeSceneRenderer(renderer,402,760,1.5),true);assert.equal(resets,1);
+ assert.equal(resizeSceneRenderer(renderer,402,760,2),true);assert.equal(resets,2);
+ assert.equal(resizeSceneRenderer(renderer,874,402,1.5),true);
+ assert.deepEqual([width,height,ratio],[874,402,1.5]);
 });

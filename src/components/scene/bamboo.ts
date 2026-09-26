@@ -153,12 +153,24 @@ export function addPorchBamboo(scene:T.Scene,prototype:T.Group,time:{value:numbe
  }
  void branchCulmState(out vec3 offset,out vec3 derivative){
   vec3 tip=forestTipAlong(aBranchRoot.xyz,aBranchFrame.w,aBranchFrame.xyz);
+  #ifdef USE_CACHED_BRANCH_WIND
+  float h=max(aBranchFrame.w,.25),u=clamp(aBranchRoot.w/h,0.,1.12);
+  offset=tip*(u*u*(3.-u)*.5)-aBranchFrame.xyz*aInstanceWind.z;
+  derivative=tip*((3.*u-1.5*u*u)/h)+aBranchFrame.xyz*aInstanceWind.w;
+  #else
   mat3 frame=mat3(branchCulmRotate(vec3(1.,0.,0.)),branchCulmRotate(vec3(0.,1.,0.)),branchCulmRotate(vec3(0.,0.,1.)));
   vec4 dots;float fifth;culmCurveDots(frame,tip,int(aBranchShape.w+.5),dots,fifth);
   offset=forestCurvedOffset(tip,aBranchRoot.w,aBranchFrame.w,aBranchFrame.xyz,dots,fifth);
   derivative=forestCurvedDerivative(tip,aBranchRoot.w,aBranchFrame.w,aBranchFrame.xyz,dots,fifth);
+  #endif
  }
- vec3 branchSecondary(){return forestBranchSecondary(aBranchRoot.xyz);}
+ vec3 branchSecondary(){
+  #ifdef USE_CACHED_BRANCH_WIND
+  return aBranchWindSecondary;
+  #else
+  return forestBranchSecondary(aBranchRoot.xyz);
+  #endif
+ }
  vec3 branchWindPoint(vec3 p){
   vec3 offset,derivative;branchCulmState(offset,derivative);
   vec3 v=windRotate(p-aBranchAnchor.xyz,aBranchFrame.xyz,derivative);
@@ -199,7 +211,7 @@ export function addPorchBamboo(scene:T.Scene,prototype:T.Group,time:{value:numbe
  for(const type of ['Branches','Leaves']) {
   const source=prototype.getObjectByName(type) as T.Mesh;
   if(!source?.geometry)throw new Error('PORCH_BAMBOO_ASSET_INVALID');
-  const material=(source.material as T.MeshStandardMaterial).clone();material.envMapIntensity=.55;material.userData.instanceWind={height:14,branch:true};
+  const material=(source.material as T.MeshStandardMaterial).clone();material.envMapIntensity=.55;material.userData.instanceWind={height:14,branch:true,curves};
   if(type==='Leaves'){material.side=T.DoubleSide;material.roughness=.73;}
   material.onBeforeCompile=shader=>{deform(shader,type==='Leaves');if(type==='Leaves')addLeafLight(shader,night);};
   material.customProgramCacheKey=()=>`porch-weather-${type}-v3`;

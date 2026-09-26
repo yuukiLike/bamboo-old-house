@@ -1,0 +1,86 @@
+{
+  "recordedAt": "2026-09-26T07:45:45.516149+00:00",
+  "branch": "main",
+  "baseCommit": "c24ca123b308a7e5f94db56a7af97f81638d3c3a",
+  "environment": {
+    "browser": "Chrome Canary 156.0.8074.0",
+    "host": "Apple M4 / ANGLE Metal",
+    "mode": "headed desktop, isolated temporary profile",
+    "viewport": {
+      "width": 402,
+      "height": 874,
+      "deviceScaleFactor": 3,
+      "isMobile": true,
+      "hasTouch": true
+    }
+  },
+  "build": {
+    "sha256": "4cea9827052120418bf53d4661e3588f6bb468e688c1cb5f69536007ad0f52fc",
+    "files": 41,
+    "bytes": 45204326
+  },
+  "validation": {
+    "check": "typecheck, lint, 46 tests and generated LOD check passed",
+    "build": "passed, existing chunk size advisory remains",
+    "mobileSmoke": "passed; final includes resize and 3 restart cycles; prior identical audio code includes additional 90 seconds playback",
+    "physicalIPhone": "not performed",
+    "allPlaces": "passed: all 8 free-view places, day/night, full effects and touch orbit; 16 combinations"
+  },
+  "sourceSha256": {
+    "scripts/perf/mobile-runtime-smoke.mjs": "29aad337702b43d7c66b3343ca51d3ae2b3c5cbe7b1d7c0e4d0e04a88edec4ac",
+    "src/components/scene/bamboo.ts": "ef96f19fa06f8a5037fd45453abdf1b4eda72ce48241b5316dfa6e604c1a4f96",
+    "src/components/scene/render-settings.ts": "c1c2b29c4a7a62faba1aa1770bc43b832746630740888e91adce597dd1a17df0",
+    "src/components/scene/scene.ts": "ed6303ca7afed1520c79c9a8b25979ad9ee58de1f6328581913a2890b752d10e",
+    "src/components/scene/soundscape.ts": "718f90046346223e3bda9526a8f82e55f994cf1f04bfce6024ff9052d0b00c57",
+    "src/components/scene/weather.ts": "23a0fbe3d4fba036e5283ac2f2e5cbb2bf1ec0b23eb03f296c1e907e3d213a9a",
+    "src/components/scene/wind.ts": "2c9949ed19f7cd3fae07092e7052c200bfd2d8fcfd0f03107fe14ec0f3a26c1a",
+    "src/lib/performance.ts": "a2e37e527a9b1f6d25f56af68a0d2a716e0489a3758d071d264a40fe3599a86d",
+    "src/performance/bamboo-adapter.ts": "6b80a6303460da78757e06d2f58c64b576553555e23ab091178843551f841916",
+    "tests/performance-collection.test.ts": "69c4f03806d997cb3bab316e022965e98e68676699ea3370318b8a1aced38195",
+    "tests/render-settings.test.ts": "8c83a1e30e1a790c9d563e8a388f2ac5e8ed199bf4bd742f5ff3a3939ca8a764",
+    "tools/scene-perf/core/timings.ts": "d023284acae488f0e3eb1e05b7121d82ee4b55482b0d35acfaf1e2a3c5665932",
+    "tools/scene-perf/react/performance-panel.tsx": "815b4b8b4259b0ccf14ab780349503fd524dfc2c9c22b33fee485ca96cf593eb",
+    "tools/scene-perf/react/performance-runtime-view.tsx": "9f2b4d49ec6c83bcc01a43a777712f21c0d53d6ac589a4c520befa6f978215ba",
+    "tools/scene-perf/react/types.ts": "a60fbcd3795b12abf0a2223462f736de14c33d40ea4329ab25eb9c2bdb38a5d1",
+    "tests/instance-wind.test.ts": "a425fa9a9e9b1bcfb98d67af055e731e40855d338d49dabc3ff3ee80be9ade56",
+    "tests/soundscape-lifecycle.test.ts": "1c7413f0f665c0894fdc86fcc9c5213f1be327a5eca9df178ec49a8a2e03d2fc"
+  },
+  "evidence": [
+    {
+      "path": "tidewater-05-audio-soak.json",
+      "scope": "Intermediate build before resize changes: lifecycle, repeated restart and 90-second extra audio soak; same final soundscape and wind implementations. No iPhone thermal/FPS claims.",
+      "sha256": "1e0a9241431a84d9888bca4154d1ff3a33abdc31502f021c97fcd6ae705d2160"
+    },
+    {
+      "path": "tidewater-05-acceptance.json",
+      "scope": "Final build: clarity, resize, stop/restart isolation, audio mute/resume. Extra audio soak explicitly skipped because audio code had not changed.",
+      "sha256": "d5edc58ab5d9fcd7e34144c0492357be49549fd3b2fb77be409a5dd952f8501a"
+    },
+    {
+      "path": "tidewater-05-audio-and-rain.json",
+      "scope": "Baseline decoder overlap/PCM sizes; parent and implementation architecture rain-attribute hashes. Dynamic ablation timings excluded.",
+      "sha256": "070fb09dc13548e93f0d98b45b8d4bebe74ab8f323ad4b85d7695b4e438c061f"
+    },
+    {
+      "path": "tidewater-05-user-mobile.png",
+      "scope": "User-provided iPhone screenshot reporting 11.9 Hz; no modifications.",
+      "sha256": "6d5fbf39522a13089dfe439d78b037c07d10ac250793eba5146a3c63e3285e60"
+    },
+    {
+      "path": "tidewater-05-restarted-mobile.png",
+      "scope": "Final headed Canary mobile viewport, restarted diagnostics and working room controls; not physical iPhone FPS.",
+      "sha256": "1e96db007c7a8870c004a59b4a47caa0db467a833c0047b8ac600fa6b92903ab"
+    },
+    {
+      "path": "tidewater-05-all-places.json",
+      "scope": "Final headed Canary full-effect day/night and touch checks across all free-view places; not iPhone hardware performance.",
+      "sha256": "35b1200db0a3fc1d97534281fdc4a371a4f94cb5d7e0d49418486e50dcb8ffaf"
+    }
+  ],
+  "limitations": [
+    "No iPhone 16 Pro thermal state, GPU timing, total process memory or sustained frame-rate validation.",
+    "PCM bytes are decoded recording capacity, not JS heap or total process memory. Serial decoding does not reduce steady PCM capacity.",
+    "Four desktop GPU timing probes had different simulation clocks and were not repeated crossover experiments; no FPS gain percentage claimed.",
+    "Numerical wind tests check CPU-equivalent parent motion within Float32 tolerance, not pixel-identical GPU output."
+  ]
+}

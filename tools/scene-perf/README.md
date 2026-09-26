@@ -75,7 +75,7 @@ export function App() {
 
 **这个开关只控制面板及其采集资源，不控制独立的业务 recorder。** 如果要从导航开始记录完整加载过程，仍推荐通过诊断 URL 重新加载；中途开启无法恢复此前没有记录的业务阶段或 RAF。
 
-面板另提供「停止检测」按钮，停止面板所有采集、定时刷新并收起，保留最终数据可导出。宿主通过 `stopCollection()` 一并停止独立 recorder、诊断计数等，例如调用 `timings.stop()`；停止后 `timings.read()` 返回冻结的数据，`enabled` 为 `false`，迟到的异步完成回调不会再写入。停止是当前会话内的终态，重新加载可开启。宿主仍在采集业务阶段但没有接入此回调时，面板会明确提示业务采集未关闭。
+面板另提供「停止检测」按钮，停止面板所有采集、定时刷新并收起，保留最终数据可导出。宿主通过 `stopCollection()` 一并停止独立 recorder、诊断计数等，例如调用 `timings.stop()`；停止后 `timings.read()` 返回冻结的数据，`enabled` 为 `false`，迟到的异步完成回调不会再写入。宿主接入 `restartCollection()` 后，停止按钮变为“清空并重启”：调用 `timings.restart()`，重置宿主诊断计数和全局桥接，再创建新的运行时采集器。旧完成回调按会话隔离，不会写回；只有 `dispose()` 是不可重开的终态。新一轮资源按开始时间过滤，导出的 `collectionStartedAt` 标注边界，不重新导出早期导航。纯浏览器适配器无需业务回调即可重启；有业务读取器却未接入重启回调时，重启按钮不可用，需刷新页面。宿主仍在采集业务阶段但没有接入此回调时，面板会明确提示业务采集未关闭。
 
 `PerformanceAdapter` 的变化点：
 
@@ -91,6 +91,7 @@ export function App() {
 | `describeState()` / `rendererDescription` | 状态与渲染器计数口径的展示 |
 | `onCollector(collector)` | 可选宿主绑定，返回自己的清理函数；不需要额外创建 collector |
 | `stopCollection()` | 停止宿主拥有的业务计时与诊断；必须为启用业务 recorder 的项目接入，已有记录可保留供导出 |
+| `restartCollection()` | 清空宿主业务 recorder、诊断计数和桥接并重开；配合 `timings.restart()`，不得重载产品场景 |
 
 `onCollector` 若在部分完成宿主绑定后抛错，宿主需自行回滚；工具会销毁 collector，但无法取得尚未返回的清理函数。
 

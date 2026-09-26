@@ -2,7 +2,7 @@
 import type { PerformanceAdapter } from '../../tools/scene-perf/react/types';
 import type { RendererSnapshot, RuntimeCollector, RuntimeState } from '../../tools/scene-perf/core/runtime';
 import type { ActivePhase, Phase } from '../../tools/scene-perf/core/timings';
-import { bambooTimings, stopPerformanceCollection } from '../lib/performance';
+import { bambooTimings, stopPerformanceCollection, restartPerformanceCollection } from '../lib/performance';
 
 declare global { interface Window { __BAMBOO_RUNTIME__?: RuntimeCollector; } }
 
@@ -96,6 +96,7 @@ export const bambooPerformanceAdapter: PerformanceAdapter = {
  readRenderer,
  readBusinessPhases: () => bambooTimings.read(),
  stopCollection: stopPerformanceCollection,
+ restartCollection: restartPerformanceCollection,
  phaseLabels,
  startupPhase: 'startup.experience',
  readyLabel: '首屏控件已就绪',

@@ -17,6 +17,17 @@ export function scenePixelRatio(deviceRatio:number,mobile:boolean,settings:Rende
  return Math.min(deviceRatio,1.6)*(settings.resolution==='balanced'?.85:1);
 }
 
+/** Mobile browser chrome can emit repeated resize events. In Three,
+ * setPixelRatio also resizes the drawing buffer, even for the same ratio. */
+export function resizeSceneRenderer(renderer:T.WebGLRenderer,width:number,height:number,ratio:number){
+ const size=renderer.getSize(new T.Vector2());
+ const sizeChanged=size.x!==width||size.y!==height,ratioChanged=renderer.getPixelRatio()!==ratio;
+ if(!sizeChanged&&!ratioChanged)return false;
+ if(ratioChanged)renderer.setPixelRatio(ratio);
+ if(sizeChanged)renderer.setSize(width,height);
+ return true;
+}
+
 /** Limit submissions, not animation time. Skipped callbacks do no scene/audio
  * work; the next render receives elapsed wall time. No catch-up draw bursts. */
 export function createFramePacer(){

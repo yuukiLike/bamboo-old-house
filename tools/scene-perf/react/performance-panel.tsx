@@ -135,6 +135,8 @@ function Panel({ adapter }: { adapter: PerformanceAdapter }) {
  const [downloadError, setDownloadError] = useState(false);
  const [stopped, setStopped] = useState(false);
  const [stopFailed, setStopFailed] = useState(false);
+ const [restartFailed, setRestartFailed] = useState(false);
+ const [collectionStartedAt, setCollectionStartedAt] = useState(0);
  const stopCollection = useRef<() => void>(() => {});
  const resourceObserverSupported = useRef(true);
  const resourceReadErrors = useRef(0);
@@ -165,7 +167,7 @@ function Panel({ adapter }: { adapter: PerformanceAdapter }) {
    if (detached) return;
    for (const entry of entries) {
     try {
-     if (entry.entryType !== 'resource') continue;
+     if (entry.entryType !== 'resource' || entry.startTime < collectionStartedAt) continue;
      const resource = entry as PerformanceResourceTiming;
      const id = `${resource.startTime}:${resource.name}:${resource.initiatorType}`;
      if (resourceIds.current.has(id)) continue;
@@ -236,7 +238,20 @@ function Panel({ adapter }: { adapter: PerformanceAdapter }) {
    catch { /* Host cleanup cannot prevent collector and browser cleanup. */ }
    finally { runtimeCollector.current?.dispose(); runtimeCollector.current = null; }
   };
- }, [adapter, stopped]);
+ }, [adapter, stopped, collectionStartedAt]);
+
+ const canRestart = Boolean(adapter.restartCollection || !adapter.readBusinessPhases);
+ const restartCollection = () => {
+  if (!stopped || !canRestart) return;
+  try { adapter.restartCollection?.(); }
+  catch { setRestartFailed(true); setCollapsed(false); return; }
+  resources.current = []; resourceIds.current.clear(); droppedResources.current = 0;
+  resourceReadErrors.current = 0; resourceObserverSupported.current = true;
+  setCollectionStartedAt(performance.now());
+  setSnapshot(readSnapshot(adapter)); setRuntime(null); setRuntimeFailed(false);
+  setStopFailed(false); setRestartFailed(false); setDownloadError(false); setQuery('');
+  setStopped(false);
+ };
 
  // Export remains available after collection stops, so its cleanup belongs
  // to the panel's lifetime rather than the shorter collection effect.
@@ -253,7 +268,7 @@ function Panel({ adapter }: { adapter: PerformanceAdapter }) {
  const completed = useMemo(() => timelineVisible ? snapshot.phases.map(phase => ({ id: phase.entryName, name: phase.detail.phase, label: adapter.phaseLabels?.[phase.detail.phase] ?? phase.detail.phase, startTime: phase.startTime, duration: phase.duration, status: phase.detail.status, detail: phaseDetail(adapter, phase) })).sort((a, b) => a.startTime - b.startTime) : [], [adapter, snapshot.phases, timelineVisible]);
  const network = useMemo(() => timelineVisible ? snapshot.resources.map(resource => ({ id: resource.id, name: resource.initiatorType || 'resource', label: filename(resource.name), startTime: resource.startTime, duration: resource.duration, status: 'recorded', detail: resource.name, cache: resource.cache })).sort((a, b) => a.startTime - b.startTime) : [], [snapshot.resources, timelineVisible]);
  const resourceCache = useMemo(() => summarizeResourceCache(snapshot.resources, { pageUrl: location.href }), [snapshot.resources]);
- const navigation = timelineVisible ? navigationRows(snapshot.now) : [];
+ const navigation = timelineVisible && collectionStartedAt === 0 ? navigationRows(snapshot.now) : [];
  const scale = Math.max(1, startupEnd, ...completed.map(row => row.startTime + row.duration), ...network.map(row => row.startTime + row.duration), ...navigation.map(row => row.startTime + row.duration));
  const active = timelineVisible ? snapshot.active.filter(phase => `${phase.detail.phase} ${adapter.phaseLabels?.[phase.detail.phase] ?? ''} ${phaseDetail(adapter, phase)}`.toLowerCase().includes(query.trim().toLowerCase())) : [];
 
@@ -261,7 +276,7 @@ function Panel({ adapter }: { adapter: PerformanceAdapter }) {
   try {
    const latest = stopped ? snapshot : readSnapshot(adapter, resources.current.slice(), droppedResources.current, resourceObserverSupported.current, resourceReadErrors.current);
    const retainedResources = latest.resources.map(resource => ({ ...resource.timing, cache: resource.cache }));
-   const content = JSON.stringify({ schemaVersion: 1, capturedAt: new Date().toISOString(), timeOrigin: performance.timeOrigin, url: location.href, startupReadyAt: latest.readyAt, now: latest.now, navigation: performance.getEntriesByType('navigation').map(entry => entry.toJSON()), resources: retainedResources, resourceCache: { ...summarizeResourceCache(retainedResources, { pageUrl: location.href }), scope: 'Retained Resource Timing entries only; initial navigation is separate.', droppedResources: latest.droppedResources, resourceObserverSupported: latest.resourceObserverSupported, resourceReadErrors: latest.resourceReadErrors }, businessPhases: { version: 1, enabled: latest.businessEnabled, phases: latest.phases, activePhases: latest.active, droppedPhases: latest.dropped, droppedActivePhases: latest.droppedActive }, runtime: runtimeCollector.current?.snapshot() ?? runtime, businessAdapterFailed: latest.businessFailed, droppedResources: droppedResources.current, limitations: ['CPU submission does not prove GPU completion or display presentation.', 'Concurrent and nested durations must not be added.', 'The UI cannot repaint during synchronous main-thread work.', 'Resource history starts from entries still retained by the browser when the panel loads.', 'Local resource reuse does not prove a Cache-Control freshness policy; Resource Timing revalidation is inference without wire-level 304 evidence.', 'Page Resource Timing cannot read arbitrary resource response headers; cache summaries cover retained resources only.', 'Runtime RAF rates are callback rates, not display FPS or GPU timings.', 'Runtime collection starts when this opt-in panel mounts; hidden and paused frame gaps are excluded.'] }, null, 2);
+   const content = JSON.stringify({ schemaVersion: 1, capturedAt: new Date().toISOString(), timeOrigin: performance.timeOrigin, collectionStartedAt, url: location.href, startupReadyAt: latest.readyAt, now: latest.now, navigation: collectionStartedAt === 0 ? performance.getEntriesByType('navigation').map(entry => entry.toJSON()) : [], resources: retainedResources, resourceCache: { ...summarizeResourceCache(retainedResources, { pageUrl: location.href }), scope: 'Retained Resource Timing entries only; initial navigation is separate.', droppedResources: latest.droppedResources, resourceObserverSupported: latest.resourceObserverSupported, resourceReadErrors: latest.resourceReadErrors }, businessPhases: { version: 1, enabled: latest.businessEnabled, phases: latest.phases, activePhases: latest.active, droppedPhases: latest.dropped, droppedActivePhases: latest.droppedActive }, runtime: runtimeCollector.current?.snapshot() ?? runtime, businessAdapterFailed: latest.businessFailed, droppedResources: droppedResources.current, limitations: ['CPU submission does not prove GPU completion or display presentation.', 'Concurrent and nested durations must not be added.', 'The UI cannot repaint during synchronous main-thread work.', 'Resource history starts from entries still retained by the browser when the panel loads.', 'Local resource reuse does not prove a Cache-Control freshness policy; Resource Timing revalidation is inference without wire-level 304 evidence.', 'Page Resource Timing cannot read arbitrary resource response headers; cache summaries cover retained resources only.', 'Runtime RAF rates are callback rates, not display FPS or GPU timings.', 'Runtime collection starts when this opt-in panel mounts; hidden and paused frame gaps are excluded.'] }, null, 2);
    clearTimeout(revokeTimer.current);
    if (downloadUrl.current) URL.revokeObjectURL(downloadUrl.current);
    const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
@@ -280,24 +295,26 @@ function Panel({ adapter }: { adapter: PerformanceAdapter }) {
   } catch { setRuntimeFailed(true); }
  };
  const readyLabel = adapter.readyLabel ?? '首屏已就绪';
- const startupLabel = snapshot.businessFailed ? '业务阶段读取异常' : snapshot.readyAt !== undefined ? readyLabel : failed ? '初始化已中断' : adapter.startupPhase ? '首屏加载中' : '首屏就绪未标记';
+ const sessionTime = collectionStartedAt ? Math.max(0, snapshot.now - collectionStartedAt) : startupEnd;
+ const startupLabel = collectionStartedAt ? '本轮检测' : snapshot.businessFailed ? '业务阶段读取异常' : snapshot.readyAt !== undefined ? readyLabel : failed ? '初始化已中断' : adapter.startupPhase ? '首屏加载中' : '首屏就绪未标记';
  const runtimeStatus = runtime?.status ?? 'stopped';
  const runtimeHealth = getRuntimeHealth(runtime, runtimeFailed, snapshot.businessFailed);
- const headerValue = stopped ? '已停止' : view === 'timeline' ? duration(startupEnd) : runtimeStatus === 'collecting' && !runtimeFailed && runtime?.window.rafHz !== null && runtime?.window.rafHz !== undefined ? `${runtime.window.rafHz.toFixed(1)} Hz · ${runtimeHealth.label}` : runtimeHealth.label;
+ const headerValue = stopped ? '已停止' : view === 'timeline' ? duration(sessionTime) : runtimeStatus === 'collecting' && !runtimeFailed && runtime?.window.rafHz !== null && runtime?.window.rafHz !== undefined ? `${runtime.window.rafHz.toFixed(1)} Hz · ${runtimeHealth.label}` : runtimeHealth.label;
  const headerStatusClass = view === 'timeline' ? (failed ? 'perf-status-error' : snapshot.readyAt !== undefined ? 'perf-status-ready' : '') : '';
 
  return <aside className={`perf-panel ${collapsed ? 'perf-panel-collapsed' : ''}`} aria-label="页面性能诊断" data-scene-perf data-collection={stopped ? 'stopped' : 'running'}>
   <header className="perf-panel-header">
    <button type="button" className="perf-panel-title" aria-expanded={!collapsed} aria-controls="performance-panel-body" onClick={() => setCollapsed(!collapsed)}><span className={`perf-status-dot ${headerStatusClass}`} data-health={view === 'runtime' ? runtimeHealth.level : undefined} /><span>{view === 'runtime' ? '实时性能' : '加载时间线'}</span><span className="perf-header-time" data-health={view === 'runtime' ? runtimeHealth.level : undefined} title={view === 'runtime' ? runtimeHealth.reason : undefined}>{headerValue}</span><span aria-hidden="true">{collapsed ? '＋' : '−'}</span></button>
-   <button type="button" className="perf-stop" aria-label="停止性能检测" disabled={stopped} onClick={() => stopCollection.current()}>{stopped ? '已停止' : '停止检测'}</button>
+   <button type="button" className="perf-stop" aria-label={stopped ? '清空并重新检测' : '停止性能检测'} disabled={stopped && !canRestart} onClick={stopped ? restartCollection : () => stopCollection.current()}>{stopped ? '清空并重启' : '停止检测'}</button>
   </header>
   {!collapsed && <div id="performance-panel-body" className="perf-panel-body">
    <fieldset className="perf-tabs" aria-label="性能诊断视图"><button type="button" data-perf-tab="runtime" aria-pressed={view === 'runtime'} onClick={() => setView('runtime')}>实时运行</button><button type="button" data-perf-tab="timeline" aria-pressed={view === 'timeline'} onClick={() => setView('timeline')}>加载时间线</button></fieldset>
-   {stopped && <output className="perf-explanation">{stopFailed ? '面板检测已停止，项目业务采集仍需关闭。' : '性能检测已停止：不再采集或自动刷新。'}保留最后记录供查看和导出，刷新页面可重新检测。</output>}
+   {stopped && <output className="perf-explanation">{stopFailed ? '面板检测已停止，项目业务采集仍需关闭。' : '性能检测已停止：不再采集或自动刷新。'}保留最后记录供查看和导出。{canRestart ? '点击“清空并重启”开始新一轮检测。' : '刷新页面可重新检测。'}</output>}
+   {restartFailed && <p className="perf-warning">重新检测未成功，请重试。</p>}
    {stopFailed && <p className="perf-warning">面板采集已停止，但项目业务采集停止失败。请去掉 perf 与 perfUI 参数后刷新页面。</p>}
-   {view === 'runtime' ? <><PerformanceRuntimeView snapshot={runtime} health={runtimeHealth} describeState={adapter.describeState} rendererDescription={adapter.rendererDescription} startupLabel={startupLabel} startupTime={duration(startupEnd)} failed={runtimeFailed} onPause={() => changeRuntime('pause')} onResume={() => changeRuntime('resume')} onClear={() => changeRuntime('clear')} /><PerformanceCacheView summary={resourceCache} dropped={snapshot.droppedResources} observerSupported={snapshot.resourceObserverSupported} readErrors={snapshot.resourceReadErrors} compact /></> : <>
-   <div className="perf-overview"><div><span>{snapshot.businessFailed ? '业务阶段读取异常' : snapshot.readyAt !== undefined ? readyLabel : failed ? '本次初始化已中断' : adapter.startupPhase ? '正在进入页面' : '导航后经过'}</span><strong>{duration(startupEnd)}</strong></div><p>从导航开始 · 就绪后冻结首屏时间</p>
-    <Progress.Root value={snapshot.readyAt !== undefined ? 1 : null} max={1} aria-label="首屏就绪状态" aria-valuetext={snapshot.readyAt !== undefined ? readyLabel : failed ? '初始化已中断' : '尚未收到首屏就绪标记'} className={`perf-progress ${failed ? 'perf-progress-stopped' : ''}`}><Progress.Track className="perf-progress-track"><Progress.Indicator className="perf-progress-indicator" /></Progress.Track></Progress.Root>
+   {view === 'runtime' ? <><PerformanceRuntimeView snapshot={runtime} health={runtimeHealth} describeState={adapter.describeState} rendererDescription={adapter.rendererDescription} startupLabel={startupLabel} startupTime={duration(sessionTime)} failed={runtimeFailed} onPause={() => changeRuntime('pause')} onResume={() => changeRuntime('resume')} onClear={() => changeRuntime('clear')} /><PerformanceCacheView summary={resourceCache} dropped={snapshot.droppedResources} observerSupported={snapshot.resourceObserverSupported} readErrors={snapshot.resourceReadErrors} compact /></> : <>
+   <div className="perf-overview"><div><span>{collectionStartedAt ? '本轮检测' : snapshot.businessFailed ? '业务阶段读取异常' : snapshot.readyAt !== undefined ? readyLabel : failed ? '本次初始化已中断' : adapter.startupPhase ? '正在进入页面' : '导航后经过'}</span><strong>{duration(sessionTime)}</strong></div><p>{collectionStartedAt ? '仅保留本轮新记录 · 下方时间轴仍以页面导航为原点' : '从导航开始 · 就绪后冻结首屏时间'}</p>
+    {!collectionStartedAt && <Progress.Root value={snapshot.readyAt !== undefined ? 1 : null} max={1} aria-label="首屏就绪状态" aria-valuetext={snapshot.readyAt !== undefined ? readyLabel : failed ? '初始化已中断' : '尚未收到首屏就绪标记'} className={`perf-progress ${failed ? 'perf-progress-stopped' : ''}`}><Progress.Track className="perf-progress-track"><Progress.Indicator className="perf-progress-indicator" /></Progress.Track></Progress.Root>}
    </div>
    <p className="perf-explanation">耗时条按真实开始时间排列，并行与父子阶段不能相加。未知完成比例时仅显示进行中。</p>
    <label className="perf-search-label"><span>查找阶段或资源</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="阶段名称、资源地址、.js…" /></label>

@@ -6,6 +6,8 @@ import { pathToFileURL } from 'node:url';
 const { chromium }=await import(process.env.PERF_PLAYWRIGHT ? pathToFileURL(process.env.PERF_PLAYWRIGHT).href : 'playwright');
 (async()=>{
  const out=process.env.PERF_OUT || 'outputs/performance/mobile-runtime-smoke';
+ const audioSoakSeconds=Number(process.env.PERF_AUDIO_SOAK_SECONDS??90);
+ assert.ok(Number.isFinite(audioSoakSeconds)&&audioSoakSeconds>=0);
  await fs.mkdir(out,{recursive:true});
  const url=new URL(process.env.PERF_URL || 'http://127.0.0.1:4175/');
  url.searchParams.set('perf','1');url.searchParams.set('perfUI','1');
@@ -16,11 +18,24 @@ const { chromium }=await import(process.env.PERF_PLAYWRIGHT ? pathToFileURL(proc
   page.on('console',message=>{if(message.type()==='error'&&/WebGL|shader|THREE|自然声|Ambience/.test(message.text()))errors.push(message.text());});
   await page.addInitScript(()=>{
    const owned=()=>/performance-panel/.test(new Error().stack||'');
-   const intervals=new Set(),rafs=new Set(),observers=new Set();
+   const intervals=new Set(),rafs=new Set(),observers=new Set(),audioIntervals=new Set();
+   const audio=window.__audioProbe={activeDecodes:0,peakDecodes:0,decodedBytes:0,decodes:0,sources:0,peakSources:0,contexts:[],intervals:audioIntervals};
+   // Each wrapper forwards with the original AudioContext as its receiver.
+   // eslint-disable-next-line @typescript-eslint/unbound-method
+   const decode=AudioContext.prototype.decodeAudioData,createSource=AudioContext.prototype.createBufferSource;
+   AudioContext.prototype.decodeAudioData=async function(...args){
+    if(!audio.contexts.includes(this))audio.contexts.push(this);
+    audio.activeDecodes++;audio.peakDecodes=Math.max(audio.peakDecodes,audio.activeDecodes);
+    try{const buffer=await decode.apply(this,args);audio.decodes++;audio.decodedBytes+=buffer.length*buffer.numberOfChannels*4;return buffer;}finally{audio.activeDecodes--;}
+   };
+   AudioContext.prototype.createBufferSource=function(...args){
+    const source=createSource.apply(this,args);audio.sources++;audio.peakSources=Math.max(audio.peakSources,audio.sources);
+    source.addEventListener('ended',()=>audio.sources--,{once:true});return source;
+   };
    window.__collectionProbe={intervals,rafs,observers,ticks:0,observerCalls:0,draws:0};
    const set=window.setInterval,clear=window.clearInterval,request=window.requestAnimationFrame,cancel=window.cancelAnimationFrame;
-   window.setInterval=function(callback,delay,...args){if(!owned())return set(callback,delay,...args);const id=set(()=>{window.__collectionProbe.ticks++;callback(...args);},delay);intervals.add(id);return id;};
-   window.clearInterval=function(id){intervals.delete(id);return clear(id);};
+   window.setInterval=function(callback,delay,...args){if(delay===1500){const id=set(callback,delay,...args);audioIntervals.add(id);return id;}if(!owned())return set(callback,delay,...args);const id=set(()=>{window.__collectionProbe.ticks++;callback(...args);},delay);intervals.add(id);return id;};
+   window.clearInterval=function(id){intervals.delete(id);audioIntervals.delete(id);return clear(id);};
    window.requestAnimationFrame=function(callback){if(!owned())return request(callback);const id=request(now=>{rafs.delete(id);callback(now);});rafs.add(id);return id;};
    window.cancelAnimationFrame=function(id){rafs.delete(id);return cancel(id);};
    const OriginalObserver=window.PerformanceObserver;
@@ -39,6 +54,20 @@ const { chromium }=await import(process.env.PERF_PLAYWRIGHT ? pathToFileURL(proc
   const defaults=await page.evaluate(()=>({settings:window.__BAMBOO__.renderSettings,ratio:window.__BAMBOO__.pixelRatio,size:window.__BAMBOO__.drawSize}));
   assert.equal(defaults.ratio,1.5);assert.deepEqual(defaults.settings,{resolution:'balanced',shadows:'alternate',frameRate:'60'});
   assert.deepEqual(defaults.size,[603,1311]);
+  const resizeWrites=await page.evaluate(async()=>{
+   const canvas=document.querySelector('.scene-mount canvas')??document.querySelector('canvas');
+   let writes=0;
+   const width=Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype,'width');
+   Object.defineProperty(canvas,'width',{configurable:true,get(){return width.get.call(this);},set(value){writes++;width.set.call(this,value);}});
+   for(let i=0;i<30;i++)window.dispatchEvent(new Event('resize'));
+   await new Promise(resolve=>setTimeout(resolve,100));
+   delete canvas.width;return writes;
+  });
+  assert.equal(resizeWrites,0,'same-size browser events must not reset the drawing buffer');
+  await page.setViewportSize({width:874,height:402});
+  await page.waitForFunction(()=>document.querySelector('canvas')?.width===1311&&document.querySelector('canvas')?.height===603);
+  await page.setViewportSize({width:402,height:874});
+  await page.waitForFunction(()=>document.querySelector('canvas')?.width===603&&document.querySelector('canvas')?.height===1311);
   await page.getByRole('button',{name:'画面设置',exact:true}).click();
   await page.getByRole('button',{name:'省电 30 帧',exact:true}).click();
   await page.getByRole('button',{name:'收起画面设置',exact:true}).click();
@@ -94,8 +123,42 @@ const { chromium }=await import(process.env.PERF_PLAYWRIGHT ? pathToFileURL(proc
   const downloadEvent=page.waitForEvent('download');await page.getByRole('button',{name:'导出 JSON',exact:true}).click();
   const download=await downloadEvent;const exported=JSON.parse(await fs.readFile(await download.path(),'utf8'));
   assert.equal(exported.runtime.status,'stopped');assert.equal(exported.businessPhases.enabled,false);assert.equal(exported.businessPhases.phases.length,stopped.phases);
+  const restarts=[];
+  for(let round=0;round<3;round++){
+   await page.getByRole('button',{name:'清空并重新检测',exact:true}).click();
+   await page.waitForFunction(()=>window.__BAMBOO_RUNTIME__&&window.__BAMBOO_PERF__.enabled&&window.__BAMBOO_PERF__.phases.length===0);
+   await page.waitForTimeout(300);
+   const active=await probe();assert.equal(active.timers,1);assert.equal(active.raf,1);assert.equal(active.observers,running.observers);assert.ok(active.frames<stopped.frames);
+   await page.evaluate(round=>fetch(`/audio/frog-call.mp3?restart-probe=${round}`).then(r=>r.arrayBuffer()),round);
+   await page.waitForTimeout(1200);
+   if(await page.locator('.perf-panel-title').getAttribute('aria-expanded')==='false')await page.locator('.perf-panel-title').click();
+   const freshDownload=page.waitForEvent('download');await page.getByRole('button',{name:'导出 JSON',exact:true}).click();
+   const fresh=JSON.parse(await fs.readFile(await (await freshDownload).path(),'utf8'));
+   assert.ok(fresh.collectionStartedAt>0);assert.deepEqual(fresh.navigation,[]);assert.deepEqual(fresh.businessPhases.phases,[]);
+   assert.ok(fresh.resources.length>=1);assert.ok(fresh.resources.every(r=>r.startTime>=fresh.collectionStartedAt));
+   assert.ok(fresh.runtime.history.every(r=>r.startTime>=fresh.collectionStartedAt));
+   assert.equal(fresh.runtime.status,'collecting');
+   await page.getByRole('button',{name:'停止性能检测',exact:true}).click();
+   const again=await probe();assert.equal(again.timers,0);assert.equal(again.raf,0);assert.equal(again.observers,0);
+   restarts.push({active,stopped:again,resources:fresh.resources.length,collectionStartedAt:fresh.collectionStartedAt});
+  }
+  const audioProbe=()=>page.evaluate(()=>({decodes:__audioProbe.decodes,peakDecodes:__audioProbe.peakDecodes,decodedBytes:__audioProbe.decodedBytes,sources:__audioProbe.sources,peakSources:__audioProbe.peakSources,states:__audioProbe.contexts.map(c=>c.state),timers:__audioProbe.intervals.size}));
+  const soundBefore=await audioProbe();assert.equal(soundBefore.peakDecodes,1);assert.equal(soundBefore.decodes,9);assert.equal(soundBefore.timers,1);
+  await page.locator('.sound-toggle').click();await page.waitForTimeout(1600);
+  const muted=await audioProbe();assert.deepEqual(muted.states,['suspended']);assert.equal(muted.timers,0);
+  await page.locator('.sound-toggle').click();await page.waitForFunction(()=>document.querySelector('.sound-toggle').getAttribute('aria-pressed')==='true');
+  await page.waitForTimeout(500);const resumed=await audioProbe();assert.equal(resumed.timers,1);assert.equal(resumed.decodes,soundBefore.decodes);assert.deepEqual(resumed.states,['running']);
+  await page.getByRole('button',{name:'清空并重新检测',exact:true}).click();
+  await page.waitForTimeout(1200);await page.screenshot({path:`${out}/restarted-mobile.png`});
+  await page.getByRole('button',{name:'停止性能检测',exact:true}).click();
+  // Longer than the longest recording: exercise overlap cleanup and replay.
+  for(let elapsed=0;elapsed<audioSoakSeconds;elapsed+=15){
+   await page.waitForTimeout(Math.min(15,audioSoakSeconds-elapsed)*1000);
+   const sample=await audioProbe();assert.equal(sample.decodes,soundBefore.decodes);assert.equal(sample.decodedBytes,soundBefore.decodedBytes);assert.ok(sample.sources<=18);
+  }
+  const soundAfter=await audioProbe();assert.ok(soundAfter.peakSources<=18);
   assert.equal(errors.length,0);
-  await fs.writeFile(`${out}/acceptance.json`,JSON.stringify({capturedAt:new Date().toISOString(),browser:await browser.version(),url:url.href,defaults,full,reduced,submissions,running,stopped,final,exportedStatus:exported.runtime.status,errors,afterStopViews:['porch','well-rain','free/hall'],note:'Headed desktop Canary, 402x874 @ DPR3 touch emulation; lifecycle/layout/quality checks, not iPhone thermal evidence.'},null,2));
-  console.log(JSON.stringify({defaults,full,submissions,running,stopped,final,errors},null,2));
+  await fs.writeFile(`${out}/acceptance.json`,JSON.stringify({capturedAt:new Date().toISOString(),browser:await browser.version(),url:url.href,defaults,full,reduced,submissions,resizeWrites,running,stopped,final,exportedStatus:exported.runtime.status,errors,afterStopViews:['porch','well-rain','free/hall'],restarts,audioSoakSeconds,audio:{soundBefore,muted,resumed,soundAfter},note:'Headed desktop Canary, 402x874 @ DPR3 touch emulation; lifecycle/layout/quality checks, not iPhone thermal evidence.'},null,2));
+  console.log(JSON.stringify({defaults,full,submissions,running,stopped,final,restarts,audio:{soundBefore,muted,resumed,soundAfter},errors},null,2));
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,0 +1,212 @@
+{
+  "capturedAt": "2026-09-26T07:40:36.709Z",
+  "browser": "156.0.8074.0",
+  "url": "http://127.0.0.1:4175/?perf=1&perfUI=1",
+  "defaults": {
+    "settings": {
+      "resolution": "balanced",
+      "shadows": "alternate",
+      "frameRate": "60"
+    },
+    "ratio": 1.5,
+    "size": [
+      603,
+      1311
+    ]
+  },
+  "full": {
+    "settings": {
+      "resolution": "full",
+      "shadows": "full",
+      "frameRate": "display"
+    },
+    "ratio": 2,
+    "size": [
+      804,
+      1748
+    ]
+  },
+  "reduced": 1.0625,
+  "submissions": 29.7314178638351,
+  "resizeWrites": 0,
+  "running": {
+    "timers": 1,
+    "raf": 1,
+    "observers": 2,
+    "ticks": 13,
+    "callbacks": 12,
+    "draws": 125552,
+    "frames": 534,
+    "phases": 59,
+    "active": 0,
+    "enabled": true,
+    "measures": 59
+  },
+  "stopped": {
+    "timers": 0,
+    "raf": 0,
+    "observers": 0,
+    "ticks": 13,
+    "callbacks": 12,
+    "draws": 125946,
+    "frames": 536,
+    "phases": 59,
+    "active": 0,
+    "enabled": false,
+    "measures": 0
+  },
+  "final": {
+    "timers": 0,
+    "raf": 0,
+    "observers": 0,
+    "ticks": 13,
+    "callbacks": 12,
+    "draws": 309060,
+    "frames": 536,
+    "phases": 59,
+    "active": 0,
+    "enabled": false,
+    "measures": 0
+  },
+  "exportedStatus": "stopped",
+  "errors": [],
+  "afterStopViews": [
+    "porch",
+    "well-rain",
+    "free/hall"
+  ],
+  "restarts": [
+    {
+      "active": {
+        "timers": 1,
+        "raf": 1,
+        "observers": 2,
+        "ticks": 13,
+        "callbacks": 13,
+        "draws": 312720,
+        "frames": 0,
+        "phases": 0,
+        "enabled": true,
+        "measures": 0
+      },
+      "stopped": {
+        "timers": 0,
+        "raf": 0,
+        "observers": 0,
+        "ticks": 14,
+        "callbacks": 14,
+        "draws": 322236,
+        "frames": 63,
+        "phases": 0,
+        "enabled": false,
+        "measures": 0
+      },
+      "resources": 1,
+      "collectionStartedAt": 39774.59999999963
+    },
+    {
+      "active": {
+        "timers": 1,
+        "raf": 1,
+        "observers": 2,
+        "ticks": 14,
+        "callbacks": 15,
+        "draws": 324676,
+        "frames": 0,
+        "phases": 0,
+        "enabled": true,
+        "measures": 0
+      },
+      "stopped": {
+        "timers": 0,
+        "raf": 0,
+        "observers": 0,
+        "ticks": 15,
+        "callbacks": 16,
+        "draws": 334372,
+        "frames": 67,
+        "phases": 0,
+        "enabled": false,
+        "measures": 0
+      },
+      "resources": 1,
+      "collectionStartedAt": 41405.799999999814
+    },
+    {
+      "active": {
+        "timers": 1,
+        "raf": 1,
+        "observers": 2,
+        "ticks": 15,
+        "callbacks": 17,
+        "draws": 336812,
+        "frames": 0,
+        "phases": 0,
+        "enabled": true,
+        "measures": 0
+      },
+      "stopped": {
+        "timers": 0,
+        "raf": 0,
+        "observers": 0,
+        "ticks": 16,
+        "callbacks": 18,
+        "draws": 346392,
+        "frames": 67,
+        "phases": 0,
+        "enabled": false,
+        "measures": 0
+      },
+      "resources": 1,
+      "collectionStartedAt": 43056.09999999963
+    }
+  ],
+  "audioSoakSeconds": 0,
+  "audio": {
+    "soundBefore": {
+      "decodes": 9,
+      "peakDecodes": 1,
+      "decodedBytes": 172466312,
+      "sources": 9,
+      "peakSources": 9,
+      "states": [
+        "running"
+      ],
+      "timers": 1
+    },
+    "muted": {
+      "decodes": 9,
+      "peakDecodes": 1,
+      "decodedBytes": 172466312,
+      "sources": 9,
+      "peakSources": 9,
+      "states": [
+        "suspended"
+      ],
+      "timers": 0
+    },
+    "resumed": {
+      "decodes": 9,
+      "peakDecodes": 1,
+      "decodedBytes": 172466312,
+      "sources": 9,
+      "peakSources": 9,
+      "states": [
+        "running"
+      ],
+      "timers": 1
+    },
+    "soundAfter": {
+      "decodes": 9,
+      "peakDecodes": 1,
+      "decodedBytes": 172466312,
+      "sources": 9,
+      "peakSources": 9,
+      "states": [
+        "running"
+      ],
+      "timers": 1
+    }
+  },
+  "note": "Headed desktop Canary, 402x874 @ DPR3 touch emulation; lifecycle/layout/quality checks, not iPhone thermal evidence."
+}

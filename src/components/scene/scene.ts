@@ -17,9 +17,9 @@ import { createVegetationVisibility } from './vegetation-visibility';
 import { ViewControls } from './view-controls';
 import { createInteriorContact } from './interior-contact';
 import { createViewTransition } from './view-transition';
-import { DEFAULT_RENDER_SETTINGS, scenePixelRatio, createDirectionalShadowUpdates, createFramePacer, type RenderSettings } from './render-settings';
+import { DEFAULT_RENDER_SETTINGS, scenePixelRatio, resizeSceneRenderer, createDirectionalShadowUpdates, createFramePacer, type RenderSettings } from './render-settings';
 import { skipZeroPointLightContributions } from './point-light-shading';
-import { beginPhase, measurePhase, phaseStatus, performanceCollectionStopped, type FinishPhase } from '@/lib/performance';
+import { beginPhase, measurePhase, phaseStatus, performanceCollectionStopped, performanceCollectionGeneration, type FinishPhase } from '@/lib/performance';
 import { shadeWindowRecesses } from './window-light';
 import { stabilizeHouseSurfaces } from './house-surfaces';
 import { BUILD_ID, PORCH_VIEW, MOON_VIEW, BREEZE_VIEW, WELL_RAIN_VIEW, ROOM_VIEWS, PLACE_VIEWS, groundHeight, pathClearance, treePositions, cameraProgress, followWalkProgress, positionPath, targetPath, type ViewMode, type TimeOfDay, type PlaceId } from './config';
@@ -220,7 +220,13 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const media=matchMedia('(prefers-reduced-motion:reduce)');let reduced=media.matches;
   const syncWalkScroll=()=>{if(!controls.active&&viewMode==='walk')progress=T.MathUtils.clamp(scrollY/Math.max(1,document.documentElement.scrollHeight-innerHeight),0,1);};
   const scroll=()=>{if(controls.active||viewMode!=='walk')return;lastScroll=performance.now();dragging=false;};
-  const resize=()=>{resyncWalkCamera=true;camera.aspect=innerWidth/innerHeight;renderer.setPixelRatio(scenePixelRatio(devicePixelRatio,mobile,renderSettings));renderer.setSize(innerWidth,innerHeight);camera.updateProjectionMatrix();interiorContact.resize();viewTransition.resize();shadowUpdates.invalidate();};
+  let resizePending=false;
+  const requestResize=()=>{resizePending=true;};
+  const resize=()=>{
+   resizePending=false;resyncWalkCamera=true;
+   if(!resizeSceneRenderer(renderer,innerWidth,innerHeight,scenePixelRatio(devicePixelRatio,mobile,renderSettings)))return;
+   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();interiorContact.resize();viewTransition.resize();shadowUpdates.invalidate();
+  };
   const change=()=>{reduced=media.matches;resyncWalkCamera=true;};
   const release=()=>{dragging=false;pointerX=0;pointerY=0;};
   const pointerdown=(e:PointerEvent)=>{if(controls.active||e.pointerType!=='mouse'||e.button!==0||reduced)return;dragging=true;previousX=e.clientX;previousY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId);};
@@ -231,9 +237,9 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const setPlace=(value:PlaceId)=>{if(!Object.hasOwn(PLACE_VIEWS,value)||place===value)return;shadowUpdates.invalidate();place=value;viewTransition.setContext({view:viewMode,place});interiorContact.resetForViewChange();reset();if(viewMode==='free')setPanorama(true);};
   let last=performance.now(),hidden=document.hidden;const visibility=()=>{hidden=document.hidden;shadowUpdates.invalidate();last=performance.now();resyncWalkCamera=true;release();controls.cancelInput();};
   const contextLost=(e:Event)=>{e.preventDefault();cleanup();hooks.onFailure();mount.classList.remove('ready');};
-  window.addEventListener('scroll',scroll,{passive:true});window.addEventListener('resize',resize);window.addEventListener('blur',release);document.addEventListener('visibilitychange',visibility);media.addEventListener('change',change);
+  window.addEventListener('scroll',scroll,{passive:true});window.addEventListener('resize',requestResize);window.addEventListener('blur',release);document.addEventListener('visibilitychange',visibility);media.addEventListener('change',change);
   renderer.domElement.addEventListener('pointerdown',pointerdown);renderer.domElement.addEventListener('pointermove',pointermove);renderer.domElement.addEventListener('pointerup',release);renderer.domElement.addEventListener('pointerleave',release);renderer.domElement.addEventListener('pointercancel',release);renderer.domElement.addEventListener('lostpointercapture',release);renderer.domElement.addEventListener('webglcontextlost',contextLost);
-  removeEvents=()=>{controls.dispose();window.removeEventListener('scroll',scroll);window.removeEventListener('resize',resize);window.removeEventListener('blur',release);document.removeEventListener('visibilitychange',visibility);media.removeEventListener('change',change);renderer.domElement.removeEventListener('pointerdown',pointerdown);renderer.domElement.removeEventListener('pointermove',pointermove);for(const name of ['pointerup','pointerleave','pointercancel','lostpointercapture'])renderer.domElement.removeEventListener(name,release);renderer.domElement.removeEventListener('webglcontextlost',contextLost);};
+  removeEvents=()=>{controls.dispose();window.removeEventListener('scroll',scroll);window.removeEventListener('resize',requestResize);window.removeEventListener('blur',release);document.removeEventListener('visibilitychange',visibility);media.removeEventListener('change',change);renderer.domElement.removeEventListener('pointerdown',pointerdown);renderer.domElement.removeEventListener('pointermove',pointermove);for(const name of ['pointerup','pointerleave','pointercancel','lostpointercapture'])renderer.domElement.removeEventListener(name,release);renderer.domElement.removeEventListener('webglcontextlost',contextLost);};
   const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');
   // Every main-scene draw, including indoor prewarming, shares the policy.
   const renderScene=(interior:boolean,delta=0)=>{
@@ -312,10 +318,16 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   measurePhase('startup.initial-frame-submit',()=>renderFrame(),{mobile,view:viewMode,place,boundary:'cpu-submitted'});
   diagnostics.startupMs=performance.now()-started;last=performance.now();
   let frame=0;
+  let collectionGeneration=performanceCollectionGeneration();
   const shouldRender=createFramePacer();
   const tick=(now:number)=>{
    if(disposed)return;raf=requestAnimationFrame(tick);if(hidden)return;
    if(!shouldRender(now,renderSettings.frameRate))return;
+   if(resizePending)resize();
+   if(collectionGeneration!==performanceCollectionGeneration()){
+    collectionGeneration=performanceCollectionGeneration();
+    diagnostics.frames.length=0;directionalShadowRequests=0;frame=0;
+   }
    const delta=Math.min((now-last)/1000,.075);const actual=now-last;last=now;
    if(!paused&&!reduced)time.value+=delta;
    if(!dragging){const decay=Math.exp(-delta*(now-lastScroll<180?9:2));dragX*=decay;dragY*=decay;}
