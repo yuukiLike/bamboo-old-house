@@ -1,0 +1,112 @@
+{
+  "kind": "CPU only; not browser startup or GPU/FPS",
+  "createdAt": "2026-09-26T03:12:34.873Z",
+  "ref": "3f382ac0fb84e35ca52593e2630c660c078d723d",
+  "head": "3f382ac0fb84e35ca52593e2630c660c078d723d",
+  "environment": {
+    "node": "v24.18.0",
+    "three": "185",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "cpu": "Apple M4"
+  },
+  "assetHash": "009a3e159d5a165f93bde5ee6f7c572cc8edd275045a31e4435fc7c55e6675bc",
+  "sourceHashes": {
+    "src/components/scene/weather.ts": "b3f9e07fc848392ae08facbfd274db5b365798eb12a02b6d77a563b7034db09e",
+    "src/components/scene/rain-shelter.ts": "1260162a463f81ccd414f99772687b0efb52a089f205541d38eafe26f2398fb9",
+    "src/components/scene/footpath.ts": "47cd1e7bfd788df1eb2c8b36535bed57911be8a21d153471ddd0f6ef07e4f140",
+    "src/components/scene/config.ts": "af8c90d399b11e877b6e979eee0b98391f31771587ef3c0b9aa9cc484d37ae7a",
+    "src/components/scene/wind.ts": "8964f805b9607fbf6ca822b1c3afcffc51933211926e66fd4cb66e30fa300f27",
+    "src/components/scene/vegetation-visibility.ts": "bf06c68c8fe0d133902b741b985773acdb6303c5f7b01f1eee0a8cc38e3e791a",
+    "src/components/scene/house-surfaces.ts": "54e5530f627d860b7dc437c9c007ad8df5359bb2ed1a7275cf8d25757d091943"
+  },
+  "iterations": 3,
+  "weather": [
+    {
+      "totalMs": 6909.610124999999,
+      "shelterMs": 660.64675,
+      "surfaceMs": 6248.963374999999,
+      "stats": {
+        "step": 0.2,
+        "triangles": 996363,
+        "solidCells": 89048,
+        "cells": 759460,
+        "triangleBuildMs": 457.09912499999996,
+        "voxelBuildMs": 203.04312500000003
+      },
+      "sourceTriangles": 996363,
+      "vertices": 1131197,
+      "exposedVertices": 114408,
+      "attributeHash": "e6ba8b5d34a2b118264bb8725b2ab7189100647e330bee155d7602623c7af212"
+    },
+    {
+      "totalMs": 5663.7279579999995,
+      "shelterMs": 731.2473749999999,
+      "surfaceMs": 4932.480583,
+      "stats": {
+        "step": 0.2,
+        "triangles": 996363,
+        "solidCells": 89048,
+        "cells": 759460,
+        "triangleBuildMs": 579.0938329999999,
+        "voxelBuildMs": 151.92683399999987
+      },
+      "sourceTriangles": 996363,
+      "vertices": 1131197,
+      "exposedVertices": 114408,
+      "attributeHash": "e6ba8b5d34a2b118264bb8725b2ab7189100647e330bee155d7602623c7af212"
+    },
+    {
+      "totalMs": 5763.084917,
+      "shelterMs": 733.9089999999997,
+      "surfaceMs": 5029.1759170000005,
+      "stats": {
+        "step": 0.2,
+        "triangles": 996363,
+        "solidCells": 89048,
+        "cells": 759460,
+        "triangleBuildMs": 579.1138329999994,
+        "voxelBuildMs": 154.6647499999999
+      },
+      "sourceTriangles": 996363,
+      "vertices": 1131197,
+      "exposedVertices": 114408,
+      "attributeHash": "e6ba8b5d34a2b118264bb8725b2ab7189100647e330bee155d7602623c7af212"
+    }
+  ],
+  "vegetation": [
+    {
+      "instances": 30000,
+      "frames": 180,
+      "buildMs": 3.095874999999978,
+      "totalMs": 59.10334200000034,
+      "meanMs": 0.32835190000000186,
+      "p95Ms": 0.5191249999998035,
+      "uploadBytes": 73113900,
+      "visibleInstances": 1657769,
+      "outputHash": "bf170f3080507c6ce72fc83a76a4247dfd684a49586c45708c49b17c355a62b1"
+    },
+    {
+      "instances": 30000,
+      "frames": 180,
+      "buildMs": 2.305458999999246,
+      "totalMs": 62.405332000009366,
+      "meanMs": 0.34669628888894094,
+      "p95Ms": 0.564249999999447,
+      "uploadBytes": 73113900,
+      "visibleInstances": 1657769,
+      "outputHash": "bf170f3080507c6ce72fc83a76a4247dfd684a49586c45708c49b17c355a62b1"
+    },
+    {
+      "instances": 30000,
+      "frames": 180,
+      "buildMs": 2.903582999999344,
+      "totalMs": 62.456000999973185,
+      "meanMs": 0.34697778333318435,
+      "p95Ms": 0.5709169999972801,
+      "uploadBytes": 73113900,
+      "visibleInstances": 1657769,
+      "outputHash": "bf170f3080507c6ce72fc83a76a4247dfd684a49586c45708c49b17c355a62b1"
+    }
+  ]
+}

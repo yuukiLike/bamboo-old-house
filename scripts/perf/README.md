@@ -2,6 +2,10 @@
 
 这是竹屋的项目入口：`run.mjs` 注入项目适配器、业务计时来源和操作流程；通用实现已移入可整体复制的 [`tools/scene-perf/`](../../tools/scene-perf/README.md)。`pnpm perf` / `pnpm perf:report` 命令保持不变。
 
+持续优化的分支关系、阶段结果和详细证据统一记录在 [3D 性能优化记录](../../docs/performance/optimization-log.md)。
+
+仅验证遮雨计算与植被裁剪时，可以运行 `node scripts/perf/optimization-bench.mjs --out outputs/performance/cpu-check.json`。它默认执行三轮真实建筑几何 / 确定性植被测试，支持 `--ref <commit>` 读取旧源码，输出耗时和一致性哈希，不需要浏览器。其结果不代表整页启动时间或 GPU 帧率；口径、基线及复现命令见 [Tidewater 策略迁移记录](../../docs/performance/optimizations/001-tidewater-transfer.md)。
+
 从导航之前开始录制，持续到三维画面出现，再通过真实控件记录首次进屋与再次进入。产出独立 HTML、Markdown、JSON，以及可导入 Chrome DevTools 的原始 trace。工具用于定位优化目标和复测，不修改画质，不自动判断某个函数就是瓶颈。
 
 [重复采集与对比流水线](../../docs/performance/pipeline.md) · [接入另一个 Three.js 项目](../../docs/performance/adapter.md) · [实时运行与加载时间线](../../docs/performance/diagnostic-view.md) · [页面整体流程图](../../docs/performance/page-lifecycle.md) · [选型与设计依据](../../docs/plans/preview-performance-baseline.md) · [首次实测记录](../../docs/performance/first-capture.md) · [3D 专项开源仓库](../../docs/performance/open-source-tools.md)
