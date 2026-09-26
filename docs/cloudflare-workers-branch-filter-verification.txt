@@ -14,32 +14,33 @@ Cloudflare Workers Builds 分支过滤验证
 
 每条 curl 都是单行，整行复制执行。替换以下占位符：
 API_TOKEN：你的个人 API token。
+ACCOUNT_ID：你的 Cloudflare 账户 ID，公开文档中保留占位符。
 WORKER_TAG：第一条查到的测试 Worker 的 tag。
 TRIGGER_UUID：第二条查到的非生产触发器 UUID。
 
 Token 权限：Workers Builds Configuration / Edit（API 文档称 Workers CI Write），以及 Workers Scripts / Read；账户范围包含下方账户。
-Token 只在执行时替换，保存这份文档时保留 API_TOKEN 占位符。
+Token 和账户 ID 只在执行时替换，保存这份文档时保留 API_TOKEN 与 ACCOUNT_ID 占位符。
 URL 使用原始地址，不要改成 [地址](地址) 的 Markdown 链接；不要把 -H 单独拆成一条命令。
 
 第一条：查询 Worker，找到测试 Worker 对应的 tag。
 
-curl -sS "https://api.cloudflare.com/client/v4/accounts/59189ac1604f92c5cd02c2c0398a8190/workers/scripts" -H "Authorization: Bearer API_TOKEN"
+curl -sS "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/workers/scripts" -H "Authorization: Bearer API_TOKEN"
 
 第二条：查询触发器。找到 branch_includes 为 ["*"]、branch_excludes 为 ["main"] 的非生产触发器，记录 trigger_uuid。如果只有 main 的生产触发器，先停在这里。
 
-curl -sS "https://api.cloudflare.com/client/v4/accounts/59189ac1604f92c5cd02c2c0398a8190/builds/workers/WORKER_TAG/triggers" -H "Authorization: Bearer API_TOKEN"
+curl -sS "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/builds/workers/WORKER_TAG/triggers" -H "Authorization: Bearer API_TOKEN"
 
 第三条：原样保存配置作为对照。返回 HTTP 200 且 success 为 true 后，再执行第四条；否则先处理本次请求失败，不能据此判断 preview/* 的支持情况。
 
-curl -sS -X PATCH "https://api.cloudflare.com/client/v4/accounts/59189ac1604f92c5cd02c2c0398a8190/builds/triggers/TRIGGER_UUID" -H "Authorization: Bearer API_TOKEN" -H "Content-Type: application/json" --data '{"branch_includes":["*"],"branch_excludes":["main"]}' -w '\nHTTP %{http_code}\n'
+curl -sS -X PATCH "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/builds/triggers/TRIGGER_UUID" -H "Authorization: Bearer API_TOKEN" -H "Content-Type: application/json" --data '{"branch_includes":["*"],"branch_excludes":["main"]}' -w '\nHTTP %{http_code}\n'
 
 第四条：使用相同 token、账户和 trigger UUID，仅将包含分支改为 preview/*。
 
-curl -sS -X PATCH "https://api.cloudflare.com/client/v4/accounts/59189ac1604f92c5cd02c2c0398a8190/builds/triggers/TRIGGER_UUID" -H "Authorization: Bearer API_TOKEN" -H "Content-Type: application/json" --data '{"branch_includes":["preview/*"],"branch_excludes":["main"]}' -w '\nHTTP %{http_code}\n'
+curl -sS -X PATCH "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/builds/triggers/TRIGGER_UUID" -H "Authorization: Bearer API_TOKEN" -H "Content-Type: application/json" --data '{"branch_includes":["preview/*"],"branch_excludes":["main"]}' -w '\nHTTP %{http_code}\n'
 
 第五条：重新查询，确认实际保存的配置。检查第二条选中的同一个 trigger_uuid。
 
-curl -sS "https://api.cloudflare.com/client/v4/accounts/59189ac1604f92c5cd02c2c0398a8190/builds/workers/WORKER_TAG/triggers" -H "Authorization: Bearer API_TOKEN"
+curl -sS "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/builds/workers/WORKER_TAG/triggers" -H "Authorization: Bearer API_TOKEN"
 
 2026-09-20 第四条的错误响应：
 {"success":false,"messages":[],"errors":[{"code":12002,"message":"Invalid request body"}],"result":null}

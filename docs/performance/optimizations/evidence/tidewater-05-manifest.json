@@ -62,11 +62,6 @@
       "sha256": "070fb09dc13548e93f0d98b45b8d4bebe74ab8f323ad4b85d7695b4e438c061f"
     },
     {
-      "path": "tidewater-05-user-mobile.png",
-      "scope": "User-provided iPhone screenshot reporting 11.9 Hz; no modifications.",
-      "sha256": "6d5fbf39522a13089dfe439d78b037c07d10ac250793eba5146a3c63e3285e60"
-    },
-    {
       "path": "tidewater-05-restarted-mobile.png",
       "scope": "Final headed Canary mobile viewport, restarted diagnostics and working room controls; not physical iPhone FPS.",
       "sha256": "1e96db007c7a8870c004a59b4a47caa0db467a833c0047b8ac600fa6b92903ab"
