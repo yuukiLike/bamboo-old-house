@@ -7,7 +7,7 @@
 | 阶段 | 分支 | 内容与结果 | 详细记录 |
 | --- | --- | --- | --- |
 | 01 | `perf/tidewater-scene-optimizations` | 已实现并验证：固定雨向索引、植被空间裁剪与差量上传。纯 CPU 三轮中位数：建筑遮雨与湿润属性合计 −33.72%，植被夹具裁剪 −36.82%；输出哈希一致。 | [第一阶段](./optimizations/001-tidewater-transfer.md) |
-| 02 | `perf/tidewater-scene-optimizations-02-rain-index` | 已实现并验证：保守排除三角形外的单元。相对父阶段，遮雨相关 CPU 中位数 −21.51%，候选引用 −30.94%，索引数组容量 84.01 → 71.11 MiB；雨水属性哈希一致。 | [第二阶段](./optimizations/002-rain-index.md) |
+| 02 | `perf/tidewater-scene-optimizations-02-rain-index` | 实现提交 `0be5bec`。相对父阶段，遮雨相关 CPU 中位数 −21.51%，候选引用 −30.94%，索引数组容量 84.01 → 71.11 MiB；雨水属性哈希一致。用户实看反馈“有显著提升”，原始截图与读数已归档。 | [第二阶段](./optimizations/002-rain-index.md) |
 
 阶段 01 的基线是 `3f382ac0fb84e35ca52593e2630c660c078d723d`。测量未使用 computer-use，不代表浏览器 FPS 或 GPU 帧时；画质、模型、DPR 与阴影设置保持原配置。方向索引在阶段 01 占约 84.01 MiB 数组容量，阶段 02 收紧为约 71.11 MiB。
 
