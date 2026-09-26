@@ -4,6 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { beginPhase, measurePhase, phaseStatus, type FinishPhase } from '../../lib/performance';
 type ContactQuality='motion'|'detail';
 
 /** Keep camera-aligned contact shade cheap while moving, then refine it once.
@@ -121,7 +122,11 @@ class CachedContactPass extends ShaderPass {
 export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,camera:T.PerspectiveCamera,house:T.Group,mobile:boolean) {
  let pipeline:ReturnType<typeof build>|undefined;
  let preparing:Promise<void>|undefined,preparationPending=false,disposed=false;
+ let firstRender=true;
  function build() {
+  return measurePhase('interior.pipeline-build',buildPipeline,{mobile,deferred:mobile});
+ }
+ function buildPipeline() {
   const occluders=new T.Scene();house.updateWorldMatrix(true,true);
   const copy=house.clone(true);copy.matrixAutoUpdate=false;copy.matrix.copy(house.matrixWorld);
   copy.traverse(object=>{
@@ -167,25 +172,31 @@ export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,cam
   // Temporarily expose the normal-pass material, restoring it before yielding.
   const materials=new Map<T.Mesh,T.Material|T.Material[]>();
   const previousTarget=renderer.getRenderTarget();
+  const finishTargets=beginPhase('interior.render-targets-prepare',{mobile});
+  let finishCompile:FinishPhase|undefined;
   let compilation:Promise<unknown>;
   try {
    try {
     occluders.traverse(object=>{if(object instanceof T.Mesh){materials.set(object,object.material);object.material=contact.normalMaterial;}});
     for(const target of [composer.readBuffer,composer.writeBuffer,contact.normalRenderTarget,contact.gtaoRenderTarget,contact.pdRenderTarget,motionContact.normalRenderTarget,motionContact.gtaoRenderTarget,motionContact.pdRenderTarget])renderer.initRenderTarget(target);
     renderer.setRenderTarget(composer.readBuffer);
+    finishTargets();
     // The beauty pass writes linear HDR into this target, so it needs a
     // different material variant from the main canvas's direct ACES render.
+    finishCompile=beginPhase('interior.shader-compile',{mobile,variants:'beauty,occluders,postprocessing'});
     compilation=Promise.all([renderer.compileAsync(scene,camera),renderer.compileAsync(occluders,camera),renderer.compileAsync(shaders,fullscreenCamera)]);
    } finally {
     materials.forEach((material,mesh)=>{mesh.material=material;});renderer.setRenderTarget(previousTarget);
    }
    await compilation;
+   finishCompile?.(disposed?'cancelled':'success');
    if(!disposed) {
     const target=renderer.getRenderTarget();
-    try {cachedContact.warm(renderer,composer.writeBuffer,composer.readBuffer);}
+    try {measurePhase('interior.contact-warmup-submit',()=>cachedContact.warm(renderer,composer.writeBuffer,composer.readBuffer),{mobile});}
     finally {renderer.setRenderTarget(target);}
    }
-  } finally {geometry.dispose();shaders.clear();}
+  } catch(error) {const status=disposed?'cancelled':phaseStatus(error);finishTargets(status);finishCompile?.(status);throw error;}
+  finally {geometry.dispose();shaders.clear();}
  }
  return {
   prepare() {
@@ -193,7 +204,14 @@ export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,cam
    if(!preparationPending){preparationPending=true;preparing=prepare().finally(()=>{preparationPending=false;if(disposed)release();});}
    return preparing;
   },
-  render(delta=0) { if(disposed)return;pipeline??=build();pipeline.composer.render(delta); },
+  render(delta=0) {
+   if(disposed)return;pipeline??=build();
+   if(firstRender) {
+    const current=pipeline;
+    measurePhase('interior.first-frame-submit',()=>current.composer.render(delta),{mobile,deferred:mobile,boundary:'cpu-submitted'});
+    firstRender=false;
+   } else pipeline.composer.render(delta);
+  },
   resetForViewChange() { if(!disposed)pipeline?.cachedContact.resetForViewChange(); },
   resize() { if(!pipeline)return;const size=renderer.getSize(new T.Vector2());pipeline.composer.setPixelRatio(renderer.getPixelRatio());pipeline.composer.setSize(size.x,size.y); },
   dispose() {

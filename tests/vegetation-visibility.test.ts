@@ -142,3 +142,43 @@ await test('small stone and meadow shadow batches remain whole to avoid extra dr
   assert.equal(mesh.castShadow, true);
  }
 });
+
+await test('spatial cells preserve exact sphere visibility across camera changes and parent transforms',()=>{
+ const scene=new T.Scene(),group=new T.Group();group.position.set(-3,2,7);group.rotation.y=.3;group.scale.setScalar(1.4);scene.add(group);
+ const mesh=new T.InstancedMesh(new T.BoxGeometry(.2,.5,.2),new T.MeshBasicMaterial(),900);
+ mesh.name='Fallen_bamboo_leaves';group.add(mesh);
+ const matrices:T.Matrix4[]=[],spheres:T.Sphere[]=[];
+ const color=new T.Color();
+ for(let i=0;i<900;i++){
+  const matrix=new T.Matrix4().makeTranslation((i%30-15)*4,0,(Math.floor(i/30)-15)*4);matrices.push(matrix);
+  mesh.setMatrixAt(i,matrix);mesh.setColorAt(i,color.setRGB(i/900,0,1-i/900));
+ }
+ scene.updateMatrixWorld(true);mesh.geometry.computeBoundingSphere();
+ for(const matrix of matrices){const sphere=mesh.geometry.boundingSphere!.clone().applyMatrix4(matrix.clone().premultiply(mesh.matrixWorld));sphere.radius+=.05;spheres.push(sphere);}
+ const visibility=createVegetationVisibility(scene),projection=new T.Matrix4(),frustum=new T.Frustum();
+ for(let step=0;step<24;step++){
+  const camera=viewAt(Math.sin(step)*30,2);camera.position.z=Math.cos(step)*30;
+  camera.lookAt(0,2,0);camera.fov=35+step*2;camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
+  frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+  const expected=spheres.flatMap((sphere,index)=>frustum.intersectsSphere(sphere)?[index]:[]);
+  visibility.update(camera);assert.equal(mesh.count,expected.length);
+  expected.forEach((index,slot)=>{const actual=new T.Matrix4();mesh.getMatrixAt(slot,actual);assert.deepEqual(actual.elements,matrices[index].elements);assert.ok(Math.abs(mesh.instanceColor!.getX(slot)-index/900)<1e-6);});
+ }
+});
+
+await test('a removed suffix needs no upload; later updates retain all pending dirty slots',()=>{
+ const scene=new T.Scene(),mesh=new T.InstancedMesh(new T.BoxGeometry(.1,.1,.1),new T.MeshBasicMaterial(),3);
+ mesh.name='Fallen_bamboo_leaves';scene.add(mesh);
+ [0,2,20].forEach((x,i)=>{mesh.setMatrixAt(i,new T.Matrix4().makeTranslation(x,0,0));mesh.setColorAt(i,new T.Color(i/3,0,0));});
+ const visibility=createVegetationVisibility(scene),wide=viewAt(0);wide.fov=150;wide.updateProjectionMatrix();
+ visibility.update(wide);assert.equal(mesh.count,3);
+ mesh.instanceMatrix.clearUpdateRanges();mesh.instanceColor!.clearUpdateRanges();
+ const version=mesh.instanceMatrix.version;
+ visibility.update(viewAt(0));assert.equal(mesh.count,2);assert.equal(mesh.instanceMatrix.version,version);assert.deepEqual(mesh.instanceMatrix.updateRanges,[]);
+ visibility.update(wide);assert.equal(mesh.count,3);assert.deepEqual(mesh.instanceMatrix.updateRanges,[{start:32,count:16}]);
+ // No render/upload occurs between these two updates. Slot 2 must remain
+ // pending even though the second update changes only the first slot.
+ visibility.update(viewAt(20));assert.equal(mesh.count,1);
+ assert.deepEqual(mesh.instanceMatrix.updateRanges,[{start:32,count:16},{start:0,count:16}]);
+ assert.deepEqual(mesh.instanceColor!.updateRanges,[{start:6,count:3},{start:0,count:3}]);
+});

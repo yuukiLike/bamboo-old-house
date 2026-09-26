@@ -1,5 +1,6 @@
 import type { TimeOfDay, ViewMode } from './config';
 import type { WeatherSettings } from './weather-state';
+import { beginPhase, measurePhase, performanceEnabled, phaseStatus, type FinishPhase } from '../../lib/performance';
 
 export interface Soundscape {
   /** Call directly inside the sound button's gesture; rejects if sound cannot start. */
@@ -71,6 +72,8 @@ export function createSoundscape(): Soundscape {
   let enabled = false;
   let disposed = false;
   let enableVersion = 0;
+  let pendingEnableTiming: FinishPhase | undefined;
+  let pendingWeatherTiming: FinishPhase | undefined;
   let timeOfDay: TimeOfDay = 'dusk';
   let view: ViewMode = 'walk';
   let sheltered = false;
@@ -290,21 +293,37 @@ export function createSoundscape(): Soundscape {
     const audioContext = context!;
     const controller = new AbortController();
     loadAborts.set(group, controller);
+    const finishGroup = beginPhase('audio.group-ready', { group });
     const recordings = RECORDINGS.filter(recording => recording.group === group);
     // A stalled connection is a retryable error, never an endless loading control.
-    const timeout = setTimeout(() => controller.abort(), 45000);
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 45000);
     const request = Promise.all(recordings.map(async recording => {
-      const response = await fetch(`/audio/${recording.file}.mp3`, { signal: controller.signal });
-      if (!response.ok) throw new Error(`自然声加载失败（${recording.file} / ${response.status}）`);
-      const buffer = await audioContext.decodeAudioData(await response.arrayBuffer());
-      if (buffer.duration < (group === 'frog' ? .3 : CROSSFADE_SECONDS * 3)) {
-        throw new Error(`自然声片段不完整（${recording.file}）`);
+      const file = `/audio/${recording.file}.mp3`;
+      let finish = beginPhase('audio.download', { group, file });
+      try {
+        const response = await fetch(file, { signal: controller.signal });
+        if (!response.ok) throw new Error(`自然声加载失败（${recording.file} / ${response.status}）`);
+        const data = await response.arrayBuffer();
+        finish(disposed ? 'cancelled' : 'success', { bytes: data.byteLength });
+        finish = beginPhase('audio.decode', { group, file });
+        const buffer = await audioContext.decodeAudioData(data);
+        if (buffer.duration < (group === 'frog' ? .3 : CROSSFADE_SECONDS * 3)) {
+          throw new Error(`自然声片段不完整（${recording.file}）`);
+        }
+        finish(disposed ? 'cancelled' : 'success', { durationSeconds: buffer.duration, channels: buffer.numberOfChannels, sampleRate: buffer.sampleRate });
+        return { recording, buffer };
+      } catch (error) {
+        finish(disposed ? 'cancelled' : timedOut ? 'error' : phaseStatus(error), { timedOut });
+        throw error;
       }
-      return { recording, buffer };
     })).then(buffers => {
       // Only a recording already available when rain ends may supply its tail.
       // An obsolete in-flight rain load must not create a new drip source.
-      if (disposed || group === 'rain' && rain === 0) return;
+      if (disposed || group === 'rain' && rain === 0) {
+        finishGroup(disposed ? 'cancelled' : 'skipped', { reason: disposed ? 'disposed' : 'weather-cleared' });
+        return;
+      }
       for (const { buffer, recording } of buffers) {
         const gain = audioContext.createGain();
         const highpass = audioContext.createBiquadFilter();
@@ -332,7 +351,9 @@ export function createSoundscape(): Soundscape {
           nextStart: audioContext.currentTime + (group === 'frog' ? 9 + Math.random() * 6 : .04), sources: new Map() });
       }
       updateMix();
+      finishGroup('success', { recordings: buffers.length, boundary: 'audio-nodes-connected' });
     }).catch(error => {
+      finishGroup(disposed ? 'cancelled' : 'error', { timedOut });
       controller.abort();
       if (disposed) return;
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -375,6 +396,20 @@ export function createSoundscape(): Soundscape {
     }, 1100);
   }
 
+  function resumeContext(reason: 'enable' | 'visibility') {
+    const audioContext = context!;
+    const finish = beginPhase('audio.resume', { reason });
+    try {
+      // Keep the actual resume call synchronous in the original user gesture.
+      const resumed = audioContext.resume();
+      if (performanceEnabled()) void resumed.then(
+        () => finish(disposed ? 'cancelled' : 'success', { contextState: audioContext.state, boundary: 'resume-promise-settled' }),
+        error => finish(disposed ? 'cancelled' : phaseStatus(error)),
+      );
+      return resumed;
+    } catch (error) { finish(phaseStatus(error)); throw error; }
+  }
+
   function visibilityChanged() {
     if (!context || disposed) return;
     delayFrogs();
@@ -385,7 +420,7 @@ export function createSoundscape(): Soundscape {
     }
     clearSuspendTimer();
     if (enabled) {
-      void context.resume().then(() => { updateMix(); schedule(); }).catch(error => {
+      void resumeContext('visibility').then(() => { updateMix(); schedule(); }).catch(error => {
         console.warn('浏览器尚未恢复自然声，请重新开启声音', error);
       });
     }
@@ -393,25 +428,33 @@ export function createSoundscape(): Soundscape {
 
   return {
     async setEnabled(value) {
+      pendingEnableTiming?.('superseded');
+      const finish = beginPhase(value ? 'audio.enable' : 'audio.disable', { view, timeOfDay, rain });
+      pendingEnableTiming = finish;
       if (disposed) {
+        finish('cancelled', { reason: 'disposed' });
         if (value) throw new Error('自然声已关闭，请重新进入场景');
         return;
       }
       const version = ++enableVersion;
-      enabled = value;
-      clearSuspendTimer();
-      delayFrogs();
-      if (!value) {
-        updateMix();
-        suspendAfterFade();
-        return;
-      }
+      try {
+        enabled = value;
+        clearSuspendTimer();
+        delayFrogs();
+        if (!value) {
+          pendingWeatherTiming?.('cancelled', { reason: 'sound-disabled' });
+          updateMix();
+          suspendAfterFade();
+          finish('success', { boundary: 'mute-fade-scheduled' });
+          return;
+        }
+      } catch (error) { finish(phaseStatus(error)); throw error; }
       try {
         if (!context) {
           const AudioContextClass = window.AudioContext
             ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
           if (!AudioContextClass) throw new Error('当前浏览器暂不支持自然声播放');
-          context = new AudioContextClass({ latencyHint: 'playback' });
+          context = measurePhase('audio.context-create', () => new AudioContextClass({ latencyHint: 'playback' }));
           master = context.createGain();
           master.gain.value = 0;
           roomFilter = context.createBiquadFilter();
@@ -425,18 +468,22 @@ export function createSoundscape(): Soundscape {
         }
         // Resume synchronously in the gesture, before waiting for network/decode.
         await Promise.all([
-          context.resume(),
+          resumeContext('enable'),
           loadRecordings('base'),
           // A clear view or storm can supersede pending rain / frog recordings.
           loadWeatherRecordings(),
         ]);
-        if (disposed || !enabled || version !== enableVersion) return;
+        if (disposed || !enabled || version !== enableVersion) { finish(disposed ? 'cancelled' : 'superseded'); return; }
         if (!document.hidden && context.state !== 'running') throw new Error('请再次轻点声音按钮，允许浏览器播放');
         updateMix();
         schedule();
         if (document.hidden) suspendAfterFade();
+        // Loading, decode, resume and scheduling completed. This does not
+        // measure acoustic output; recordings still use the existing fades.
+        finish('success', { contextState: context.state, hidden: document.hidden, boundary: 'audio-api-ready' });
       } catch (error) {
-        if (disposed || !enabled || version !== enableVersion) return;
+        if (disposed || !enabled || version !== enableVersion) { finish(disposed ? 'cancelled' : 'superseded'); return; }
+        finish(phaseStatus(error));
         enabled = false;
         updateMix();
         suspendAfterFade();
@@ -451,24 +498,34 @@ export function createSoundscape(): Soundscape {
       updateMix();
     },
     async setWeather(value) {
-      if (disposed) return;
-      const hadFrogs = frogsActive();
-      if (Number.isFinite(value.wind)) wind = Math.min(1, Math.max(0, value.wind));
-      if (Number.isFinite(value.rain)) rain = Math.min(1, Math.max(0, value.rain));
-      if (Number.isFinite(value.autumn ?? 0)) autumn = Math.min(1, Math.max(0, value.autumn ?? 0));
-      if (hadFrogs !== frogsActive()) delayFrogs();
-      updateMix();
-      if (!enabled || !context || rain === 0) return;
+      pendingWeatherTiming?.('superseded');
+      const finish = beginPhase('audio.weather-ready', { view, timeOfDay, rain: value.rain, wind: value.wind, autumn: value.autumn ?? 0 });
+      pendingWeatherTiming = finish;
+      if (disposed) { finish('cancelled'); return; }
+      try {
+        const hadFrogs = frogsActive();
+        if (Number.isFinite(value.wind)) wind = Math.min(1, Math.max(0, value.wind));
+        if (Number.isFinite(value.rain)) rain = Math.min(1, Math.max(0, value.rain));
+        if (Number.isFinite(value.autumn ?? 0)) autumn = Math.min(1, Math.max(0, value.autumn ?? 0));
+        if (hadFrogs !== frogsActive()) delayFrogs();
+        updateMix();
+      } catch (error) { finish(phaseStatus(error)); throw error; }
+      if (!enabled || !context || rain === 0) {
+        finish(!enabled || !context ? 'skipped' : 'success', { reason: !enabled || !context ? 'sound-disabled' : 'dry-mix', boundary: 'mix-updated' });
+        return;
+      }
       try {
         await loadWeatherRecordings();
       } catch (error) {
         // Muting, leaving rain, or disposal supersedes this pending request.
-        if (disposed || !enabled || rain === 0) return;
+        if (disposed || !enabled || rain === 0) { finish(disposed ? 'cancelled' : 'superseded'); return; }
+        finish(phaseStatus(error));
         throw error;
       }
-      if (disposed || !enabled) return;
-      updateMix();
-      schedule();
+      if (disposed || !enabled) { finish(disposed ? 'cancelled' : 'superseded'); return; }
+      try { updateMix(); schedule(); }
+      catch (error) { finish(phaseStatus(error)); throw error; }
+      finish('success', { contextState: context?.state, boundary: 'weather-audio-scheduled' });
     },
     setGust(strength) {
       if (disposed || !Number.isFinite(strength)) return;
@@ -501,6 +558,8 @@ export function createSoundscape(): Soundscape {
     dispose() {
       if (disposed) return;
       disposed = true;
+      pendingEnableTiming?.('cancelled', { reason: 'disposed' });
+      pendingWeatherTiming?.('cancelled', { reason: 'disposed' });
       enabled = false;
       for (const controller of loadAborts.values()) controller.abort();
       clearSuspendTimer();

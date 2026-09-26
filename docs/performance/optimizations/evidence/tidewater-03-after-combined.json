@@ -1,0 +1,816 @@
+{
+  "kind": "CPU shadow submission simulation; not GPU time, rendered pixels or FPS",
+  "createdAt": "2026-09-26T04:29:53.479Z",
+  "ref": "working-tree",
+  "head": "b0cb10b5411359b6a93717e383a690e520bc74dd",
+  "three": "185",
+  "node": "v24.18.0",
+  "fixtureHash": "f698bae0e67cead3a87a49adfa7fb890f1bf679bad1fed9d4f5684d1285add7c",
+  "profile": "combined",
+  "settings": {
+    "resolution": "reduced",
+    "shadows": "alternate"
+  },
+  "framesPerCase": 30,
+  "coverage": {
+    "views": [
+      "walk-0",
+      "walk-1",
+      "walk-2",
+      "walk-3",
+      "walk-4",
+      "porch",
+      "moon",
+      "breeze",
+      "well-rain",
+      "free/courtyard",
+      "free/yard-edge",
+      "free/upstairs",
+      "free/store",
+      "free/room-one",
+      "free/room-two",
+      "free/hall",
+      "free/kitchen"
+    ],
+    "times": [
+      "dawn",
+      "day",
+      "noon",
+      "dusk",
+      "night"
+    ],
+    "weather": [
+      "breeze",
+      "autumn",
+      "drizzle",
+      "storm"
+    ],
+    "orientations": [
+      "authored",
+      "rotated-180"
+    ],
+    "motion": [
+      "moving",
+      "paused"
+    ],
+    "device": [
+      "desktop",
+      "mobile"
+    ]
+  },
+  "limits": [
+    "No GPU, shader compilation, texture sampling or image comparison.",
+    "Shadow workload only; rain and falling leaves do not cast shadows and are omitted.",
+    "Indoor composer pixels and contact-pass timings are not measured.",
+    "Point-light BRDF savings require GPU measurement; this fixture counts directional shadows only."
+  ],
+  "geometryHashes": {
+    "desktop": {
+      "casters": 215,
+      "hash": "4c781fc0cab9031ea3e3b2cd4298dacde4986634abcae5dffa8f577d3939743c"
+    },
+    "mobile": {
+      "casters": 212,
+      "hash": "43cfa719468d3901909218681bab71141999f29df78fb1d85ad9abaaadb54f2c"
+    }
+  },
+  "resolutions": [
+    {
+      "device": "desktop",
+      "width": 1920,
+      "height": 1080,
+      "pixelRatio": 1.36,
+      "drawSize": [
+        2611,
+        1468
+      ],
+      "pixels": 3832948
+    },
+    {
+      "device": "mobile",
+      "width": 390,
+      "height": 844,
+      "pixelRatio": 1.0625,
+      "drawSize": [
+        414,
+        896
+      ],
+      "pixels": 370944
+    }
+  ],
+  "rows": [
+    {
+      "device": "desktop",
+      "view": "walk-0",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "walk-0",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "walk-1",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "walk-1",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "walk-2",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "walk-2",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "walk-3",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "walk-3",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "walk-4",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "walk-4",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "porch",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "porch",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "moon",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "moon",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "breeze",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "breeze",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "well-rain",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "well-rain",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "free/courtyard",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "free/courtyard",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "free/yard-edge",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "free/yard-edge",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "free/upstairs",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "free/upstairs",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "free/store",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "free/store",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "free/room-one",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "free/room-one",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "free/room-two",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "free/room-two",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "free/hall",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "free/hall",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "desktop",
+      "view": "free/kitchen",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 129000,
+      "shadowTriangles": 2717431800
+    },
+    {
+      "device": "desktop",
+      "view": "free/kitchen",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8600,
+      "shadowTriangles": 181162120
+    },
+    {
+      "device": "mobile",
+      "view": "walk-0",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "walk-0",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "walk-1",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "walk-1",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "walk-2",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "walk-2",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "walk-3",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "walk-3",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "walk-4",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "walk-4",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "porch",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "porch",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "moon",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "moon",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "breeze",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "breeze",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "well-rain",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "well-rain",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "free/courtyard",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "free/courtyard",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "free/yard-edge",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "free/yard-edge",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "free/upstairs",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "free/upstairs",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "free/store",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "free/store",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "free/room-one",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "free/room-one",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "free/room-two",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "free/room-two",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "free/hall",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "free/hall",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    },
+    {
+      "device": "mobile",
+      "view": "free/kitchen",
+      "paused": false,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 600,
+      "shadowDraws": 127200,
+      "shadowTriangles": 2234920200
+    },
+    {
+      "device": "mobile",
+      "view": "free/kitchen",
+      "paused": true,
+      "cases": 40,
+      "frames": 1200,
+      "shadowRefreshes": 40,
+      "shadowDraws": 8480,
+      "shadowTriangles": 148994680
+    }
+  ],
+  "assetHashes": {
+    "architecture": "009a3e159d5a165f93bde5ee6f7c572cc8edd275045a31e4435fc7c55e6675bc",
+    "bamboo": "d5e4b0914eff9ada6729b93eeabd04e87999b9b91544e57c6647217b3779e12f",
+    "understory": "5cffbd5f309611af1d29e5a097a05dd67f54a246c1038b64fd4b2bbb3d5eeb01",
+    "background-foliage": "82b388885d6d2622c140f187671504a0df7458713270cbc85b4733f32ba32f7c",
+    "porch-bamboo": "361683332df354dbed3315135cdc85bee2acb827c0a2beb3827fdfdfd3639fd7",
+    "dry-fuel": "46585811ccb68e6a18649be0adf5040523402d8c113660b798ffe0868be3f2de"
+  },
+  "sourceHashes": {
+    "src/components/scene/config.ts": "77ee45213a8a56a0110a36bd1b8e9ed1f4a92993ec334d61de251bb77cffedd8",
+    "src/components/scene/weather-state.ts": "2ffc151afba0b7708310b2d03f0a1b6490589c516f49fa88bb91796c8db4084b",
+    "src/components/scene/environment.ts": "78bedc35bc24c83276daa8f889a3ac9c7118973dcf6e31112bdeb71bab114f55",
+    "src/components/scene/footpath.ts": "fc055434c9b1fdaf701ef7942c517f011a38e5641448d06bd783624bb5631643",
+    "src/components/scene/water.ts": "72397fd0e2285b1c0fa0f271f2b89a80a5dcfcf1fd8294bc1b8fe4ed7ee5c683",
+    "src/components/scene/terrain-art.ts": "f047871988aa1f4237aefcf62fc88bdbc9ed1be357bfd50f6db21fb7cf5ebc87",
+    "src/components/scene/day-cycle.ts": "f696b345774259b3d6dc21d1457ccdf45f8d569ab8a9aa04a4e6e0eeba2a0050",
+    "src/components/scene/house-surfaces.ts": "8e4323a3f81700b4b5a6b7a8312c21245fd904c6c094d1e899c962b8b56632d5",
+    "src/components/scene/bamboo.ts": "418016ffa136e1e9cc27ba0ca2da07c7797778ff126d134a900b4f1f55182b9c",
+    "src/components/scene/generated/bamboo-lod.json": "57c6e8c7205c8e697fd6d702dcb7dcb266b8ce45241fd8954b6e601b8528e478",
+    "src/components/scene/leaf-motion.ts": "8256bfe69fa7f828d2521768fe67c85639ad1004353d22169325c169a7a10dfd",
+    "src/components/scene/wind.ts": "e3abfc8b0e0343aed93383c460a56c8984912914d102850ec037d20ee18424a1",
+    "src/components/scene/culm-curve.ts": "d6af8a5af0dc8b89aee32009edce3508ab5255725bcab1282aa29fd4ef2fba92",
+    "src/components/scene/understory.ts": "5d9097228fe7f5890c4b8818797c4803af2fbe516b0fa87585369659fbd0c924",
+    "src/components/scene/dry-fuel.ts": "477cd434a1c5fffca5921ecfccc56f627181628efadb9a8e05d7eb02de34e8c7",
+    "src/components/scene/forest-floor.ts": "d0e9d3fa39463ffd4980e0b617936bebeec692b886fd6f543b0ccae23c896e39",
+    "src/components/scene/forest-remains.ts": "fc168f55c3f4e8905be3e616408ad4d18f66f6490d93417784de756d13e3233b",
+    "src/components/scene/woodland-finish.ts": "544345b4d9a11c33ad68b7da8a4ca6f771f5062492d987524f2524b19a6ef1e5",
+    "src/components/scene/pine-bank.ts": "a6bca05da77f6c8a79309cb87a611347c14f6363bc42870905eef6caab966aec",
+    "src/components/scene/vegetation-visibility.ts": "021396ce8111334ab054097d1cee93d93704687d3f2bd987c3a340a40f9297bf",
+    "src/components/scene/scene.ts": "ebd48d213853f68d30e10c576005fd4dda3b909b0820e4a54411a1e61a5f6edc",
+    "src/components/scene/render-settings.ts": "69b31c984bac756c8edf742f60d5dd7b962473650d82ce65ae5442a1c5077d40",
+    "src/components/scene/point-light-shading.ts": "d2a0a94ba2d2c75e07bab93513cb7336289c4b397563257d13eff3d2843b3713"
+  }
+}

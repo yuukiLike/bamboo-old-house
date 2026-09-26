@@ -193,15 +193,16 @@ h1,h2 { font-family:'Songti SC','STSong','Noto Serif CJK SC',serif; font-size:44
 }
 @media(max-width:360px) { .view-switch button { padding:0 8px; } .porch-copy { bottom:213px; } }
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*:before,*:after { animation:none !important; transition:none !important; } }
-/* Wind, rain and listening share a quiet, mutually exclusive settings surface. */
+/* Weather, sound and rendering use mutually exclusive settings panels. */
 .header-aside { gap:10px; }
 .day-switch button { min-width:64px; padding:0 10px; }
-.sound-controls,.weather-controls { position:relative; display:flex; align-items:center; gap:3px; }
+.sound-controls,.weather-controls,.render-controls { position:relative; display:flex; align-items:center; gap:3px; }
 .sound-toggle[aria-pressed='true'] { border-color:#d4dfb389 !important; color:#e9edcf !important; }
-.weather-toggle[aria-expanded='true'] { border-color:#d4dfb389 !important; background:#d7e3be1c !important; }
+.weather-toggle[aria-expanded='true'],.render-toggle[aria-expanded='true'] { border-color:#d4dfb389 !important; background:#d7e3be1c !important; }
+.render-toggle { width:44px; min-width:44px; padding:0 !important; }
 .sound-settings-toggle { width:44px; min-width:44px; min-height:44px; padding:0; color:#e3e8d3; border-radius:50%; }
 .settings-panel { position:absolute; top:59px; left:auto; right:0; margin:0; color:inherit; width:304px; min-width:0; max-width:calc(100vw - 28px); padding:12px 18px 14px; max-height:calc(100svh - 220px); overflow:auto; overscroll-behavior:contain; border:1px solid #ece3c639; border-radius:12px; background:#17231ef5; backdrop-filter:blur(18px); box-shadow:0 12px 42px #0005; }
-.weather-panel { width:360px; }
+.weather-panel,.render-panel { width:360px; }
 .settings-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .settings-heading h2 { font-family:inherit; font-size:15px; letter-spacing:.08em; line-height:1.6; }
 .settings-close { width:44px; min-width:44px; min-height:44px; padding:0; border-radius:50%; color:#dfe5ce; }
@@ -211,9 +212,12 @@ h1,h2 { font-family:'Songti SC','STSong','Noto Serif CJK SC',serif; font-size:44
 .settings-panel input[type='range'] { display:block; width:100%; min-height:44px; margin:0 0 9px; accent-color:#d8ddb7; cursor:pointer; touch-action:pan-y; }
 .settings-panel input:focus-visible { outline:2px solid #e5f5be; outline-offset:3px; border-radius:5px; }
 .settings-panel a { display:inline-flex; align-items:center; min-height:44px; font-size:12px; color:#c0cdb4; text-decoration:underline; text-underline-offset:3px; }
-.weather-presets { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); min-inline-size:0; width:100%; max-width:100%; gap:8px; padding:0 0 17px; margin:0; border:0; }
-.weather-presets button { width:100%; min-width:0; min-height:46px; padding:0 9px; border:1px solid #d3dbc235; border-radius:7px; color:#dbe2ce; font-size:13px; font-weight:400; gap:8px; }
-.weather-presets button[aria-pressed='true'] { background:#e3e7d1; border-color:#e3e7d1; color:#2b3b2b; }
+.weather-presets,.render-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); min-inline-size:0; width:100%; max-width:100%; gap:8px; padding:0 0 17px; margin:0; border:0; }
+.weather-presets button,.render-options button { width:100%; min-width:0; min-height:46px; padding:0 9px; border:1px solid #d3dbc235; border-radius:7px; color:#dbe2ce; font-size:13px; font-weight:400; gap:8px; }
+.weather-presets button[aria-pressed='true'],.render-options button[aria-pressed='true'] { background:#e3e7d1; border-color:#e3e7d1; color:#2b3b2b; }
+.render-options { padding-bottom:8px; }
+.render-options legend { font-size:12px; line-height:1.9; padding:0 0 7px; color:#e6e9d7; }
+.render-reset { width:100%; min-height:44px; font-size:12px; color:#e3e9ce; border:1px solid #d3dbc235; }
 .weather-listening-note { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; min-height:44px; margin-top:2px; border-top:1px solid #d3dbc220; color:#bfcab4; font-size:11px; line-height:1.8; }
 .weather-listening-note button,.weather-message button { min-height:44px; padding:0 8px; font-size:12px; color:#e3e9ce; font-weight:400; }
 .sound-message { position:fixed; top:106px; right:48px; z-index:10; padding:10px 14px; font-size:13px; background:#17231eef; border-radius:6px; }

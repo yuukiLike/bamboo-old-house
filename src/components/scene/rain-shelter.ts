@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { createRainOcclusion } from './rain-occlusion';
 
 // The three sectors span gusts around the prevailing wind. The same sectors
 // drive incoming rain and the retained water on open architectural edges.
@@ -17,7 +18,7 @@ export function createRainShelter(house:T.Group,roofAt:(x:number,z:number)=>numb
     meshes.push(o);
   });
   const bounds=new T.Box3();for(const mesh of meshes)bounds.expandByObject(mesh);
-  const started=performance.now(),exact=createTriangleShelter(meshes),triangleBuildMs=performance.now()-started;
+  const started=performance.now(),exact=createRainOcclusion(meshes,rainDirections.map(direction=>new T.Vector3(-direction.cos*.67,1,-direction.sin*.67))),triangleBuildMs=performance.now()-started;
   const voxelStarted=performance.now();
   const step=.20,origin=bounds.min.clone().addScalar(-step*2);
   const nx=Math.ceil((bounds.max.x-origin.x)/step)+3,ny=Math.ceil((bounds.max.y-origin.y)/step)+3,nz=Math.ceil((bounds.max.z-origin.z)/step)+3;
@@ -76,84 +77,13 @@ export function createRainShelter(house:T.Group,roofAt:(x:number,z:number)=>numb
           if(roofAt(qx,qz)<qy+.12){open=distance*.67;break;}
           if(qy>bounds.max.y+.3)break;
         }
-        if(open>=0&&open<3.2&&!exact.blocked(px,py,pz,dx,dy,dz))reach[sector]=Math.exp(-open/1.15);
+        if(open>=0&&open<3.2&&!exact.blocked(px,py,pz,sector))reach[sector]=Math.exp(-open/1.15);
       }
       cache.set(key,reach);
     }
     return reach.map((value,i)=>T.MathUtils.clamp(value*Math.max(.12,ny-nx*rainDirections[i].cos*.67-nz*rainDirections[i].sin*.67),0,1)) as [number,number,number];
   };
-  return{solid,clip,exposure,stats:{step,triangles,solidCells,cells:cells.length,triangleBuildMs,voxelBuildMs},dispose(){cache.clear();cells.fill(0);exact.dispose();}};
-}
-
-/** A compact static triangle hierarchy is used only while authoring vertex
- * wetness (and explicit diagnostics). It is never traversed per animation frame.
- * Raster shells remain the more conservative, cheaper particle collider. */
-function createTriangleShelter(meshes:T.Mesh[]){
-  let count=0;for(const mesh of meshes)count+=(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3;
-  let vertices=new Float32Array(count*9),centers=new Float32Array(count*3),ids=new Uint32Array(count);
-  const point=new T.Vector3();let cursor=0;
-  for(const mesh of meshes){
-    const p=mesh.geometry.attributes.position,index=mesh.geometry.index;
-    for(let i=0;i<(index?.count??p.count);i+=3){
-      ids[cursor]=cursor;
-      for(let j=0;j<3;j++){
-        point.fromBufferAttribute(p,index?index.getX(i+j):i+j).applyMatrix4(mesh.matrixWorld);
-        vertices.set(point.toArray(),cursor*9+j*3);
-        centers[cursor*3]+=point.x/3;centers[cursor*3+1]+=point.y/3;centers[cursor*3+2]+=point.z/3;
-      }
-      cursor++;
-    }
-  }
-  type Node={lo:number[];hi:number[];start:number;end:number;left?:Node;right?:Node};
-  const build=(start:number,end:number,depth=0):Node=>{
-    const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
-    for(let i=start;i<end;i++)for(let j=0;j<9;j++){const axis=j%3,v=vertices[ids[i]*9+j];lo[axis]=Math.min(lo[axis],v);hi[axis]=Math.max(hi[axis],v);}
-    const node:Node={lo,hi,start,end};if(end-start<=12||depth>=32)return node;
-    const extents=hi.map((v,i)=>v-lo[i]),axis=extents.indexOf(Math.max(...extents)),middle=(lo[axis]+hi[axis])*.5;
-    let left=start,right=end-1;
-    while(left<=right){if(centers[ids[left]*3+axis]<middle)left++;else{const id=ids[left];ids[left]=ids[right];ids[right]=id;right--;}}
-    if(left===start||left===end)left=(start+end)>>1;
-    node.left=build(start,left,depth+1);node.right=build(left,end,depth+1);return node;
-  };
-  let root:Node|null=build(0,count);centers=new Float32Array(0);
-  const ray=new T.Ray(),a=new T.Vector3(),b=new T.Vector3(),c=new T.Vector3(),hit=new T.Vector3();
-  // Reuse traversal storage and visit the nearest bounds first. Exposure rays
-  // usually hit a nearby wall; visiting the distant roof first needlessly
-  // walks thousands of triangles for every sheltered vertex.
-  const origin=[0,0,0],direction=[0,0,0],inverse=[0,0,0],stack:Node[]=[];
-  const entryDistance=(node:Node)=>{
-    let near=0,far=12;
-    for(let axis=0;axis<3;axis++){
-      if(Math.abs(direction[axis])<1e-8){if(origin[axis]<node.lo[axis]||origin[axis]>node.hi[axis])return Infinity;continue;}
-      const t1=(node.lo[axis]-origin[axis])*inverse[axis],t2=(node.hi[axis]-origin[axis])*inverse[axis];
-      near=Math.max(near,Math.min(t1,t2));far=Math.min(far,Math.max(t1,t2));
-      if(far<near)return Infinity;
-    }
-    return near;
-  };
-  const blocked=(x:number,y:number,z:number,dx:number,dy:number,dz:number)=>{
-    ray.origin.set(x,y,z);ray.direction.set(dx,dy,dz).normalize();
-    ray.origin.toArray(origin);ray.direction.toArray(direction);
-    for(let axis=0;axis<3;axis++)inverse[axis]=1/direction[axis];
-    stack.length=0;if(root&&entryDistance(root)!==Infinity)stack.push(root);
-    while(stack.length){
-      const node=stack.pop()!;
-      if(node.left&&node.right){
-        const left=entryDistance(node.left),right=entryDistance(node.right);
-        if(left<right){if(right!==Infinity)stack.push(node.right);if(left!==Infinity)stack.push(node.left);}
-        else{if(left!==Infinity)stack.push(node.left);if(right!==Infinity)stack.push(node.right);}
-        continue;
-      }
-      for(let i=node.start;i<node.end;i++){
-        const offset=ids[i]*9;a.fromArray(vertices,offset);b.fromArray(vertices,offset+3);c.fromArray(vertices,offset+6);
-        if(ray.intersectTriangle(a,b,c,false,hit)){
-          const distance=hit.distanceToSquared(ray.origin);if(distance>.000009&&distance<144)return true;
-        }
-      }
-    }
-    return false;
-  };
-  return{blocked,dispose(){root=null;stack.length=0;vertices=new Float32Array(0);ids=new Uint32Array(0);}};
+  return{solid,clip,exposure,stats:{step,triangles,solidCells,cells:cells.length,triangleBuildMs,voxelBuildMs,occlusion:exact.stats},dispose(){cache.clear();cells.fill(0);exact.dispose();}};
 }
 
 /** Authored floors and lime walls contain metre-wide sparse triangles.

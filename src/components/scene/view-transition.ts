@@ -1,11 +1,14 @@
 import * as T from 'three';
+import type { FinishPhase, PhaseStatus } from '@/lib/performance';
 
 const REVEAL_MS=220;
-type Operation={kind:'capture'|'reveal';complete:()=>void;startedAt?:number;from:number};
+type Operation={kind:'capture'|'reveal';complete:()=>void;startedAt?:number;from:number;finish:FinishPhase;context:{view:string;place:string}};
 
 /** One GPU snapshot of the last complete, displayed frame. Call render only
  * after the destination's normal rendering, including its postprocessing. */
-export function createViewTransition(renderer:T.WebGLRenderer) {
+export function createViewTransition(renderer:T.WebGLRenderer,timings?:Pick<typeof import('@/lib/performance'),'beginPhase'|'measurePhase'>) {
+ const beginPhase=timings?.beginPhase??(()=>()=>{});
+ const measurePhase:typeof import('@/lib/performance').measurePhase=timings?.measurePhase??((_name,run)=>run());
  const scene=new T.Scene(),camera=new T.OrthographicCamera(-1,1,1,-1,0,1);
  const geometry=new T.PlaneGeometry(2,2);
  const material=new T.ShaderMaterial({
@@ -25,19 +28,22 @@ export function createViewTransition(renderer:T.WebGLRenderer) {
  let snapshot:T.FramebufferTexture|undefined,operation:Operation|undefined;
  let alpha=0,hasSnapshot=false,disposed=false,disabled=false,released=false;
  let preparing:Promise<void>|undefined,preparationPending=false;
+ let context={view:'walk',place:'courtyard'};
 
- function clear() {operation=undefined;alpha=0;hasSnapshot=false;}
+ function clear(status:PhaseStatus='cancelled') {operation?.finish(status);operation=undefined;alpha=0;hasSnapshot=false;}
  function allocate() {
   renderer.getDrawingBufferSize(bufferSize);
   if(snapshot&&snapshot.image.width===bufferSize.x&&snapshot.image.height===bufferSize.y)return false;
-  snapshot?.dispose();
-  snapshot=new T.FramebufferTexture(Math.max(1,bufferSize.x),Math.max(1,bufferSize.y));
-  snapshot.name='ViewTransitionSnapshot';
-  // NoColorSpace keeps copied output bytes raw; an sRGB texture would decode
-  // them again and visibly darken the frozen image.
-  snapshot.colorSpace=T.NoColorSpace;
-  material.uniforms.previousFrame.value=snapshot;
-  renderer.initTexture(snapshot);
+  measurePhase('view.snapshot-allocation',()=>{
+   snapshot?.dispose();
+   snapshot=new T.FramebufferTexture(Math.max(1,bufferSize.x),Math.max(1,bufferSize.y));
+   snapshot.name='ViewTransitionSnapshot';
+   // NoColorSpace keeps copied output bytes raw; an sRGB texture would decode
+   // them again and visibly darken the frozen image.
+   snapshot.colorSpace=T.NoColorSpace;
+   material.uniforms.previousFrame.value=snapshot;
+   renderer.initTexture(snapshot);
+  },{width:bufferSize.x,height:bufferSize.y});
   return true;
  }
  function onOutput(draw:()=>void) {
@@ -65,7 +71,7 @@ export function createViewTransition(renderer:T.WebGLRenderer) {
  }
  function disable() {
   disabled=true;
-  const current=operation;clear();
+  const current=operation;clear('error');
   if(!preparationPending)release();
   current?.complete();
  }
@@ -74,15 +80,21 @@ export function createViewTransition(renderer:T.WebGLRenderer) {
   if(preparing)return preparing;
   preparationPending=true;
   preparing=(async()=>{
+   const finish=beginPhase('view.snapshot-prepare');
+   let finishCompile:FinishPhase|undefined;
    try {
     allocate();
     let compilation:Promise<T.Object3D>|undefined;
+    finishCompile=beginPhase('view.snapshot-shader-compile');
     onOutput(()=>{compilation=renderer.compileAsync(scene,camera);});
     await compilation;
+    finishCompile(disposed?'cancelled':'success');
     // Drivers can defer work until a draw. Warm the exact output variant at
     // zero opacity under the loading UI, without capturing or redrawing scenery.
-    if(!disposed&&!disabled)onOutput(()=>drawSnapshot(0));
+    if(!disposed&&!disabled)measurePhase('view.snapshot-warmup-submit',()=>onOutput(()=>drawSnapshot(0)));
+    finish(disposed?'cancelled':disabled?'error':'success');
    } catch {
+    const status=disposed?'cancelled':'error';finishCompile?.(status);finish(status);
     // The scenery remains usable if this optional effect cannot allocate or
     // compile. Keep navigation immediate instead of failing the whole loader.
     disable();
@@ -94,17 +106,24 @@ export function createViewTransition(renderer:T.WebGLRenderer) {
  }
  function schedule(kind:Operation['kind'],complete:()=>void) {
   if(disposed)return()=>{};
-  if(disabled||(kind==='reveal'&&!hasSnapshot)){complete();return()=>{};}
+  const finish=beginPhase(`view.${kind}`,context);
+  if(disabled||(kind==='reveal'&&!hasSnapshot)){finish('skipped',{reason:disabled?'effect-disabled':'no-snapshot'});complete();return()=>{};}
   // Replacing/cancelling an operation freezes the last displayed alpha. The
   // next capture therefore includes the real blend, without rewinding it.
-  const next:Operation={kind,complete,from:alpha};operation=next;
-  return()=>{if(operation===next)operation=undefined;};
+  operation?.finish('superseded');
+  const next:Operation={kind,complete,from:alpha,finish,context:{...context}};operation=next;
+  return()=>{if(operation===next){next.finish('cancelled');operation=undefined;}};
  }
  function render(now:number) {
   if(disposed||disabled||(!hasSnapshot&&!operation))return;
   const current=operation;
   if(current?.kind==='reveal') {
-   current.startedAt??=now;
+   if(current.startedAt===undefined) {
+    // The regular scene/composer render immediately precedes this callback.
+    // This is a CPU-submitted boundary, not GPU completion or presentation.
+    beginPhase('view.target-frame-submitted',{...current.context,boundary:'cpu-submitted'})();
+    current.startedAt=now;
+   }
    const progress=T.MathUtils.clamp((now-current.startedAt)/REVEAL_MS,0,1);
    alpha=current.from*(1-progress*progress*(3-2*progress));
   }
@@ -122,20 +141,22 @@ export function createViewTransition(renderer:T.WebGLRenderer) {
    // A snapshot is optional. Fall back to an immediate handoff if the GPU
    // cannot copy/draw it, after onOutput has restored the renderer. Completing
    // the operation also releases the outer scheduler's pending destination.
-   clear();current?.complete();return;
+   clear('error');current?.complete();return;
   }
   if(current?.kind==='capture') {
+   current.finish();
    hasSnapshot=true;alpha=1;operation=undefined;
    // A callback may synchronously commit a camera and request reveal. Leave
    // that request for the next render, after the new camera was actually drawn.
    current.complete();return;
   }
   if(current?.kind==='reveal'&&alpha===0) {
-   clear();current.complete();
+   clear('success');current.complete();
   }
  }
  return {
   prepare,
+  setContext(value:{view:string;place:string}) {context={...value};},
   capture:(complete:()=>void)=>schedule('capture',complete),
   reveal:(complete:()=>void)=>schedule('reveal',complete),
   render,clear,

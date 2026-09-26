@@ -1,0 +1,56 @@
+{
+  "kind": "CPU only; not browser startup or GPU/FPS",
+  "createdAt": "2026-09-26T03:07:07.132Z",
+  "ref": "working-tree",
+  "head": "3f382ac0fb84e35ca52593e2630c660c078d723d",
+  "environment": {
+    "node": "v24.18.0",
+    "three": "185",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "cpu": "Apple M4"
+  },
+  "assetHash": "009a3e159d5a165f93bde5ee6f7c572cc8edd275045a31e4435fc7c55e6675bc",
+  "sourceHashes": {
+    "src/components/scene/weather.ts": "7485844c725cd47262e1d556ed66e9fcd9f80ffffb5996583812df0ef562fc5a",
+    "src/components/scene/rain-shelter.ts": "c65a089df062023726d256fce0dc49c9f64a16a52e988b804d9bbcfb46af4c9e",
+    "src/components/scene/rain-occlusion.ts": "a004fe047182d29d0896689c67f8109d1795e91ba8e983cddb418918560df9a0",
+    "src/components/scene/footpath.ts": "fc055434c9b1fdaf701ef7942c517f011a38e5641448d06bd783624bb5631643",
+    "src/components/scene/config.ts": "77ee45213a8a56a0110a36bd1b8e9ed1f4a92993ec334d61de251bb77cffedd8",
+    "src/components/scene/wind.ts": "e3abfc8b0e0343aed93383c460a56c8984912914d102850ec037d20ee18424a1",
+    "src/components/scene/vegetation-visibility.ts": "8123a088af7d6609dd624528f9ca75fdf687494faf7098511ce9038df3a31e49"
+  },
+  "iterations": 1,
+  "weather": [
+    {
+      "totalMs": 10203.084416000002,
+      "shelterMs": 790.167083,
+      "surfaceMs": 9412.917333000001,
+      "stats": {
+        "step": 0.2,
+        "triangles": 996363,
+        "solidCells": 89048,
+        "cells": 759460,
+        "triangleBuildMs": 659.288791,
+        "voxelBuildMs": 130.32158400000003
+      },
+      "sourceTriangles": 996363,
+      "vertices": 1131197,
+      "exposedVertices": 114410,
+      "attributeHash": "b56032248a9268a6ebf4c04223794043c44f337eadd7db43edf24b2cf48f45c5"
+    }
+  ],
+  "vegetation": [
+    {
+      "instances": 30000,
+      "frames": 180,
+      "buildMs": 3.000833000000057,
+      "totalMs": 59.36086900000373,
+      "meanMs": 0.32978260555557626,
+      "p95Ms": 0.5295829999995476,
+      "uploadBytes": 73113900,
+      "visibleInstances": 1657769,
+      "outputHash": "bf170f3080507c6ce72fc83a76a4247dfd684a49586c45708c49b17c355a62b1"
+    }
+  ]
+}

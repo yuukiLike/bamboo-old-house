@@ -1,0 +1,161 @@
+.perf-panel {
+ position: fixed; top: 118px; right: 154px; z-index: 15; width: 420px;
+ max-width: calc(100vw - 48px); color: #dce8df; background: #13231ff7;
+ border: 1px solid #b9d1bd3b; border-radius: 10px; box-shadow: 0 12px 38px #07120e50;
+ font: 12px/1.5 'PingFang SC', 'Microsoft YaHei', sans-serif; letter-spacing: 0;
+ color-scheme: dark; contain: layout style;
+}
+.perf-panel * { box-sizing: border-box; }
+.perf-panel button, .perf-panel input { font: inherit; }
+.perf-panel button { border: 0; color: inherit; cursor: pointer; }
+.perf-panel button:focus-visible, .perf-panel input:focus-visible, .perf-group summary:focus-visible { outline: 2px solid #a9d7ae; outline-offset: 3px; }
+.perf-panel-header { padding: 0; }
+.perf-panel-title { display: flex; align-items: center; width: 100%; gap: 9px; padding: 13px 15px; background: transparent; text-align: left; }
+.perf-panel-title > span:nth-child(2) { font-weight: 600; }
+.perf-header-time { margin-left: auto; color: #bdcfbf; font-variant-numeric: tabular-nums; }
+.perf-status-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: #dfba7f; }
+.perf-status-ready { background: #aad2a9; }
+.perf-status-error { background: #e0a197; }
+.perf-status-idle { background: #8fa69a; }
+.perf-panel.perf-panel-collapsed { width: 280px; }
+.perf-panel-body { max-height: calc(100svh - 330px); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 15px 15px; }
+.perf-tabs { display: flex; gap: 4px; padding: 4px; margin: 1px 0 14px; border: 1px solid #bdd4c223; border-radius: 7px; background: #07130f66; }
+.perf-tabs button { flex: 1; padding: 7px 10px; border-radius: 4px; background: transparent; color: #a0b4a7; }
+.perf-tabs button[aria-pressed='true'] { color: #e5f0e2; background: #a6cba823; box-shadow: inset 0 0 0 1px #b4d6b725; }
+.perf-runtime-status { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 12px; color: #afc3b3; font-size: 11px; }
+.perf-runtime-status > span:first-child { display: inline-flex; gap: 6px; align-items: center; }
+.perf-runtime-status small { color: #8ea496; font-size: 10px; }
+.perf-runtime-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 9px; }
+.perf-runtime-metric { display: grid; align-content: start; gap: 5px; padding: 10px 8px; border-radius: 6px; border: 1px solid #b4d1be20; background: #98bb9c09; min-width: 0; }
+.perf-runtime-metric > span { color: #a8c0ae; font-size: 10px; }
+.perf-runtime-metric strong { color: #e4efdf; font-size: 24px; line-height: 1.2; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.perf-runtime-metric strong small { margin-left: 3px; color: #9eb4a5; font-size: 10px; font-weight: 400; }
+.perf-runtime-metric[data-severity='warning'] strong { color: #e0bc7b; }
+.perf-runtime-metric[data-severity='slow'] strong { color: #eca99a; }
+.perf-panel [data-health='good'] { --perf-health-color: #aad2a9; }
+.perf-panel [data-health='warning'] { --perf-health-color: #e0bc7b; }
+.perf-panel [data-health='slow'] { --perf-health-color: #eca99a; }
+.perf-panel [data-health='unknown'] { --perf-health-color: #9aac9f; }
+.perf-runtime-metric[data-health] strong, .perf-runtime-metric .perf-health-label, .perf-header-time[data-health], .perf-health-description strong, .perf-health-rules [data-health] { color: var(--perf-health-color); }
+.perf-runtime-metric[data-health] { border-color: var(--perf-health-color); }
+.perf-status-dot[data-health] { background: var(--perf-health-color); }
+.perf-health-description { margin: 0 0 10px; font-size: 11px; color: #b6cbb9; line-height: 1.7; }
+.perf-health-description strong { font-weight: 600; }
+.perf-health-rules { margin-bottom: 10px; padding-top: 9px; border-top: 1px solid #bdd1bd20; }
+.perf-health-rules [data-health] { display: block; font-weight: 500; }
+.perf-group.perf-fps-guide { margin: 0 0 14px; padding: 0 11px 2px; border: 1px solid #b4d1be2e; border-radius: 7px; background: #98bb9c09; }
+.perf-fps-guide summary { color: #dce8df; }
+.perf-fps-guide summary > span { display: block; margin: 3px 0 0 14px; color: #a9cbaa; font-size: 11px; font-weight: 400; }
+.perf-fps-guide p { margin: 0 0 9px; color: #a9bcb0; font-size: 11px; line-height: 1.7; }
+.perf-fps-guide p > strong { color: #cbdacb; font-weight: 500; }
+.perf-fps-reference { margin: 0 0 10px; }
+.perf-fps-reference > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid #bdd1bd12; }
+.perf-fps-reference dt { color: #dce8df; font-size: 13px; font-variant-numeric: tabular-nums; }
+.perf-fps-reference dt small { display: block; color: #91a898; font-size: 10px; }
+.perf-fps-reference dd { margin: 0; color: #a9bcb0; font-size: 11px; }
+.perf-fps-reference dd strong { display: block; color: #cbdacb; font-weight: 500; }
+.perf-fps-guide .perf-fps-thresholds { display: flex; flex-wrap: wrap; gap: 4px 15px; margin-bottom: 4px; }
+.perf-fps-thresholds .perf-chart-warning { color: #d0b37c; }
+.perf-fps-thresholds .perf-chart-slow { color: #d79887; }
+.perf-runtime-context { margin: 9px 0 13px; color: #b5c9b9; font-size: 11px; overflow-wrap: anywhere; }
+.perf-runtime-chart { margin: 0 0 14px; }
+.perf-runtime-chart figcaption { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 0 7px; color: #c9d9ca; font-size: 11px; }
+.perf-runtime-chart figcaption > span { color: #91a898; font-size: 10px; }
+.perf-runtime-chart svg { display: block; width: 100%; height: 114px; background: #07140f50; border-radius: 5px; overflow: visible; }
+.perf-chart-grid { stroke: #a6c2ae28; stroke-width: .6; }
+.perf-chart-threshold { stroke: #ccab6959; stroke-width: .8; stroke-dasharray: 3 4; }
+.perf-chart-threshold-slow { stroke: #d2917f70; }
+.perf-chart-label { fill: #849d8d; font: 8px 'PingFang SC', sans-serif; }
+.perf-chart-bar { fill: #83b799; }
+.perf-chart-bar[data-severity='warning'] { fill: #cfad70; }
+.perf-chart-bar[data-severity='slow'] { fill: #d78e80; }
+.perf-chart-legend { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 3px 10px; margin: 5px 0 0; color: #92ac9b; font-size: 10px; }
+.perf-chart-legend .perf-chart-warning { color: #d0b37c; }
+.perf-chart-legend .perf-chart-slow { color: #d79887; }
+.perf-runtime-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 13px; }
+.perf-runtime-actions button { border-radius: 4px; padding: 6px 10px; background: #b6c9b51a; }
+.perf-runtime-actions button:hover { background: #b6c9b52e; }
+.perf-runtime-actions button:disabled { opacity: .4; cursor: default; }
+.perf-runtime-list { list-style: none; padding: 0; margin: 0 0 9px; }
+.perf-runtime-list > li { border-top: 1px solid #bdd1bd12; padding: 8px 0; }
+.perf-runtime-list .perf-row-heading { align-items: center; }
+.perf-runtime-list .perf-row-heading > span { color: #abc1b0; font-size: 10px; font-variant-numeric: tabular-nums; }
+.perf-runtime-list .perf-row-heading strong { color: #d7b680; }
+.perf-runtime-list > li[data-severity='slow'] .perf-row-heading strong { color: #e1a08f; }
+.perf-runtime-list p { margin: 4px 0 0; color: #acc1b1; font-size: 10px; overflow-wrap: anywhere; }
+.perf-runtime-list .perf-runtime-phases { color: #819c8a; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.perf-runtime-diagnostics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 16px; margin: 0 0 12px; font-size: 11px; }
+.perf-runtime-diagnostics > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 2px 8px; }
+.perf-runtime-diagnostics dt { color: #8fa999; }
+.perf-runtime-diagnostics dd { margin: 0; color: #d0dfce; font-variant-numeric: tabular-nums; }
+.perf-runtime-diagnostics > .perf-runtime-diagnostic-wide { grid-column: 1 / -1; }
+.perf-runtime-diagnostics .perf-runtime-diagnostic-wide dd { max-width: 100%; font-size: 10px; overflow-wrap: anywhere; }
+.perf-overview { padding: 13px 0 12px; border-top: 1px solid #d2e4d71b; }
+.perf-overview > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.perf-overview strong { color: #f1f5eb; font-size: 25px; line-height: 1.2; font-weight: 500; font-variant-numeric: tabular-nums; }
+.perf-overview p { margin: 5px 0 11px; color: #9aafa1; font-size: 11px; }
+.perf-progress { width: 100%; }
+.perf-progress-track { width: 100%; height: 3px; border-radius: 2px; overflow: hidden; background: #b1c7b91a; }
+.perf-progress-indicator { height: 100%; border-radius: inherit; background: #a6cba8; }
+.perf-progress-indicator[data-indeterminate] { width: 35%; animation: perf-progress-travel 1.7s ease-in-out infinite; }
+.perf-progress-stopped .perf-progress-indicator { animation: none; background: #d0a08c; }
+.perf-explanation, .perf-limitations { margin: 0 0 13px; color: #a9bcb0; font-size: 11px; line-height: 1.7; }
+.perf-limitations { margin: 12px 0 0; color: #8fa597; }
+.perf-search-label { display: grid; gap: 6px; margin: 0 0 15px; color: #becdc2; font-size: 11px; }
+.perf-search-label input { width: 100%; min-height: 33px; border: 1px solid #acc5b335; border-radius: 5px; padding: 6px 9px; background: #06130e55; color: #e1eadf; }
+.perf-search-label input::placeholder { color: #829b8b; }
+.perf-section-heading { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 9px; }
+.perf-count { font-size: 10px; color: #adbfaf; background: #bdccbf14; padding: 1px 6px; border-radius: 4px; font-weight: 400; }
+.perf-cache { margin: 0 0 12px; padding: 11px 0 2px; border-top: 1px solid #bfd4c21f; }
+.perf-cache-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; color: #c9d9ca; font-size: 11px; font-weight: 600; }
+.perf-cache-heading > span:last-child { color: #91a898; font-size: 10px; font-weight: 400; }
+.perf-cache-counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; margin: 0 0 9px; }
+.perf-cache-counts > div { min-width: 0; padding: 7px 5px; border: 1px solid #b4d1be20; border-radius: 5px; background: #98bb9c08; }
+.perf-cache-counts dt { color: #a5bdac; font-size: 10px; white-space: nowrap; }
+.perf-cache-counts dd { margin: 3px 0 0; color: #d8e9d8; font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.perf-cache-counts > [data-cache-kind='unknown'] dd { color: #acbbae; }
+.perf-cache-rate { display: flex; gap: 5px 14px; flex-wrap: wrap; margin: 0 0 7px; color: #bacfbd; font-size: 11px; font-variant-numeric: tabular-nums; }
+.perf-cache .perf-explanation { margin-bottom: 7px; }
+.perf-cache-compact .perf-cache-counts > div { display: flex; align-items: center; justify-content: space-between; gap: 3px; padding: 5px; }
+.perf-cache-compact .perf-cache-counts dd { margin: 0; font-size: 13px; }
+.perf-resource-cache { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 4px 0 2px; font-size: 10px; color: #98b19f; font-variant-numeric: tabular-nums; }
+.perf-cache-badge { display: inline-block; border-radius: 3px; padding: 1px 5px; background: #98b8a51c; color: #afc6b5; white-space: nowrap; }
+.perf-cache-badge[data-cache-kind='local'] { color: #bce0ba; background: #9dc69320; }
+.perf-cache-badge[data-cache-kind='revalidated'] { color: #d4c9a0; background: #cfba7520; }
+.perf-cache-badge[data-cache-kind='network'] { color: #a7c6d0; background: #87b2c51a; }
+.perf-cache-badge[data-cache-kind='unknown'] { color: #a6b2a8; background: #b2beb412; }
+.perf-active { padding: 0 0 12px; }
+.perf-active ul, .perf-timeline { margin: 0; padding: 0; list-style: none; }
+.perf-active ul { max-height: 174px; overflow: auto; scrollbar-width: thin; }
+.perf-active li { padding: 7px 0 9px; }
+.perf-active .perf-progress { margin-top: 6px; }
+.perf-row-heading { display: flex; gap: 10px; justify-content: space-between; align-items: baseline; }
+.perf-row-heading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.perf-row-heading strong { flex-shrink: 0; font-weight: 500; font-size: 11px; color: #e0e9d9; font-variant-numeric: tabular-nums; }
+.perf-row-code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8ca795; font: 10px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.perf-row-code span { color: #a7bba9; }
+.perf-group { border-top: 1px solid #bfd4c21f; padding: 0; }
+.perf-group summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+.perf-group summary > .perf-count { float: right; }
+.perf-axis { display: flex; justify-content: space-between; color: #8da395; font-size: 10px; margin: 0 0 8px; font-variant-numeric: tabular-nums; }
+.perf-timeline li { padding: 5px 0 10px; }
+.perf-time-track { position: relative; height: 6px; margin: 6px 0 3px; background: repeating-linear-gradient(to right, #b3c7b415 0, #b3c7b415 1px, transparent 1px, transparent 25%); border-radius: 2px; overflow: hidden; }
+.perf-time-track > span { position: absolute; top: 0; bottom: 0; min-width: 2px; max-width: 100%; background: #88b89c; border-radius: 2px; }
+.perf-timeline li[data-status='error'] .perf-time-track > span { background: #d59b8f; }
+.perf-timeline li[data-status='cancelled'] .perf-time-track > span, .perf-timeline li[data-status='superseded'] .perf-time-track > span { background: #9caa9d; }
+.perf-timeline li[data-status='skipped'] .perf-time-track > span { background: #b69f7f; }
+.perf-timeline li[data-status='running'] .perf-time-track > span { background: #d6b379; }
+.perf-row-meta { display: flex; justify-content: space-between; gap: 12px; color: #829d8d; font-size: 10px; font-variant-numeric: tabular-nums; }
+.perf-empty { color: #8ea395; margin: 3px 0 10px; font-size: 11px; }
+.perf-pagination { display: flex; align-items: center; justify-content: space-between; margin: 0 0 12px; font-size: 11px; color: #b4c5b6; }
+.perf-pagination button, .perf-panel-footer button { background: #b6c9b51a; border-radius: 4px; padding: 6px 10px; }
+.perf-pagination button:hover, .perf-panel-footer button:hover { background: #b6c9b52e; }
+.perf-pagination button:disabled { opacity: .35; cursor: default; }
+.perf-panel-footer { display: flex; gap: 10px; align-items: center; border-top: 1px solid #bfd4c21f; padding-top: 12px; color: #94ac9b; font-size: 11px; }
+.perf-panel-footer button { color: #dce8d8; }
+.perf-warning { display: block; color: #ddba90; font-size: 11px; margin: 8px 0 0; }
+.perf-panel-error { padding: 13px 15px; color: #ddba90; }
+@keyframes perf-progress-travel { from { transform: translateX(-100%); } to { transform: translateX(390%); } }
+@media (max-width: 1100px) { .perf-panel { width: 380px; } }
+@media (max-width: 900px) { .perf-panel { top: 172px; right: 14px; width: 360px; max-width: calc(100vw - 28px); } }
+@media (prefers-reduced-motion: reduce) { .perf-progress-indicator[data-indeterminate] { animation: none; opacity: .7; } }

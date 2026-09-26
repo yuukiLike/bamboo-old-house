@@ -1,13 +1,17 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUpRight, Pause, Play, Compass, RotateCcw, Sun, SunMedium, Moon, Scan, X, DoorOpen, Sunrise, Sunset, Volume2, VolumeX, SlidersHorizontal, Wind, CloudRain, Droplets } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Pause, Play, Compass, RotateCcw, Sun, SunMedium, Moon, Scan, X, DoorOpen, Sunrise, Sunset, Volume2, VolumeX, SlidersHorizontal, Wind, CloudRain, Droplets, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { createSoundscape } from './scene/soundscape';
 import { createSceneTransition } from './scene-transition';
+import { beginPhase, phaseStatus, type FinishPhase } from '@/lib/performance';
+import { usePerformancePanel } from '../../tools/scene-perf/react/use-performance-panel';
+import { bambooPerformanceAdapter } from '../performance/bamboo-adapter';
 import { DEFAULT_WEATHER, WEATHER_PRESETS, type WeatherSettings } from './scene/weather-state';
+import { DEFAULT_RENDER_SETTINGS, FULL_RENDER_SETTINGS, type RenderSettings } from './scene/render-settings';
 import type { SceneHandle } from './scene/scene';
 import { ROOM_VIEWS, OUTDOOR_VIEWS, PLACE_VIEWS, type PlaceId, type TimeOfDay, type ViewMode } from './scene/config';
 
@@ -20,10 +24,12 @@ const chapters = [
 ];
 
 export default function Experience() {
+ const performancePanel = usePerformancePanel(bambooPerformanceAdapter);
  const mount = useRef<HTMLDivElement>(null);
  const engine = useRef<SceneHandle | null>(null);
  const sceneTransition = useRef<ReturnType<typeof createSceneTransition> | null>(null);
  const requestedPlace = useRef<{view:ViewMode;place:PlaceId;panorama:boolean}>({view:'walk',place:'courtyard',panorama:false});
+ const pendingViewTiming = useRef<FinishPhase | undefined>(undefined);
  const committedPlace = useRef({view:'walk' as ViewMode,place:'courtyard' as PlaceId});
  const pendingNavigation = useRef<{revision:number;run:()=>void}|undefined>(undefined);
  const navigationCounter = useRef(0);
@@ -49,7 +55,8 @@ export default function Experience() {
  const [soundEnabled,setSoundEnabled] = useState(false);
  const [soundBusy,setSoundBusy] = useState(false);
  const [soundError,setSoundError] = useState(false);
- const [settingsPanel,setSettingsPanel] = useState<'sound' | 'weather' | null>(null);
+ const [settingsPanel,setSettingsPanel] = useState<'sound' | 'weather' | 'render' | null>(null);
+ const [renderSettings,setRenderSettings] = useState<RenderSettings>({...DEFAULT_RENDER_SETTINGS});
  const [weather,setWeather] = useState<WeatherSettings>({...DEFAULT_WEATHER});
  const [weatherBusy,setWeatherBusy] = useState(false);
  const [weatherError,setWeatherError] = useState(false);
@@ -59,6 +66,8 @@ export default function Experience() {
  const soundSettingsButton = useRef<HTMLButtonElement>(null);
  const weatherPanel = useRef<HTMLDialogElement>(null);
  const soundPanel = useRef<HTMLDialogElement>(null);
+ const renderButton = useRef<HTMLButtonElement>(null);
+ const renderPanel = useRef<HTMLDialogElement>(null);
  const [volume,setVolume] = useState(.55);
  const soundRequest = useRef(0);
  const panoramaButton = useRef<HTMLButtonElement>(null);
@@ -69,7 +78,7 @@ export default function Experience() {
    const media=matchMedia('(prefers-reduced-motion: reduce)');
    const change=()=>{if(media.matches)transition.finish();};
    document.addEventListener('visibilitychange',visibility);window.addEventListener('resize',resize);media.addEventListener('change',change);
-   return()=>{transition.dispose();sceneTransition.current=null;pendingNavigation.current=undefined;document.removeEventListener('visibilitychange',visibility);window.removeEventListener('resize',resize);media.removeEventListener('change',change);};
+   return()=>{pendingViewTiming.current?.('cancelled');transition.dispose();sceneTransition.current=null;pendingNavigation.current=undefined;document.removeEventListener('visibilitychange',visibility);window.removeEventListener('resize',resize);media.removeEventListener('change',change);};
  },[]);
  useEffect(()=>{if(!ready||staticMode)sceneTransition.current?.finish();},[ready,staticMode]);
  useEffect(() => {
@@ -94,23 +103,32 @@ export default function Experience() {
    return()=>{cancelAnimationFrame(frame);window.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);};
  },[view]);
  useEffect(()=>{ let disposed=false,failed=false;const controller=new AbortController();
+   const finishStartup=beginPhase('startup.experience',{attempt});
+   let finishStage:FinishPhase|undefined;
    const resetRoof=()=>{roofRunoff.current=0;soundscape.current?.setRoofRunoff(0);};
    resetRoof();
    const start=async()=>{ try {
+     finishStage=beginPhase('startup.scene-import',{attempt});
      const { createScene } = await import('./scene/scene');
-     if(disposed || !mount.current)return;
-     const scene=await createScene(mount.current,{onProgress:(state,value)=>{if(!disposed)setLoading({state,progress:value});},onPanorama:(value)=>{if(!disposed){requestedPlace.current={...requestedPlace.current,panorama:value};setPanorama(value);if(!value)panoramaButton.current?.focus({preventScroll:true});}},onGust:(strength)=>{if(!disposed&&!failed)soundscape.current?.setGust(strength);},onRunoff:(flow)=>{if(disposed||failed)return;roofRunoff.current=flow;soundscape.current?.setRoofRunoff(flow);},onBearing:(value)=>{if(!disposed&&bearingLabel.current){const label=`${String(value).padStart(3,'0')}°`;if(bearingLabel.current.textContent!==label)bearingLabel.current.textContent=label;}},onFailure:()=>{if(!disposed){failed=true;engine.current=null;resetRoof();soundRequest.current++;weatherRequest.current++;void soundscape.current?.setEnabled(false);setSoundEnabled(false);setSoundBusy(false);setWeatherBusy(false);setSettingsPanel(null);setReady(false);setError(true);setStaticMode(true);setPanorama(false);setLoading({state:"实时画面已暂停，可重新载入。",progress:null});}}},controller.signal);
-     if(disposed||failed){scene.dispose();return;}
+     finishStage(disposed?'cancelled':'success');
+     if(disposed || !mount.current){finishStartup('cancelled');return;}
+     finishStage=beginPhase('startup.create-scene',{attempt});
+     const scene=await createScene(mount.current,{onProgress:(state,value)=>{if(!disposed)setLoading({state,progress:value});},onPanorama:(value)=>{if(!disposed){requestedPlace.current={...requestedPlace.current,panorama:value};setPanorama(value);if(!value)panoramaButton.current?.focus({preventScroll:true});}},onGust:(strength)=>{if(!disposed&&!failed)soundscape.current?.setGust(strength);},onRunoff:(flow)=>{if(disposed||failed)return;roofRunoff.current=flow;soundscape.current?.setRoofRunoff(flow);},onBearing:(value)=>{if(!disposed&&bearingLabel.current){const label=`${String(value).padStart(3,'0')}°`;if(bearingLabel.current.textContent!==label)bearingLabel.current.textContent=label;}},onFailure:()=>{if(!disposed){failed=true;finishStage?.('error',{reason:'webgl-context-lost'});finishStartup('error',{reason:'webgl-context-lost'});engine.current=null;resetRoof();soundRequest.current++;weatherRequest.current++;void soundscape.current?.setEnabled(false);setSoundEnabled(false);setSoundBusy(false);setWeatherBusy(false);setSettingsPanel(null);setReady(false);setError(true);setStaticMode(true);setPanorama(false);setLoading({state:"实时画面已暂停，可重新载入。",progress:null});}}},controller.signal);
+     finishStage(disposed?'cancelled':failed?'error':'success');
+     if(disposed||failed){finishStartup(disposed?'cancelled':'error');scene.dispose();return;}
      engine.current=scene; setReady(true);setLoading({state:'',progress:100});
-   } catch(e){ if(!disposed&&!failed){console.error('Scene failed:',e);setError(true);setStaticMode(true);setLoading({state:e instanceof Error && e.message==='WEBGL_UNAVAILABLE'?'此设备使用静态观看模式。':'竹林暂时没有载入，仍可继续阅读。',progress:null});} } };
+     finishStartup('success',{boundary:'ready-state-requested'});
+   } catch(e){ finishStage?.(disposed?'cancelled':phaseStatus(e));finishStartup(disposed?'cancelled':phaseStatus(e));if(!disposed&&!failed){console.error('Scene failed:',e);setError(true);setStaticMode(true);setLoading({state:e instanceof Error && e.message==='WEBGL_UNAVAILABLE'?'此设备使用静态观看模式。':'竹林暂时没有载入，仍可继续阅读。',progress:null});} } };
    void start();
-   return ()=>{disposed=true;resetRoof();controller.abort();engine.current?.dispose();engine.current=null;};
+   return ()=>{disposed=true;finishStage?.('cancelled');finishStartup('cancelled');resetRoof();controller.abort();engine.current?.dispose();engine.current=null;};
  },[attempt]);
+ useEffect(()=>{if(ready)beginPhase('startup.controls-ready',{attempt,boundary:'react-committed'})();},[ready,attempt]);
  useEffect(()=>{engine.current?.setPaused(paused || reduced);},[paused,reduced,ready]);
  useEffect(()=>{engine.current?.setView(view);},[view,ready]);
  useEffect(()=>{engine.current?.setPlace(place);},[place,ready]);
  useEffect(()=>{engine.current?.setTimeOfDay(timeOfDay);},[timeOfDay,ready]);
  useEffect(()=>{engine.current?.setWeather(weather);},[weather,ready]);
+ useEffect(()=>{engine.current?.setRenderSettings(renderSettings);},[renderSettings,ready]);
  useEffect(()=>{engine.current?.setPanorama(panorama);},[panorama,ready]);
  useEffect(()=>()=>{soundRequest.current++;weatherRequest.current++;soundscape.current?.dispose();soundscape.current=null;},[]);
  useEffect(()=>{soundscape.current?.setTimeOfDay(timeOfDay);},[timeOfDay]);
@@ -118,8 +136,8 @@ export default function Experience() {
  useEffect(()=>{soundscape.current?.setVolume(volume);},[volume]);
  useEffect(()=>{
    if(!settingsPanel)return;
-   const panel=settingsPanel==='weather'?weatherPanel.current:soundPanel.current;
-   const trigger=settingsPanel==='weather'?weatherButton.current:soundSettingsButton.current;
+   const panel={weather:weatherPanel,sound:soundPanel,render:renderPanel}[settingsPanel].current;
+   const trigger={weather:weatherButton,sound:soundSettingsButton,render:renderButton}[settingsPanel].current;
    panel?.querySelector<HTMLButtonElement>('button')?.focus({preventScroll:true});
    const outside=(event:PointerEvent)=>{
      if(event.target instanceof Node&&!panel?.contains(event.target)&&!trigger?.contains(event.target))setSettingsPanel(null);
@@ -196,10 +214,12 @@ export default function Experience() {
    engine.current?.setView(next.view);engine.current?.setPlace(next.place);engine.current?.setPanorama(next.panorama);
  };
  const changePlace=(next:typeof requestedPlace.current,afterCommit?:()=>void)=>{
+   pendingViewTiming.current?.('superseded');
+   const finish=beginPhase('view.request-to-commit',{view:next.view,place:next.place});pendingViewTiming.current=finish;
    const previous=requestedPlace.current;requestedPlace.current=next;
    setSelectedDestination({view:next.view,place:next.place});
    pendingNavigation.current=undefined;
-   const apply=()=>{commitPlace();if(afterCommit){const revision=++navigationCounter.current;pendingNavigation.current={revision,run:afterCommit};setNavigationRevision(revision);}};
+   const apply=()=>{try{commitPlace();if(afterCommit){const revision=++navigationCounter.current;pendingNavigation.current={revision,run:afterCommit};setNavigationRevision(revision);}finish('success',{boundary:'state-and-scene-committed'});}catch(error){finish(phaseStatus(error));throw error;}};
    if(previous.view===next.view&&previous.place===next.place&&committedPlace.current.view===next.view&&committedPlace.current.place===next.place&&!sceneTransition.current?.covering) {apply();return;}
    const animate=ready&&!staticMode&&!document.hidden&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
    if(sceneTransition.current)sceneTransition.current.request(apply,animate);else apply();
@@ -212,7 +232,8 @@ export default function Experience() {
  const navigate=(index:number)=>{window.scrollTo({top:(document.documentElement.scrollHeight-innerHeight)*index/4,behavior:reduced?'instant':'smooth'});};
  const weatherLabel=weather.rain>.7?'暴雨':weather.rain>0?'细雨':(weather.autumn??0)>.5?'大风':weather.wind===0?'无风':'晴风';
  const listeningCopy=weather.rain>.7?'雨落屋檐 · 一场夏日大雨':weather.rain>0?(view==='well-rain'?'井边细雨 · 檐下滴答':'细雨轻落 · 叶间滴答'):(weather.autumn??0)>.5?'风起竹海 · 带一点秋凉':view==='breeze'?'风从身旁经过 · 叶片轻轻响':{dawn:'晨鸟初醒 · 叶间微风',day:'风过竹叶 · 远处鸟鸣',noon:'竹荫正浓 · 远处夏声',dusk:'晚风渐柔 · 虫声初起',night:'月下虫鸣 · 风过竹梢'}[timeOfDay];
- return <div className={`experience is-${view} ${panorama?'is-panorama':''} ${staticMode?'is-static':''} ${soundEnabled?'is-listening':''} ${settingsPanel?'settings-open':''}`} data-time={timeOfDay}>
+ return <div className={`experience is-${view} ${panorama?'is-panorama':''} ${staticMode?'is-static':''} ${soundEnabled?'is-listening':''} ${settingsPanel?'settings-open':''}`} data-time={timeOfDay} data-resolution={renderSettings.resolution} data-shadows={renderSettings.shadows}>
+  {performancePanel}
   <a className="skip-link" href="#return" onClick={(e)=>{e.preventDefault();chooseView('walk',()=>navigate(4));}}>跳到结束</a>
   <div className="scene-shell" aria-hidden={!panorama}>
    <picture><source media="(max-width:700px)" srcSet="/scene-poster-mobile.webp"/><img className="fallback-view" src="/scene-poster.webp" alt="" /></picture>
@@ -242,6 +263,24 @@ export default function Experience() {
     <Button className="control-button sound-toggle" onClick={toggleSound} aria-label={soundBusy?'取消载入自然声':soundEnabled?'关闭环境声音':soundError?'重试环境声音':'开启环境声音'} aria-pressed={soundEnabled} disabled={!ready||staticMode}>{soundEnabled?<Volume2 size={16}/>:<VolumeX size={16}/>}<span>{soundBusy?'取消载入':soundEnabled?'正在聆听':soundError?'重试声音':'聆听竹林'}</span></Button>
     {soundEnabled&&<Button ref={soundSettingsButton} variant="ghost" className="sound-settings-toggle" aria-label="调整环境音量" aria-expanded={settingsPanel==='sound'} aria-controls="sound-settings" onClick={()=>setSettingsPanel(settingsPanel==='sound'?null:'sound')}><SlidersHorizontal size={15}/></Button>}
     {settingsPanel==='sound'&&soundEnabled&&<dialog open ref={soundPanel} id="sound-settings" className="settings-panel sound-panel" aria-labelledby="sound-title" onKeyDown={event=>event.stopPropagation()}><div className="settings-heading"><h2 id="sound-title">听得近一点</h2><Button className="settings-close" variant="ghost" aria-label="收起声音设置" onClick={()=>{setSettingsPanel(null);soundSettingsButton.current?.focus({preventScroll:true});}}><X size={15}/></Button></div><p className="settings-description">{listeningCopy}{view==='free'&&inside?' · 隔窗听见':''}</p><label htmlFor="ambience-volume">声音远近 <output>{Math.round(volume*100)}%</output></label><input id="ambience-volume" type="range" min="0" max="100" value={Math.round(volume*100)} onChange={event=>setVolume(Number(event.target.value)/100)} aria-label="环境音量"/><a href="/audio/credits.md" target="_blank" rel="noreferrer">自然录音与来源</a></dialog>}
+   </div>
+   <div className="render-controls">
+    <Button ref={renderButton} className="control-button render-toggle" aria-label="画面设置" title="画面设置" aria-expanded={settingsPanel==='render'} aria-controls="render-settings" disabled={!ready||staticMode} onClick={()=>setSettingsPanel(settingsPanel==='render'?null:'render')}><Monitor size={16}/></Button>
+    {settingsPanel==='render'&&<dialog open ref={renderPanel} id="render-settings" className="settings-panel render-panel" aria-labelledby="render-title" onKeyDown={event=>event.stopPropagation()}>
+     <div className="settings-heading"><h2 id="render-title">画面设置</h2><Button className="settings-close" variant="ghost" aria-label="收起画面设置" onClick={()=>{setSettingsPanel(null);renderButton.current?.focus({preventScroll:true});}}><X size={15}/></Button></div>
+     <p className="settings-description">默认使用性能设置，也可随时恢复完整效果。以下选择适用于所有视角、时段与天气，不会自动调整。</p>
+     <fieldset className="render-options" aria-describedby="resolution-note"><legend>画面清晰度</legend>
+      <Button variant="ghost" aria-pressed={renderSettings.resolution==='full'} onClick={()=>setRenderSettings(value=>({...value,resolution:'full'}))}>完整清晰</Button>
+      <Button variant="ghost" aria-pressed={renderSettings.resolution==='reduced'} onClick={()=>setRenderSettings(value=>({...value,resolution:'reduced'}))}>稍柔和（默认）</Button>
+     </fieldset>
+     <p id="resolution-note" className="settings-description">“稍柔和”可减轻绘制负担，细竹叶和远处纹理会略柔和。</p>
+     <fieldset className="render-options" aria-describedby="shadows-note"><legend>日光与月光下的动态阴影</legend>
+      <Button variant="ghost" aria-pressed={renderSettings.shadows==='full'} onClick={()=>setRenderSettings(value=>({...value,shadows:'full'}))}>每帧跟随</Button>
+      <Button variant="ghost" aria-pressed={renderSettings.shadows==='alternate'} onClick={()=>setRenderSettings(value=>({...value,shadows:'alternate'}))}>隔帧更新（默认）</Button>
+     </fieldset>
+     <p id="shadows-note" className="settings-description">“隔帧更新”可减轻阴影绘制负担，大风时竹影可能稍显不连贯。</p>
+     <Button className="render-reset" variant="ghost" onClick={()=>setRenderSettings({...FULL_RENDER_SETTINGS})}>恢复完整效果</Button>
+    </dialog>}
    </div>
    <Button className="control-button" onClick={()=>setPaused(!paused)} aria-label={reduced?'已减少动态':paused?'让风继续':'静止观看'} aria-pressed={paused || reduced} disabled={reduced || staticMode}>
     {paused || reduced ? <Play size={14}/> : <Pause size={14}/>}<span>{reduced?'已减少动态':paused?'让风继续':'静止观看'}</span>

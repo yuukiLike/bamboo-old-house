@@ -1,0 +1,51 @@
+flowchart TD
+    Open[打开页面显示封面]:::dataDisplay
+    React[接管页面交互]:::statusDisplay
+
+    subgraph Boot[三维初始化]
+        Import[动态导入三维模块]:::apiCall
+        Context[创建渲染上下文]:::statusDisplay
+        Models[六组模型下载解析]:::apiCall
+        Environment[生成地形与环境]:::statusDisplay
+        Assemble[装配场景与风雨]:::statusDisplay
+        Compile[首屏与转场编译]:::statusDisplay
+        Desktop{采用桌面路径}:::condition
+        Prewarm[预热室内与夜景]:::statusDisplay
+        First[首帧渲染提交]:::statusDisplay
+
+        Import --> Context
+        Context -->|并行发起下载| Models
+        Context -->|下载期间生成| Environment
+        Models --> Assemble
+        Environment --> Assemble
+        Assemble --> Compile --> Desktop
+        Desktop -->|桌面| Prewarm --> First
+        Desktop -->|移动端延后室内与夜景| First
+    end
+
+    Ready[控件就绪画布淡入]:::dataDisplay
+    Frame[逐帧更新与绘制]:::statusDisplay
+    Action[操作视图天气声音]:::userAction
+    Change[按需准备切换视图]:::statusDisplay
+    Audio[按需加载解码播放]:::apiCall
+    Static[静态观看可以重试]:::dataDisplay
+    Release[离开页面释放资源]:::statusDisplay
+
+    Open --> React --> Import
+    First --> Ready --> Frame
+    Frame -->|下一帧| Frame
+    Ready -.->|用户操作| Action
+    Action -->|切换地点视角| Change --> Frame
+    Action -->|调整昼夜风雨| Frame
+    Action -->|开启声音| Audio
+    %% 声音独立调度；首次开启与新增声层会下载解码，关闭或调音不重载场景
+    Boot -.->|初始化失败| Static
+    Frame -.->|上下文丢失| Static
+    Static -->|重新载入| Import
+    Frame -.->|页面卸载| Release
+
+    classDef apiCall fill:#FFF9C4,stroke:#FFB300,stroke-width:2px,color:#000000
+    classDef dataDisplay fill:#F3E5F5,stroke:#9C27B0,stroke-width:2px,color:#000000
+    classDef userAction fill:#E8F5E9,stroke:#4CAF50,stroke-width:2px,color:#000000
+    classDef statusDisplay fill:#E3F2FD,stroke:#2196F3,stroke-width:2px,color:#000000
+    classDef condition fill:#BBDEFB,stroke:#2196F3,stroke-width:2px,color:#000000

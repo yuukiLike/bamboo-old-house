@@ -187,7 +187,7 @@ const {createInteriorContact}:typeof import('../src/components/scene/interior-co
  await import(`data:text/javascript;base64,${Buffer.from(transformed).toString('base64')}`);
 
 await test('a destination jump draws full detail on its first frame and cancels the prior refinement',context=>{
- let now=1,target:T.WebGLRenderTarget|null=null,alpha=1;
+ let now=1,target:T.WebGLRenderTarget|null=null,alpha=1,pixelRatio=1.6;
  context.mock.method(performance,'now',()=>now*1000);
  const clearColor=new T.Color();
  const frames:{contact:T.Texture;refined:T.Texture;refinement:number}[]=[];
@@ -195,7 +195,7 @@ await test('a destination jump draws full detail on its first frame and cancels 
  const renderer={
   autoClear:true,autoClearColor:true,autoClearDepth:true,autoClearStencil:true,
   toneMapping:T.ACESFilmicToneMapping,toneMappingExposure:.98,outputColorSpace:T.SRGBColorSpace,
-  getSize:(size:T.Vector2)=>size.set(800,600),getPixelRatio:()=>1.6,
+  getSize:(size:T.Vector2)=>size.set(800,600),getPixelRatio:()=>pixelRatio,
   getRenderTarget:()=>target,setRenderTarget:(value:T.WebGLRenderTarget|null)=>{target=value;},
   getClearColor:(value:T.Color)=>value.copy(clearColor),getClearAlpha:()=>alpha,
   setClearColor:(value:T.ColorRepresentation)=>clearColor.set(value),setClearAlpha:(value:number)=>{alpha=value;},
@@ -234,5 +234,16 @@ await test('a destination jump draws full detail on its first frame and cancels 
   now=9;camera.position.x=-3;contact.resetForViewChange();
   const returned=render();assert.equal(returned.contact,returned.refined);assert.equal(returned.refinement,0);
   assert.deepEqual(normals.at(-1),{width:640,x:-3});
+
+  // The shared renderer's explicit resolution setting must resize indoor
+  // contact targets too, then restore the exact original target dimensions.
+  for(const ratio of [1.6*.85,1.6]){
+   pixelRatio=ratio;contact.resize();const count=normals.length;
+   now+=.016;const resized=render();
+   assert.equal(normals.length,count+1,'refresh contact immediately after a resolution change');
+   assert.deepEqual(normals.at(-1),{width:Math.round(800*ratio*.5),x:-3});
+   assert.equal(resized.contact,resized.refined,'never blend with an old-resolution contact map');
+   assert.equal(resized.refinement,0);
+  }
  } finally {contact.dispose();}
 });
