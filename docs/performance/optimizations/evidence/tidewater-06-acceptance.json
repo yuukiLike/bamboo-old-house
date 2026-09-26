@@ -1,0 +1,1278 @@
+{
+  "capturedAt": "2026-09-26T11:17:00.523Z",
+  "browser": "156.0.8075.0",
+  "url": "http://127.0.0.1:4175/?perf=1&perfUI=1",
+  "defaults": {
+    "settings": {
+      "resolution": "balanced",
+      "shadows": "alternate",
+      "frameRate": "60"
+    },
+    "ratio": 1.5,
+    "size": [
+      603,
+      1311
+    ]
+  },
+  "full": {
+    "settings": {
+      "resolution": "full",
+      "shadows": "full",
+      "frameRate": "display"
+    },
+    "ratio": 2,
+    "size": [
+      804,
+      1748
+    ]
+  },
+  "reduced": 1.0625,
+  "submissions": 29.735132433783107,
+  "resizeWrites": 0,
+  "running": {
+    "timers": 1,
+    "raf": 1,
+    "observers": 2,
+    "ticks": 14,
+    "callbacks": 12,
+    "draws": 112498,
+    "frames": 481,
+    "phases": 55,
+    "active": 0,
+    "enabled": true,
+    "measures": 55
+  },
+  "stopped": {
+    "timers": 0,
+    "raf": 0,
+    "observers": 0,
+    "ticks": 14,
+    "callbacks": 12,
+    "draws": 113031,
+    "frames": 484,
+    "phases": 55,
+    "active": 0,
+    "enabled": false,
+    "measures": 0
+  },
+  "final": {
+    "timers": 0,
+    "raf": 0,
+    "observers": 0,
+    "ticks": 14,
+    "callbacks": 12,
+    "draws": 285486,
+    "frames": 484,
+    "phases": 55,
+    "active": 0,
+    "enabled": false,
+    "measures": 0
+  },
+  "workload": {
+    "beforeStop": {
+      "sampleIntervalMs": 1000,
+      "initialLimit": 60,
+      "recentLimit": 120,
+      "dropped": 0,
+      "samples": [
+        {
+          "startTime": 103.4,
+          "timestamp": 3420.1,
+          "count": 13,
+          "observedMs": 3316.7,
+          "rafHz": 3.919558597401031,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 0,
+            "triangles": 0,
+            "textures": 0,
+            "geometries": 0,
+            "pixelRatio": 1.5,
+            "drawSize": [],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 0,
+            "cpuUpdateMs": null,
+            "cpuRenderSubmitMs": null
+          }
+        },
+        {
+          "startTime": 3420.1,
+          "timestamp": 4436.8,
+          "count": 27,
+          "observedMs": 1016.7000000000003,
+          "rafHz": 26.556506344054288,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 0,
+            "triangles": 0,
+            "textures": 0,
+            "geometries": 0,
+            "pixelRatio": 1.5,
+            "drawSize": [],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 0,
+            "cpuUpdateMs": null,
+            "cpuRenderSubmitMs": null
+          }
+        },
+        {
+          "startTime": 4436.8,
+          "timestamp": 5453.4,
+          "count": 55,
+          "observedMs": 1016.5999999999995,
+          "rafHz": 54.1019083218572,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 432,
+            "triangles": 8872317,
+            "textures": 134,
+            "geometries": 261,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.526666666691502,
+            "cpuRenderSubmitMs": 2.239999999726812
+          }
+        },
+        {
+          "startTime": 5453.4,
+          "timestamp": 6453.4,
+          "count": 56,
+          "observedMs": 1000,
+          "rafHz": 56,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "30",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 220,
+            "triangles": 4909282,
+            "textures": 135,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/30",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.6133333330353101,
+            "cpuRenderSubmitMs": 1.773333333681027
+          }
+        },
+        {
+          "startTime": 6453.4,
+          "timestamp": 7453.4,
+          "count": 60,
+          "observedMs": 1000,
+          "rafHz": 60,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "30",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 220,
+            "triangles": 4909282,
+            "textures": 135,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/30",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.6399999998509884,
+            "cpuRenderSubmitMs": 3.140000000099341
+          }
+        },
+        {
+          "startTime": 7453.4,
+          "timestamp": 8453.4,
+          "count": 60,
+          "observedMs": 1000,
+          "rafHz": 60,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "30",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 220,
+            "triangles": 4909282,
+            "textures": 135,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/30",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.6866666668405136,
+            "cpuRenderSubmitMs": 3.0799999997019767
+          }
+        },
+        {
+          "startTime": 8453.4,
+          "timestamp": 9453.4,
+          "count": 60,
+          "observedMs": 1000,
+          "rafHz": 60,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "30",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 220,
+            "triangles": 4909282,
+            "textures": 135,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/30",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.5333333334575097,
+            "cpuRenderSubmitMs": 2.5266666668156783
+          }
+        },
+        {
+          "startTime": 9453.4,
+          "timestamp": 10453.5,
+          "count": 58,
+          "observedMs": 1000.1000000000004,
+          "rafHz": 57.99420057994198,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 220,
+            "triangles": 4909282,
+            "textures": 135,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.4733333333084981,
+            "cpuRenderSubmitMs": 1.8933333331098159
+          }
+        },
+        {
+          "startTime": 10453.5,
+          "timestamp": 11470.1,
+          "count": 37,
+          "observedMs": 1016.6000000000004,
+          "rafHz": 36.3958292347039,
+          "state": {
+            "view": "breeze",
+            "place": "courtyard",
+            "timeOfDay": "day",
+            "weatherPreset": "大风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": true,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 442,
+            "triangles": 8954253,
+            "textures": 136,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.6266666669398546,
+            "cpuRenderSubmitMs": 2.7599999997764826
+          }
+        },
+        {
+          "startTime": 11470.1,
+          "timestamp": 12485.9,
+          "count": 51,
+          "observedMs": 1015.7999999999993,
+          "rafHz": 50.20673360897818,
+          "state": {
+            "view": "breeze",
+            "place": "courtyard",
+            "timeOfDay": "day",
+            "weatherPreset": "大风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": true,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 442,
+            "triangles": 8954253,
+            "textures": 136,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.4000000002483527,
+            "cpuRenderSubmitMs": 2.4733333331843217
+          }
+        },
+        {
+          "startTime": 12485.9,
+          "timestamp": 13486.8,
+          "count": 49,
+          "observedMs": 1000.8999999999996,
+          "rafHz": 48.95593965431114,
+          "state": {
+            "view": "breeze",
+            "place": "courtyard",
+            "timeOfDay": "day",
+            "weatherPreset": "大风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": true,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 442,
+            "triangles": 8954253,
+            "textures": 136,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.43999999997516476,
+            "cpuRenderSubmitMs": 2.7666666666666666
+          }
+        },
+        {
+          "startTime": 13486.8,
+          "timestamp": 14486.8,
+          "count": 49,
+          "observedMs": 1000,
+          "rafHz": 49,
+          "state": {
+            "view": "breeze",
+            "place": "courtyard",
+            "timeOfDay": "day",
+            "weatherPreset": "大风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": true,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 442,
+            "triangles": 8954253,
+            "textures": 136,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.47999999995032944,
+            "cpuRenderSubmitMs": 2.9199999996771413
+          }
+        },
+        {
+          "startTime": 14486.8,
+          "timestamp": 15486.8,
+          "count": 55,
+          "observedMs": 1000,
+          "rafHz": 55,
+          "state": {
+            "view": "breeze",
+            "place": "courtyard",
+            "timeOfDay": "day",
+            "weatherPreset": "大风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": true,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 442,
+            "triangles": 8954253,
+            "textures": 136,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.506666666517655,
+            "cpuRenderSubmitMs": 2.646666666865349
+          }
+        }
+      ]
+    },
+    "frozen": {
+      "sampleIntervalMs": 1000,
+      "initialLimit": 60,
+      "recentLimit": 120,
+      "dropped": 0,
+      "samples": [
+        {
+          "startTime": 103.4,
+          "timestamp": 3420.1,
+          "count": 13,
+          "observedMs": 3316.7,
+          "rafHz": 3.919558597401031,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 0,
+            "triangles": 0,
+            "textures": 0,
+            "geometries": 0,
+            "pixelRatio": 1.5,
+            "drawSize": [],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 0,
+            "cpuUpdateMs": null,
+            "cpuRenderSubmitMs": null
+          }
+        },
+        {
+          "startTime": 3420.1,
+          "timestamp": 4436.8,
+          "count": 27,
+          "observedMs": 1016.7000000000003,
+          "rafHz": 26.556506344054288,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 0,
+            "triangles": 0,
+            "textures": 0,
+            "geometries": 0,
+            "pixelRatio": 1.5,
+            "drawSize": [],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 0,
+            "cpuUpdateMs": null,
+            "cpuRenderSubmitMs": null
+          }
+        },
+        {
+          "startTime": 4436.8,
+          "timestamp": 5453.4,
+          "count": 55,
+          "observedMs": 1016.5999999999995,
+          "rafHz": 54.1019083218572,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 432,
+            "triangles": 8872317,
+            "textures": 134,
+            "geometries": 261,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.526666666691502,
+            "cpuRenderSubmitMs": 2.239999999726812
+          }
+        },
+        {
+          "startTime": 5453.4,
+          "timestamp": 6453.4,
+          "count": 56,
+          "observedMs": 1000,
+          "rafHz": 56,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "30",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 220,
+            "triangles": 4909282,
+            "textures": 135,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/30",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.6133333330353101,
+            "cpuRenderSubmitMs": 1.773333333681027
+          }
+        },
+        {
+          "startTime": 6453.4,
+          "timestamp": 7453.4,
+          "count": 60,
+          "observedMs": 1000,
+          "rafHz": 60,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "30",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 220,
+            "triangles": 4909282,
+            "textures": 135,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/30",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.6399999998509884,
+            "cpuRenderSubmitMs": 3.140000000099341
+          }
+        },
+        {
+          "startTime": 7453.4,
+          "timestamp": 8453.4,
+          "count": 60,
+          "observedMs": 1000,
+          "rafHz": 60,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "30",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 220,
+            "triangles": 4909282,
+            "textures": 135,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/30",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.6866666668405136,
+            "cpuRenderSubmitMs": 3.0799999997019767
+          }
+        },
+        {
+          "startTime": 8453.4,
+          "timestamp": 9453.4,
+          "count": 60,
+          "observedMs": 1000,
+          "rafHz": 60,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "30",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 220,
+            "triangles": 4909282,
+            "textures": 135,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/30",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.5333333334575097,
+            "cpuRenderSubmitMs": 2.5266666668156783
+          }
+        },
+        {
+          "startTime": 9453.4,
+          "timestamp": 10453.5,
+          "count": 58,
+          "observedMs": 1000.1000000000004,
+          "rafHz": 57.99420057994198,
+          "state": {
+            "view": "walk",
+            "place": "courtyard",
+            "timeOfDay": "dusk",
+            "weatherPreset": "晴风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": false,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 220,
+            "triangles": 4909282,
+            "textures": 135,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.4733333333084981,
+            "cpuRenderSubmitMs": 1.8933333331098159
+          }
+        },
+        {
+          "startTime": 10453.5,
+          "timestamp": 11470.1,
+          "count": 37,
+          "observedMs": 1016.6000000000004,
+          "rafHz": 36.3958292347039,
+          "state": {
+            "view": "breeze",
+            "place": "courtyard",
+            "timeOfDay": "day",
+            "weatherPreset": "大风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": true,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 442,
+            "triangles": 8954253,
+            "textures": 136,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.6266666669398546,
+            "cpuRenderSubmitMs": 2.7599999997764826
+          }
+        },
+        {
+          "startTime": 11470.1,
+          "timestamp": 12485.9,
+          "count": 51,
+          "observedMs": 1015.7999999999993,
+          "rafHz": 50.20673360897818,
+          "state": {
+            "view": "breeze",
+            "place": "courtyard",
+            "timeOfDay": "day",
+            "weatherPreset": "大风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": true,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 442,
+            "triangles": 8954253,
+            "textures": 136,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.4000000002483527,
+            "cpuRenderSubmitMs": 2.4733333331843217
+          }
+        },
+        {
+          "startTime": 12485.9,
+          "timestamp": 13486.8,
+          "count": 49,
+          "observedMs": 1000.8999999999996,
+          "rafHz": 48.95593965431114,
+          "state": {
+            "view": "breeze",
+            "place": "courtyard",
+            "timeOfDay": "day",
+            "weatherPreset": "大风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": true,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 442,
+            "triangles": 8954253,
+            "textures": 136,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.43999999997516476,
+            "cpuRenderSubmitMs": 2.7666666666666666
+          }
+        },
+        {
+          "startTime": 13486.8,
+          "timestamp": 14486.8,
+          "count": 49,
+          "observedMs": 1000,
+          "rafHz": 49,
+          "state": {
+            "view": "breeze",
+            "place": "courtyard",
+            "timeOfDay": "day",
+            "weatherPreset": "大风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": true,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 442,
+            "triangles": 8954253,
+            "textures": 136,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.47999999995032944,
+            "cpuRenderSubmitMs": 2.9199999996771413
+          }
+        },
+        {
+          "startTime": 14486.8,
+          "timestamp": 15486.8,
+          "count": 55,
+          "observedMs": 1000,
+          "rafHz": 55,
+          "state": {
+            "view": "breeze",
+            "place": "courtyard",
+            "timeOfDay": "day",
+            "weatherPreset": "大风",
+            "resolution": "balanced",
+            "shadows": "alternate",
+            "frameRate": "60",
+            "soundEnabled": true,
+            "paused": false,
+            "panorama": false
+          },
+          "renderer": {
+            "drawCalls": 442,
+            "triangles": 8954253,
+            "textures": 136,
+            "geometries": 266,
+            "pixelRatio": 1.5,
+            "drawSize": [
+              603,
+              1311
+            ],
+            "quality": "mobile/balanced/alternate/60",
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+            "programs": 81,
+            "cpuUpdateMs": 0.506666666517655,
+            "cpuRenderSubmitMs": 2.646666666865349
+          }
+        }
+      ]
+    }
+  },
+  "exportedStatus": "stopped",
+  "errors": [],
+  "afterStopViews": [
+    "porch",
+    "well-rain",
+    "free/hall"
+  ],
+  "restarts": [
+    {
+      "active": {
+        "timers": 1,
+        "raf": 1,
+        "observers": 2,
+        "ticks": 14,
+        "callbacks": 13,
+        "draws": 290122,
+        "frames": 0,
+        "phases": 0,
+        "enabled": true,
+        "measures": 0
+      },
+      "stopped": {
+        "timers": 0,
+        "raf": 0,
+        "observers": 0,
+        "ticks": 15,
+        "callbacks": 14,
+        "draws": 299638,
+        "frames": 66,
+        "phases": 0,
+        "enabled": false,
+        "measures": 0
+      },
+      "resources": 1,
+      "collectionStartedAt": 40443.09999999963,
+      "initialWorkload": {
+        "sampleIntervalMs": 1000,
+        "initialLimit": 60,
+        "recentLimit": 120,
+        "dropped": 0,
+        "samples": []
+      },
+      "workload": {
+        "sampleIntervalMs": 1000,
+        "initialLimit": 60,
+        "recentLimit": 120,
+        "dropped": 0,
+        "samples": [
+          {
+            "startTime": 40453.7,
+            "timestamp": 41470.4,
+            "count": 61,
+            "observedMs": 1016.7000000000044,
+            "rafHz": 59.998032851381666,
+            "state": {
+              "view": "free",
+              "place": "hall",
+              "timeOfDay": "day",
+              "weatherPreset": "细雨",
+              "resolution": "balanced",
+              "shadows": "alternate",
+              "frameRate": "60",
+              "soundEnabled": true,
+              "paused": false,
+              "panorama": true
+            },
+            "renderer": {
+              "drawCalls": 333,
+              "triangles": 7461938,
+              "textures": 143,
+              "geometries": 267,
+              "pixelRatio": 1.5,
+              "drawSize": [
+                603,
+                1311
+              ],
+              "quality": "mobile/balanced/alternate/60",
+              "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+              "programs": 128,
+              "cpuUpdateMs": 0.5399999998509883,
+              "cpuRenderSubmitMs": 1.4000000002483526
+            }
+          }
+        ]
+      }
+    },
+    {
+      "active": {
+        "timers": 1,
+        "raf": 1,
+        "observers": 2,
+        "ticks": 15,
+        "callbacks": 15,
+        "draws": 302078,
+        "frames": 0,
+        "phases": 0,
+        "enabled": true,
+        "measures": 0
+      },
+      "stopped": {
+        "timers": 0,
+        "raf": 0,
+        "observers": 0,
+        "ticks": 16,
+        "callbacks": 16,
+        "draws": 311594,
+        "frames": 66,
+        "phases": 0,
+        "enabled": false,
+        "measures": 0
+      },
+      "resources": 1,
+      "collectionStartedAt": 42074.199999999255,
+      "initialWorkload": {
+        "sampleIntervalMs": 1000,
+        "initialLimit": 60,
+        "recentLimit": 120,
+        "dropped": 0,
+        "samples": []
+      },
+      "workload": {
+        "sampleIntervalMs": 1000,
+        "initialLimit": 60,
+        "recentLimit": 120,
+        "dropped": 0,
+        "samples": [
+          {
+            "startTime": 42086,
+            "timestamp": 43086.1,
+            "count": 60,
+            "observedMs": 1000.0999999999985,
+            "rafHz": 59.994000599940094,
+            "state": {
+              "view": "free",
+              "place": "hall",
+              "timeOfDay": "day",
+              "weatherPreset": "细雨",
+              "resolution": "balanced",
+              "shadows": "alternate",
+              "frameRate": "60",
+              "soundEnabled": true,
+              "paused": false,
+              "panorama": true
+            },
+            "renderer": {
+              "drawCalls": 333,
+              "triangles": 7462426,
+              "textures": 143,
+              "geometries": 267,
+              "pixelRatio": 1.5,
+              "drawSize": [
+                603,
+                1311
+              ],
+              "quality": "mobile/balanced/alternate/60",
+              "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+              "programs": 128,
+              "cpuUpdateMs": 0.4666666666666667,
+              "cpuRenderSubmitMs": 1.4333333333333333
+            }
+          }
+        ]
+      }
+    },
+    {
+      "active": {
+        "timers": 1,
+        "raf": 1,
+        "observers": 2,
+        "ticks": 16,
+        "callbacks": 17,
+        "draws": 314098,
+        "frames": 0,
+        "phases": 0,
+        "enabled": true,
+        "measures": 0
+      },
+      "stopped": {
+        "timers": 0,
+        "raf": 0,
+        "observers": 0,
+        "ticks": 17,
+        "callbacks": 18,
+        "draws": 323614,
+        "frames": 66,
+        "phases": 0,
+        "enabled": false,
+        "measures": 0
+      },
+      "resources": 1,
+      "collectionStartedAt": 43724,
+      "initialWorkload": {
+        "sampleIntervalMs": 1000,
+        "initialLimit": 60,
+        "recentLimit": 120,
+        "dropped": 0,
+        "samples": []
+      },
+      "workload": {
+        "sampleIntervalMs": 1000,
+        "initialLimit": 60,
+        "recentLimit": 120,
+        "dropped": 0,
+        "samples": [
+          {
+            "startTime": 43736.1,
+            "timestamp": 44737.1,
+            "count": 60,
+            "observedMs": 1001,
+            "rafHz": 59.94005994005994,
+            "state": {
+              "view": "free",
+              "place": "hall",
+              "timeOfDay": "day",
+              "weatherPreset": "细雨",
+              "resolution": "balanced",
+              "shadows": "alternate",
+              "frameRate": "60",
+              "soundEnabled": true,
+              "paused": false,
+              "panorama": true
+            },
+            "renderer": {
+              "drawCalls": 121,
+              "triangles": 3499105,
+              "textures": 143,
+              "geometries": 267,
+              "pixelRatio": 1.5,
+              "drawSize": [
+                603,
+                1311
+              ],
+              "quality": "mobile/balanced/alternate/60",
+              "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+              "programs": 128,
+              "cpuUpdateMs": 0.4066666666418314,
+              "cpuRenderSubmitMs": 1.3200000000496706
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "audioSoakSeconds": 0,
+  "audio": {
+    "soundBefore": {
+      "decodes": 9,
+      "peakDecodes": 1,
+      "decodedBytes": 187718440,
+      "sources": 9,
+      "peakSources": 9,
+      "states": [
+        "running"
+      ],
+      "timers": 1
+    },
+    "muted": {
+      "decodes": 9,
+      "peakDecodes": 1,
+      "decodedBytes": 187718440,
+      "sources": 9,
+      "peakSources": 9,
+      "states": [
+        "suspended"
+      ],
+      "timers": 0
+    },
+    "resumed": {
+      "decodes": 9,
+      "peakDecodes": 1,
+      "decodedBytes": 187718440,
+      "sources": 9,
+      "peakSources": 9,
+      "states": [
+        "running"
+      ],
+      "timers": 1
+    },
+    "soundAfter": {
+      "decodes": 9,
+      "peakDecodes": 1,
+      "decodedBytes": 187718440,
+      "sources": 9,
+      "peakSources": 9,
+      "states": [
+        "running"
+      ],
+      "timers": 1
+    }
+  },
+  "note": "Headed desktop Canary, 402x874 @ DPR3 touch emulation; lifecycle/layout/quality checks, not iPhone thermal evidence."
+}
