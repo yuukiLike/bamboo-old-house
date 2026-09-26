@@ -21,6 +21,7 @@ class ContactRefresh {
   this.settleSeconds=settleSeconds;this.refinementSeconds=refinementSeconds;
  }
  get refining() {return this.refinementStarted!==undefined;}
+ get needsRender() {return !this.valid||this.quality==='motion'||this.refining;}
  invalidate() {
   this.valid=false;this.quality='detail';this.refinement=0;this.refinementStarted=undefined;
  }
@@ -47,6 +48,9 @@ class ScaledGTAO extends GTAOPass {
  declare normalRenderTarget:T.WebGLRenderTarget;
  constructor(scene:T.Scene,camera:T.PerspectiveCamera,private readonly resolutionScale:number) {
   super(scene,camera,16,16);
+  // These two passes only draw a fullscreen triangle with depth testing and
+  // writing disabled. The normal pass keeps its sampled depth texture.
+  this.gtaoRenderTarget.depthBuffer=false;this.pdRenderTarget.depthBuffer=false;
  }
  override setSize(width:number,height:number) {
   super.setSize(Math.max(1,Math.round(width*this.resolutionScale)),Math.max(1,Math.round(height*this.resolutionScale)));
@@ -59,6 +63,7 @@ class CachedContactPass extends ShaderPass {
  private readonly view=new T.Matrix4();
  private readonly projection=new T.Matrix4();
  private warmed=false;
+ get needsRender() {return this.refresh.needsRender;}
  constructor(readonly contact:ScaledGTAO,readonly motionContact:ScaledGTAO,private readonly camera:T.PerspectiveCamera) {
   super({
    name:'CachedInteriorContact',
@@ -86,7 +91,7 @@ class CachedContactPass extends ShaderPass {
  resetForViewChange() {
   // A destination jump is already settled. Render its full contact detail
   // on the first frame instead of treating the new room as an ongoing pan.
-  this.refresh.invalidate();
+  this.refresh.invalidate();this.warmed=false;
  }
  warm(renderer:T.WebGLRenderer,writeBuffer:T.WebGLRenderTarget,readBuffer:T.WebGLRenderTarget) {
   if(this.warmed)return;
@@ -122,6 +127,7 @@ class CachedContactPass extends ShaderPass {
 export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,camera:T.PerspectiveCamera,house:T.Group,mobile:boolean) {
  let pipeline:ReturnType<typeof build>|undefined;
  let preparing:Promise<void>|undefined,preparationPending=false,disposed=false;
+ let targetsResident=false,deactivationPending=false;
  let firstRender=true;
  function build() {
   return measurePhase('interior.pipeline-build',buildPipeline,{mobile,deferred:mobile});
@@ -138,6 +144,15 @@ export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,cam
   const size=renderer.getSize(new T.Vector2()),ratio=renderer.getPixelRatio();
   const target=new T.WebGLRenderTarget(size.x*ratio,size.y*ratio,{type:T.HalfFloatType,samples:mobile?2:4});
   const composer=new EffectComposer(renderer,target);
+  // RenderPass does not swap; the contact and output passes both do. Thus
+  // every frame uses readBuffer for the scene and writeBuffer only for the
+  // fullscreen composite. Keep scene MSAA; its already resolved image needs
+  // neither another multisample buffer nor depth when multiplying the AO.
+  composer.writeBuffer.samples=0;composer.writeBuffer.depthBuffer=false;
+  composer.readBuffer.resolveDepthBuffer=false;
+  // Keep the composer in physical pixels so a resize changes dimensions once,
+  // instead of applying a new DPR to the old viewport before setting the new one.
+  composer.setPixelRatio(1);
   const beauty=new RenderPass(scene,camera);
   const contact=new ScaledGTAO(occluders,camera,.5);
   contact.blendIntensity=.38;
@@ -151,17 +166,26 @@ export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,cam
   motionContact.updatePdMaterial({radius:1.5,samples:mobile?4:8,rings:2,radiusExponent:2,lumaPhi:10,depthPhi:.18,normalPhi:3});
   const cachedContact=new CachedContactPass(contact,motionContact,camera);
   const output=new OutputPass();composer.addPass(beauty);composer.addPass(cachedContact);composer.addPass(output);
-  // A supplied render target initially gives EffectComposer physical sizes;
-  // explicitly establish logical viewport dimensions for correct DPR handling.
-  composer.setSize(size.x,size.y);
   return {composer,contact,motionContact,cachedContact,output,occluders};
+ }
+ function renderTargets(current:NonNullable<typeof pipeline>) {
+  const {composer,contact,motionContact}=current;
+  return [composer.readBuffer,composer.writeBuffer,contact.normalRenderTarget,contact.gtaoRenderTarget,contact.pdRenderTarget,motionContact.normalRenderTarget,motionContact.gtaoRenderTarget,motionContact.pdRenderTarget];
+ }
+ function releaseTargets() {
+  if(!pipeline||!targetsResident)return;
+  // dispose() releases GPU storage; the targets, materials and compiled
+  // programs remain reusable. The next indoor frame redraws full-detail AO.
+  for(const target of renderTargets(pipeline))target.dispose();
+  pipeline.cachedContact.resetForViewChange();targetsResident=false;
  }
  function release() {
   if(!pipeline)return;
-  pipeline.cachedContact.dispose();pipeline.output.dispose();pipeline.composer.dispose();pipeline.occluders.clear();pipeline=undefined;
+  pipeline.cachedContact.dispose();pipeline.output.dispose();pipeline.composer.dispose();pipeline.occluders.clear();pipeline=undefined;targetsResident=false;
  }
  async function prepare() {
-  const {composer,contact,motionContact,cachedContact,output,occluders}=pipeline??=build();
+  const current=pipeline??=build();
+  const {composer,contact,motionContact,cachedContact,output,occluders}=current;
   const geometry=new T.PlaneGeometry(2,2),shaders=new T.Scene();
   const fullscreenCamera=new T.OrthographicCamera(-1,1,1,-1,0,1);
   // OutputPass configures these defines on its first render. Compile that
@@ -178,7 +202,8 @@ export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,cam
   try {
    try {
     occluders.traverse(object=>{if(object instanceof T.Mesh){materials.set(object,object.material);object.material=contact.normalMaterial;}});
-    for(const target of [composer.readBuffer,composer.writeBuffer,contact.normalRenderTarget,contact.gtaoRenderTarget,contact.pdRenderTarget,motionContact.normalRenderTarget,motionContact.gtaoRenderTarget,motionContact.pdRenderTarget])renderer.initRenderTarget(target);
+    targetsResident=true;
+    for(const target of renderTargets(current))renderer.initRenderTarget(target);
     renderer.setRenderTarget(composer.readBuffer);
     finishTargets();
     // The beauty pass writes linear HDR into this target, so it needs a
@@ -190,7 +215,7 @@ export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,cam
    }
    await compilation;
    finishCompile?.(disposed?'cancelled':'success');
-   if(!disposed) {
+   if(!disposed&&!deactivationPending) {
     const target=renderer.getRenderTarget();
     try {measurePhase('interior.contact-warmup-submit',()=>cachedContact.warm(renderer,composer.writeBuffer,composer.readBuffer),{mobile});}
     finally {renderer.setRenderTarget(target);}
@@ -199,21 +224,32 @@ export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,cam
   finally {geometry.dispose();shaders.clear();}
  }
  return {
+  get needsRender() {return !disposed&&(!pipeline||pipeline.cachedContact.needsRender);},
   prepare() {
    if(disposed)return Promise.resolve();
-   if(!preparationPending){preparationPending=true;preparing=prepare().finally(()=>{preparationPending=false;if(disposed)release();});}
+   deactivationPending=false;
+   if(!preparationPending){preparationPending=true;preparing=prepare().finally(()=>{preparationPending=false;if(disposed)release();else if(deactivationPending)releaseTargets();});}
    return preparing;
   },
   render(delta=0) {
-   if(disposed)return;pipeline??=build();
+   if(disposed)return;pipeline??=build();deactivationPending=false;targetsResident=true;
    if(firstRender) {
     const current=pipeline;
     measurePhase('interior.first-frame-submit',()=>current.composer.render(delta),{mobile,deferred:mobile,boundary:'cpu-submitted'});
     firstRender=false;
    } else pipeline.composer.render(delta);
   },
+  deactivate() {
+   if(disposed||!mobile)return;
+   deactivationPending=true;if(!preparationPending)releaseTargets();
+  },
   resetForViewChange() { if(!disposed)pipeline?.cachedContact.resetForViewChange(); },
-  resize() { if(!pipeline)return;const size=renderer.getSize(new T.Vector2());pipeline.composer.setPixelRatio(renderer.getPixelRatio());pipeline.composer.setSize(size.x,size.y); },
+  resize() {
+   if(!pipeline)return;
+   const size=renderer.getSize(new T.Vector2()),ratio=renderer.getPixelRatio(),width=size.x*ratio,height=size.y*ratio;
+   if(pipeline.composer.readBuffer.width===width&&pipeline.composer.readBuffer.height===height)return;
+   pipeline.composer.setSize(width,height);
+  },
   dispose() {
    if(disposed)return;disposed=true;
    if(!preparationPending)release();

@@ -4,6 +4,22 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 const { chromium }=await import(process.env.PERF_PLAYWRIGHT ? pathToFileURL(process.env.PERF_PLAYWRIGHT).href : 'playwright');
+function validateWorkload(workload){
+ assert.deepEqual([workload.sampleIntervalMs,workload.initialLimit,workload.recentLimit],[1000,60,120]);
+ assert.ok(workload.samples.length>0&&workload.samples.length<=180);
+ assert.equal(new Set(workload.samples.map(sample=>sample.timestamp)).size,workload.samples.length);
+ for(const sample of workload.samples){
+  assert.ok(sample.timestamp>sample.startTime);
+  assert.ok(sample.count>0&&sample.observedMs>=1000&&Number.isFinite(sample.rafHz));
+  assert.ok(Math.abs(sample.rafHz-sample.count*1000/sample.observedMs)<1e-9);
+  for(const name of ['programs','cpuUpdateMs','cpuRenderSubmitMs']){
+   const value=sample.renderer?.[name];
+   assert.ok(value===undefined||value===null||(Number.isFinite(value)&&value>=0),`${name} must be finite or explicitly unavailable`);
+  }
+ }
+ assert.ok(workload.samples.some(sample=>sample.renderer?.programs>0&&Number.isFinite(sample.renderer.cpuUpdateMs)&&Number.isFinite(sample.renderer.cpuRenderSubmitMs)),
+  'a rendered scene must export real CPU measurements and shader program counts');
+}
 (async()=>{
  const out=process.env.PERF_OUT || 'outputs/performance/mobile-runtime-smoke';
  const audioSoakSeconds=Number(process.env.PERF_AUDIO_SOAK_SECONDS??90);
@@ -94,8 +110,15 @@ const { chromium }=await import(process.env.PERF_PLAYWRIGHT ? pathToFileURL(proc
   await page.waitForTimeout(5000);
   const probe=()=>page.evaluate(()=>({timers:window.__collectionProbe.intervals.size,raf:window.__collectionProbe.rafs.size,observers:window.__collectionProbe.observers.size,ticks:window.__collectionProbe.ticks,callbacks:window.__collectionProbe.observerCalls,draws:window.__collectionProbe.draws,frames:window.__BAMBOO__.frames.length,phases:window.__BAMBOO_PERF__.phases.length,active:window.__BAMBOO_PERF__.activePhases?.length,enabled:window.__BAMBOO_PERF__.enabled,measures:performance.getEntriesByType('measure').filter(x=>x.name.startsWith('bamboo:')).length}));
   const running=await probe();assert.equal(running.timers,1);assert.equal(running.raf,1);assert.ok(running.observers>=1);
+  const workloadBeforeStop=await page.evaluate(()=>{
+   // Keep only the test's reference after the production bridge is detached.
+   window.__stoppedCollector=window.__BAMBOO_RUNTIME__;
+   return window.__stoppedCollector.snapshot().workload;
+  });
+  validateWorkload(workloadBeforeStop);
   await page.getByRole('button',{name:'停止性能检测',exact:true}).click();
   const stopped=await probe();
+  const frozenWorkload=await page.evaluate(()=>window.__stoppedCollector.snapshot().workload);
   assert.equal(stopped.timers,0);assert.equal(stopped.raf,0);assert.equal(stopped.observers,0);assert.equal(stopped.enabled,false);assert.equal(stopped.active,0);assert.equal(stopped.measures,0);
   await page.getByRole('button',{name:'廊下望竹',exact:true}).click();
   await page.locator('.well-toggle').click();
@@ -115,6 +138,7 @@ const { chromium }=await import(process.env.PERF_PLAYWRIGHT ? pathToFileURL(proc
   await page.evaluate(()=>fetch('/audio/frog-call.mp3?stop-probe=1').then(r=>r.arrayBuffer()));
   await page.waitForTimeout(12000);
   const final=await probe();
+  assert.deepEqual(await page.evaluate(()=>window.__stoppedCollector.snapshot().workload),frozenWorkload,'workload observations must freeze after stop while scenery remains interactive');
   for(const key of ['ticks','callbacks','frames','phases','active','measures','raf','timers','observers'])assert.equal(final[key],stopped[key],`${key} must freeze after stop`);
   assert.ok(final.draws>stopped.draws,'scene keeps drawing');
   assert.equal(await page.locator('.sound-toggle').getAttribute('aria-pressed'),'true');
@@ -123,24 +147,35 @@ const { chromium }=await import(process.env.PERF_PLAYWRIGHT ? pathToFileURL(proc
   const downloadEvent=page.waitForEvent('download');await page.getByRole('button',{name:'导出 JSON',exact:true}).click();
   const download=await downloadEvent;const exported=JSON.parse(await fs.readFile(await download.path(),'utf8'));
   assert.equal(exported.runtime.status,'stopped');assert.equal(exported.businessPhases.enabled,false);assert.equal(exported.businessPhases.phases.length,stopped.phases);
+  assert.deepEqual(exported.runtime.workload,frozenWorkload,'the stopped export must preserve the final workload observations');
   const restarts=[];
   for(let round=0;round<3;round++){
    await page.getByRole('button',{name:'清空并重新检测',exact:true}).click();
-   await page.waitForFunction(()=>window.__BAMBOO_RUNTIME__&&window.__BAMBOO_PERF__.enabled&&window.__BAMBOO_PERF__.phases.length===0);
+   const started=await page.waitForFunction(()=>{
+    if(!window.__BAMBOO_RUNTIME__||!window.__BAMBOO_PERF__.enabled||window.__BAMBOO_PERF__.phases.length!==0)return false;
+    const snapshot=window.__BAMBOO_RUNTIME__.snapshot();
+    return {startedAt:snapshot.startedAt,workload:snapshot.workload};
+   });
+   const freshStart=await started.jsonValue();await started.dispose();
+   assert.deepEqual(freshStart.workload.samples,[],'a newly attached collector starts with no old workload records');
+   assert.equal(freshStart.workload.dropped,0);
    await page.waitForTimeout(300);
    const active=await probe();assert.equal(active.timers,1);assert.equal(active.raf,1);assert.equal(active.observers,running.observers);assert.ok(active.frames<stopped.frames);
    await page.evaluate(round=>fetch(`/audio/frog-call.mp3?restart-probe=${round}`).then(r=>r.arrayBuffer()),round);
    await page.waitForTimeout(1200);
+   await page.waitForFunction(()=>window.__BAMBOO_RUNTIME__.snapshot().workload.samples.some(sample=>sample.renderer?.programs>0&&Number.isFinite(sample.renderer.cpuUpdateMs)&&Number.isFinite(sample.renderer.cpuRenderSubmitMs)),{},{timeout:10000,polling:100});
    if(await page.locator('.perf-panel-title').getAttribute('aria-expanded')==='false')await page.locator('.perf-panel-title').click();
    const freshDownload=page.waitForEvent('download');await page.getByRole('button',{name:'导出 JSON',exact:true}).click();
    const fresh=JSON.parse(await fs.readFile(await (await freshDownload).path(),'utf8'));
    assert.ok(fresh.collectionStartedAt>0);assert.deepEqual(fresh.navigation,[]);assert.deepEqual(fresh.businessPhases.phases,[]);
    assert.ok(fresh.resources.length>=1);assert.ok(fresh.resources.every(r=>r.startTime>=fresh.collectionStartedAt));
    assert.ok(fresh.runtime.history.every(r=>r.startTime>=fresh.collectionStartedAt));
+   validateWorkload(fresh.runtime.workload);
+   assert.ok(fresh.runtime.workload.samples.every(sample=>sample.startTime>=fresh.collectionStartedAt&&sample.startTime>=freshStart.startedAt),'restarted workload cannot contain intervals from the previous collection');
    assert.equal(fresh.runtime.status,'collecting');
    await page.getByRole('button',{name:'停止性能检测',exact:true}).click();
    const again=await probe();assert.equal(again.timers,0);assert.equal(again.raf,0);assert.equal(again.observers,0);
-   restarts.push({active,stopped:again,resources:fresh.resources.length,collectionStartedAt:fresh.collectionStartedAt});
+   restarts.push({active,stopped:again,resources:fresh.resources.length,collectionStartedAt:fresh.collectionStartedAt,initialWorkload:freshStart.workload,workload:fresh.runtime.workload});
   }
   const audioProbe=()=>page.evaluate(()=>({decodes:__audioProbe.decodes,peakDecodes:__audioProbe.peakDecodes,decodedBytes:__audioProbe.decodedBytes,sources:__audioProbe.sources,peakSources:__audioProbe.peakSources,states:__audioProbe.contexts.map(c=>c.state),timers:__audioProbe.intervals.size}));
   const soundBefore=await audioProbe();assert.equal(soundBefore.peakDecodes,1);assert.equal(soundBefore.decodes,9);assert.equal(soundBefore.timers,1);
@@ -158,7 +193,7 @@ const { chromium }=await import(process.env.PERF_PLAYWRIGHT ? pathToFileURL(proc
   }
   const soundAfter=await audioProbe();assert.ok(soundAfter.peakSources<=18);
   assert.equal(errors.length,0);
-  await fs.writeFile(`${out}/acceptance.json`,JSON.stringify({capturedAt:new Date().toISOString(),browser:await browser.version(),url:url.href,defaults,full,reduced,submissions,resizeWrites,running,stopped,final,exportedStatus:exported.runtime.status,errors,afterStopViews:['porch','well-rain','free/hall'],restarts,audioSoakSeconds,audio:{soundBefore,muted,resumed,soundAfter},note:'Headed desktop Canary, 402x874 @ DPR3 touch emulation; lifecycle/layout/quality checks, not iPhone thermal evidence.'},null,2));
+  await fs.writeFile(`${out}/acceptance.json`,JSON.stringify({capturedAt:new Date().toISOString(),browser:await browser.version(),url:url.href,defaults,full,reduced,submissions,resizeWrites,running,stopped,final,workload:{beforeStop:workloadBeforeStop,frozen:frozenWorkload},exportedStatus:exported.runtime.status,errors,afterStopViews:['porch','well-rain','free/hall'],restarts,audioSoakSeconds,audio:{soundBefore,muted,resumed,soundAfter},note:'Headed desktop Canary, 402x874 @ DPR3 touch emulation; lifecycle/layout/quality checks, not iPhone thermal evidence.'},null,2));
   console.log(JSON.stringify({defaults,full,submissions,running,stopped,final,restarts,audio:{soundBefore,muted,resumed,soundAfter},errors},null,2));
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

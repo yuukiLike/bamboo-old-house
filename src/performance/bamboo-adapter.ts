@@ -65,6 +65,7 @@ function readRenderer(): RendererSnapshot | null {
  return {
   drawCalls: numberOrNull(scene.drawCalls), triangles: numberOrNull(scene.triangles),
   textures: numberOrNull(scene.textures), geometries: numberOrNull(scene.geometries),
+  programs: numberOrNull(scene.programs), cpuUpdateMs: numberOrNull(scene.cpuUpdateMs), cpuRenderSubmitMs: numberOrNull(scene.cpuRenderSubmitMs),
   pixelRatio: numberOrNull(scene.pixelRatio), drawSize: [...scene.drawSize],
   quality: scene.quality ? `${scene.quality}/${scene.renderSettings?.resolution??'full'}/${scene.renderSettings?.shadows??'full'}/${scene.renderSettings?.frameRate??'display'}` : null, gpu: scene.gpu || null,
  };
@@ -102,7 +103,7 @@ export const bambooPerformanceAdapter: PerformanceAdapter = {
  readyLabel: '首屏控件已就绪',
  formatPhaseDetail: detail,
  describeState: stateDescription,
- rendererDescription: '来自应用已有诊断，每 15 个应用帧更新。纹理与几何体是数量，不是显存字节。',
+ rendererDescription: '来自应用已有诊断，每 15 个受帧率设置调度的场景更新周期采样。纹理与几何体是数量，不是显存字节。CPU 更新与提交耗时取这 15 个周期的平均值；未绘制周期的提交耗时计 0。提交耗时可能包含驱动等待，不是 GPU 执行时间。',
  onCollector(collector) {
   // Compatibility for local inspection; ownership and disposal stay in the panel.
   window.__BAMBOO_RUNTIME__ = collector;

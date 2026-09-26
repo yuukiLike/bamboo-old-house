@@ -121,6 +121,24 @@ await test('resizing during navigation clears the old image and leaves later nav
  navigation.dispose();transition.dispose();
 });
 
+await test('address-bar resizes release the stale snapshot without allocating until the next capture',async()=>{
+ const {renderer,transition,frame}=setup(),navigation=createSceneTransition(()=>transition);
+ await transition.prepare();
+ const first=[...renderer.textures.keys()][0];let releases=0;
+ first.addEventListener('dispose',()=>releases++);
+ transition.resize();assert.equal(releases,0,'an unchanged drawing buffer retains the prepared snapshot');
+ for(const height of [720,740,760,780]){renderer.size.set(400,height);transition.resize();}
+ assert.equal(releases,1);
+ assert.equal(renderer.textures.size,1,'scrolling alone must not create intermediate-sized GPU textures');
+ assert.equal(renderer.material?.uniforms.previousFrame.value,null);
+ navigation.request(()=>{});frame(.7,100);
+ assert.equal(renderer.textures.size,2);
+ const latest=[...renderer.textures.keys()].at(-1)!.image as {width:number;height:number};
+ assert.equal(latest.width,640);assert.equal(latest.height,1248);
+ close(frame(.2,110),.7);close(frame(.2,330),.2);
+ navigation.dispose();transition.dispose();
+});
+
 await test('backgrounding and reduced motion finish immediately; unmount discards pending navigation',()=>{
  const {renderer,transition,frame}=setup(),navigation=createSceneTransition(()=>transition);
  const applied:string[]=[];
@@ -160,6 +178,23 @@ await test('shader preparation preserves displayed pixels and runs only once',as
  assert.equal(renderer.material?.toneMapped,false);
  assert.equal([...renderer.textures.keys()][0].colorSpace,T.NoColorSpace);
  transition.dispose();
+});
+
+await test('a frozen scene stays awake through capture/reveal and redraws when a held overlay is cleared',()=>{
+ const {transition,frame}=setup();
+ assert.equal(transition.needsRender,false);
+ transition.capture(()=>{});assert.equal(transition.needsRender,true);
+ frame(.8,0);assert.equal(transition.needsRender,false,'a held identical snapshot is not an animation');
+ const revision=transition.visualRevision;
+ transition.reveal(()=>{});assert.equal(transition.needsRender,true);
+ frame(.2,10);frame(.2,120);assert.equal(transition.needsRender,true);
+ close(frame(.2,230),.2);assert.equal(transition.needsRender,false);
+ assert.ok(transition.visualRevision>revision);
+ transition.capture(()=>{});frame(.4,240);
+ const held=transition.visualRevision;
+ transition.clear();assert.ok(transition.visualRevision>held,'external cancellation removes the displayed overlay');
+ const cleared=transition.visualRevision;transition.clear();assert.equal(transition.visualRevision,cleared);
+ transition.dispose();assert.equal(transition.needsRender,false);
 });
 
 await test('an unavailable transition shader falls back to immediate navigation',async()=>{
@@ -211,11 +246,15 @@ await test('a destination jump draws full detail on its first frame and cancels 
  const camera=new T.PerspectiveCamera(),contact=createInteriorContact(renderer as unknown as T.WebGLRenderer,new T.Scene(),camera,new T.Group(),false);
  const render=()=>{contact.render(1/60);assert.equal(target,null);return frames.at(-1)!;};
  try {
+  assert.equal(contact.needsRender,true);
   const initial=render();assert.equal(initial.contact,initial.refined);
+  assert.equal(contact.needsRender,false,'the first full-detail frame can become idle');
   now=1.016;camera.rotateY(.1);
   const moving=render();assert.notEqual(moving.contact,moving.refined);
+  assert.equal(contact.needsRender,true,'camera stopping must still finish the contact settle window');
   now=1.15;render();now=1.20;
   assert.ok(render().refinement>0,'start a real motion-to-detail refinement in the old room');
+  assert.equal(contact.needsRender,true);
 
   now=1.22;camera.position.x=5;contact.resetForViewChange();const beforeArrival=normals.length;
   const arrived=render();
@@ -223,11 +262,15 @@ await test('a destination jump draws full detail on its first frame and cancels 
   assert.deepEqual(normals.at(-1),{width:640,x:5});
   assert.equal(arrived.contact,arrived.refined,'the first destination frame already samples full detail');
   assert.equal(arrived.refinement,0,'the old room cannot contribute a refinement tail');
+  assert.equal(contact.needsRender,false);
   for(const time of [1.25,1.35,1.5]) {
    now=time;const still=render();assert.equal(still.contact,arrived.contact);assert.equal(still.refinement,0);
   }
   now=1.52;camera.rotateY(.1);
   const panning=render();assert.notEqual(panning.contact,panning.refined,'continuous input retains the cheaper aligned contact pass');
+  now=1.65;render();assert.equal(contact.needsRender,true);
+  now=1.80;const refined=render();assert.equal(refined.contact,refined.refined,'submit the final complete contact detail');
+  assert.equal(contact.needsRender,false,'only the completed refinement may become idle');
 
   // Returning from an outdoor view can leave a stale motion cache for a long
   // time without any interior render. It still needs full detail immediately.
@@ -238,12 +281,13 @@ await test('a destination jump draws full detail on its first frame and cancels 
   // The shared renderer's explicit resolution setting must resize indoor
   // contact targets too, then restore the exact original target dimensions.
   for(const ratio of [1.6*.85,1.6]){
-   pixelRatio=ratio;contact.resize();const count=normals.length;
+   pixelRatio=ratio;contact.resize();assert.equal(contact.needsRender,true);const count=normals.length;
    now+=.016;const resized=render();
    assert.equal(normals.length,count+1,'refresh contact immediately after a resolution change');
    assert.deepEqual(normals.at(-1),{width:Math.round(800*ratio*.5),x:-3});
    assert.equal(resized.contact,resized.refined,'never blend with an old-resolution contact map');
    assert.equal(resized.refinement,0);
+   assert.equal(contact.needsRender,false);
   }
  } finally {contact.dispose();}
 });

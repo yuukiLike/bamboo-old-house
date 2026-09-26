@@ -18,7 +18,9 @@ export function createRainShelter(house:T.Group,roofAt:(x:number,z:number)=>numb
     meshes.push(o);
   });
   const bounds=new T.Box3();for(const mesh of meshes)bounds.expandByObject(mesh);
-  const started=performance.now(),exact=createRainOcclusion(meshes,rainDirections.map(direction=>new T.Vector3(-direction.cos*.67,1,-direction.sin*.67))),triangleBuildMs=performance.now()-started;
+  const started=performance.now();
+  let exact:ReturnType<typeof createRainOcclusion>|undefined=createRainOcclusion(meshes,rainDirections.map(direction=>new T.Vector3(-direction.cos*.67,1,-direction.sin*.67)));
+  const triangleBuildMs=performance.now()-started,occlusionStats=exact.stats;
   const voxelStarted=performance.now();
   const step=.20,origin=bounds.min.clone().addScalar(-step*2);
   const nx=Math.ceil((bounds.max.x-origin.x)/step)+3,ny=Math.ceil((bounds.max.y-origin.y)/step)+3,nz=Math.ceil((bounds.max.z-origin.z)/step)+3;
@@ -57,6 +59,7 @@ export function createRainShelter(house:T.Group,roofAt:(x:number,z:number)=>numb
   };
   const cache=new Map<string,[number,number,number]>();
   const exposure=(x:number,y:number,z:number,nx=0,ny=1,nz=0):[number,number,number]=>{
+    if(!exact)throw new Error('RAIN_EXPOSURE_DATA_RELEASED');
     // Millimetres of face bias avoid self intersections without jumping through
     // a thin wall. Exact triangles retain the air between slender balusters;
     // the conservative particle voxels alone would close those openings.
@@ -83,7 +86,12 @@ export function createRainShelter(house:T.Group,roofAt:(x:number,z:number)=>numb
     }
     return reach.map((value,i)=>T.MathUtils.clamp(value*Math.max(.12,ny-nx*rainDirections[i].cos*.67-nz*rainDirections[i].sin*.67),0,1)) as [number,number,number];
   };
-  return{solid,clip,exposure,stats:{step,triangles,solidCells,cells:cells.length,triangleBuildMs,voxelBuildMs,occlusion:exact.stats},dispose(){cache.clear();cells.fill(0);exact.dispose();}};
+  // Exact triangles and memoized exposure are needed only while baking the
+  // surface attributes. Particle collision keeps using the independent voxels.
+  // Standalone callers retain exact queries until they explicitly release them.
+  const releaseExposureData=()=>{cache.clear();exact?.dispose();exact=undefined;};
+  let disposed=false;
+  return{solid,clip,exposure,releaseExposureData,stats:{step,triangles,solidCells,cells:cells.length,triangleBuildMs,voxelBuildMs,occlusion:occlusionStats},dispose(){if(disposed)return;disposed=true;releaseExposureData();cells.fill(0);}};
 }
 
 /** Authored floors and lime walls contain metre-wide sparse triangles.

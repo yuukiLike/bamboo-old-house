@@ -26,11 +26,14 @@ export function createViewTransition(renderer:T.WebGLRenderer,timings?:Pick<type
  const bufferSize=new T.Vector2(),logicalSize=new T.Vector2();
  const savedViewport=new T.Vector4(),savedScissor=new T.Vector4();
  let snapshot:T.FramebufferTexture|undefined,operation:Operation|undefined;
- let alpha=0,hasSnapshot=false,disposed=false,disabled=false,released=false;
+ let alpha=0,hasSnapshot=false,disposed=false,disabled=false,released=false,visualRevision=0;
  let preparing:Promise<void>|undefined,preparationPending=false;
  let context={view:'walk',place:'courtyard'};
 
- function clear(status:PhaseStatus='cancelled') {operation?.finish(status);operation=undefined;alpha=0;hasSnapshot=false;}
+ function clear(status:PhaseStatus='cancelled') {
+  if(hasSnapshot||alpha!==0)visualRevision++;
+  operation?.finish(status);operation=undefined;alpha=0;hasSnapshot=false;
+ }
  function allocate() {
   renderer.getDrawingBufferSize(bufferSize);
   if(snapshot&&snapshot.image.width===bufferSize.x&&snapshot.image.height===bufferSize.y)return false;
@@ -155,6 +158,8 @@ export function createViewTransition(renderer:T.WebGLRenderer,timings?:Pick<type
   }
  }
  return {
+  get needsRender(){return !disposed&&!disabled&&!!operation;},
+  get visualRevision(){return visualRevision;},
   prepare,
   setContext(value:{view:string;place:string}) {context={...value};},
   capture:(complete:()=>void)=>schedule('capture',complete),
@@ -162,8 +167,14 @@ export function createViewTransition(renderer:T.WebGLRenderer,timings?:Pick<type
   render,clear,
   resize() {
    if(disposed||disabled)return;
+   renderer.getDrawingBufferSize(bufferSize);
+   if(snapshot?.image.width===bufferSize.x&&snapshot.image.height===bufferSize.y)return;
+   if(!snapshot&&!operation)return;
    const current=operation;
-   try {if(!allocate())return;} catch {disable();return;}
+   // Safari's collapsing address bar can change the drawing-buffer height
+   // several times during one scroll. An invalid old snapshot is unusable;
+   // release it now and allocate once, only when another capture needs it.
+   snapshot?.dispose();snapshot=undefined;material.uniforms.previousFrame.value=null;
    clear();
    // Finish the handoff immediately after a size change. Discarding only the
    // callback would strand the outer latest-destination scheduler in "cover".

@@ -39,6 +39,10 @@ export function createWeather(scene:T.Scene,house:T.Group,camera:T.PerspectiveCa
   const surfaceWeather:SurfaceWeather={rainTime:{value:0},activity:{value:weather.rain.value>.01?1:0},ingressWater:{value:new T.Vector3()}};
   const surfaces=weatherSurfaces(scene,roof,weather,surfaceWeather,shelter);
   const exposureBuildMs=performance.now()-exposureStarted;
+  // weatherSurfaces completes its full synchronous traversal before returning.
+  // All future rain/wind settings reuse those baked attributes and the voxels;
+  // the large exact triangle index and exposure memoization can now be freed.
+  shelter.releaseExposureData();
   const group=new T.Group();group.name='Rain_and_roof_runoff';scene.add(group);
   const random=seeded(832194);
   const maxDrops=mobile?2400:6500,maxImpacts=mobile?180:420;
@@ -189,7 +193,7 @@ export function createWeather(scene:T.Scene,house:T.Group,camera:T.PerspectiveCa
   };
   drops.forEach(drop=>spawn(drop,true));
   const runoff:Drop[]=Array.from({length:eaves.length*runoffPerEave},(_,i)=>({x:eaves[Math.floor(i/runoffPerEave)].x,y:eaves[Math.floor(i/runoffPerEave)].y,z:eaves[Math.floor(i/runoffPerEave)].z,speed:0,seed:random(),runoff:true,released:0}));
-  let lastTime=weather.time.value,impactCursor=0,previousCount=0,collisionCount=0,runoffFlow=0,roofWater=0,runoffDrops=0,ingressDrops=0;
+  let disposed=false,lastTime=weather.time.value,impactCursor=0,previousCount=0,collisionCount=0,runoffFlow=0,roofWater=0,runoffDrops=0,ingressDrops=0,visualRevision=0;
   const emitImpact=(x:number,y:number,z:number,strength:number,hard:boolean)=>{
     const impact=impacts[impactCursor++%maxImpacts];impact.x=x;impact.y=y+.012;impact.z=z;impact.born=weather.time.value;impact.strength=strength;impact.hard=hard;impact.seed=random();
   };
@@ -206,9 +210,13 @@ export function createWeather(scene:T.Scene,house:T.Group,camera:T.PerspectiveCa
     streakWidth[index]=width;
   };
   return {
+    // Rare state changes can still happen with a frozen simulation clock:
+    // a previously sheltered vapor sample succeeds, or an eave drop is culled.
+    get visualRevision(){return visualRevision;},
     surfaceHeightAt:(x:number,z:number)=>Math.max(ground(x,z),roof.sample(x,z)),
     isSheltered:(x:number,y:number,z:number)=>roof.sample(x,z)>y+.12,
     update(_delta:number,staticWeather=false){
+      if(disposed)return;
       // Pause, reduced motion and hidden tabs all freeze the owner's clock.
       const dt=staticWeather?0:Math.min(.075,Math.max(0,weather.time.value-lastTime));lastTime=weather.time.value;
       camera.getWorldDirection(forward);right.crossVectors(forward,up).normalize();halfFov=Math.tan(camera.fov*Math.PI/360);
@@ -238,6 +246,7 @@ export function createWeather(scene:T.Scene,house:T.Group,camera:T.PerspectiveCa
         for(let i=0;i<vaporCount;i++){
           const cycle=Math.floor(weather.time.value/(4.3+vaporSeeds[i]*3)+vaporSeeds[i]*7);
           const p=i*3;if(vaporCycles[i]===cycle&&(vaporPositions[p]-camera.position.x)**2+(vaporPositions[p+2]-camera.position.z)**2<12**2)continue;
+          const oldX=vaporPositions[p],oldY=vaporPositions[p+1],oldZ=vaporPositions[p+2];
           vaporCycles[i]=cycle;
           vaporPositions[p+1]=-1000;
           for(let attempt=0;attempt<16;attempt++){
@@ -247,6 +256,7 @@ export function createWeather(scene:T.Scene,house:T.Group,camera:T.PerspectiveCa
             if(sheltered)continue;
             vaporPositions[p]=x;vaporPositions[p+1]=y;vaporPositions[p+2]=z;break;
           }
+          if(vaporPositions[p]!==oldX||vaporPositions[p+1]!==oldY||vaporPositions[p+2]!==oldZ)visualRevision++;
         }
         vaporGeometry.attributes.vaporCenter.needsUpdate=true;
       }
@@ -297,10 +307,11 @@ export function createWeather(scene:T.Scene,house:T.Group,camera:T.PerspectiveCa
           // Wind can carry a leeward eave drop back against the building.
           // Consume it there; otherwise that runoff would cross walls into
           // rooms even though the main rain particles respect the roof.
-          if(lowerRoof>=source.y-.25&&drop.y<lowerRoof-.12){drop.speed=0;continue;}
+          if(lowerRoof>=source.y-.25&&drop.y<lowerRoof-.12){if(drop.speed>0)visualRevision++;drop.speed=0;continue;}
           const floor=Math.max(ground(drop.x,drop.z),lowerRoof<source.y-.25?lowerRoof:-100);
           if(drop.y<=floor+.018){
             emitImpact(drop.x,floor,drop.z,.8+flow*.8,hardGround(drop.x,drop.z)||lowerRoof===floor);
+            visualRevision++;
             drop.speed=0;continue;
           }
           writeLine(lineCount++,drop,dx*.26,dz*.26,drop.speed,.009+flow*.017,.28+flow*.38,.0016+flow*.0035);runoffDrops++;
@@ -349,8 +360,8 @@ export function createWeather(scene:T.Scene,house:T.Group,camera:T.PerspectiveCa
     },
     // Audio depends on drainage even when performance collection is stopped.
     get runoffFlow(){return runoffFlow;},
-    diagnostics(){return{rainDrops:previousCount,roofCells:roof.heights.length,runoffSources:eaves.length,collisions:collisionCount,localRainTime:surfaceWeather.rainTime.value,absorptionActivity:surfaceWeather.activity.value,roofWater,runoffFlow,runoffDrops,ingressWetness:Math.max(...surfaceWeather.ingressWater.value.toArray()),ingressDrops,ingressExposedVertices:surfaces.exposedVertices,solidRainCells:shelter.stats.solidCells,shelterTriangles:shelter.stats.triangles,triangleShelterBuildMs:shelter.stats.triangleBuildMs,voxelShelterBuildMs:shelter.stats.voxelBuildMs,surfaceExposureBuildMs:exposureBuildMs,solidAt:shelter.solid,ingressAt:shelter.exposure,shelterAt:(x:number,y:number,z:number)=>roof.sample(x,z)>y+.12};},
-    dispose(){surfaces.dispose();shelter.dispose();scene.remove(group);rainGeometry.dispose();centerlineMaterial.dispose();ribbonGeometry.dispose();ribbonQuad.dispose();rainMaterial.dispose();impactGeometry.dispose();quad.dispose();impactMaterial.dispose();vaporGeometry.dispose();vaporQuad.dispose();vaporMaterial.dispose();},
+    diagnostics(){return{rainDrops:previousCount,roofCells:roof.heights.length,runoffSources:eaves.length,collisions:collisionCount,localRainTime:surfaceWeather.rainTime.value,absorptionActivity:surfaceWeather.activity.value,roofWater,runoffFlow,runoffDrops,ingressWetness:Math.max(...surfaceWeather.ingressWater.value.toArray()),ingressDrops,ingressExposedVertices:surfaces.exposedVertices,solidRainCells:shelter.stats.solidCells,shelterTriangles:shelter.stats.triangles,triangleShelterBuildMs:shelter.stats.triangleBuildMs,voxelShelterBuildMs:shelter.stats.voxelBuildMs,surfaceExposureBuildMs:exposureBuildMs,solidAt:shelter.solid,shelterAt:(x:number,y:number,z:number)=>roof.sample(x,z)>y+.12};},
+    dispose(){if(disposed)return;disposed=true;surfaces.dispose();shelter.dispose();scene.remove(group);rainGeometry.dispose();centerlineMaterial.dispose();ribbonGeometry.dispose();ribbonQuad.dispose();rainMaterial.dispose();impactGeometry.dispose();quad.dispose();impactMaterial.dispose();vaporGeometry.dispose();vaporQuad.dispose();vaporMaterial.dispose();},
   };
 }
 

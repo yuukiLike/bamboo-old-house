@@ -31,6 +31,22 @@ export interface RendererSnapshot {
  drawSize: number[];
  quality: string | null;
  gpu: string | null;
+ programs?: number | null;
+ /** Latest adapter CPU update measurement; its aggregation belongs to the
+  * adapter, not the workload interval. This is not GPU execution time. */
+ cpuUpdateMs?: number | null;
+ /** Latest adapter CPU submission measurement, with adapter-defined
+  * aggregation. It may include driver waits and is not a GPU timer. */
+ cpuRenderSubmitMs?: number | null;
+}
+export interface RuntimeWorkloadSample {
+ startTime: number;
+ timestamp: number;
+ count: number;
+ observedMs: number;
+ rafHz: number;
+ state: RuntimeState;
+ renderer: RendererSnapshot | null;
 }
 export interface RuntimeSnapshot {
  version: 1;
@@ -50,6 +66,9 @@ export interface RuntimeSnapshot {
  stutters: RuntimeStutter[];
  state: RuntimeState;
  renderer: RendererSnapshot | null;
+ /** Low-rate foreground observations: the beginning and most recent samples,
+  * with no duplicate entries when the retained ranges overlap. */
+ workload: { sampleIntervalMs: number; initialLimit: number; recentLimit: number; dropped: number; samples: RuntimeWorkloadSample[]; };
  longTasks: { supported: boolean; recentCount: number | null; recentMaxMs: number | null; events: Interval[]; };
  dropped: { frames: number; stutters: number; longTasks: number; };
  interruptions: number;
@@ -67,6 +86,9 @@ const HISTORY_MS = 30000;
 const FRAME_LIMIT = 12000;
 const EVENT_LIMIT = 120;
 const STUTTER_MS = 50;
+const WORKLOAD_INTERVAL_MS = 1000;
+const WORKLOAD_INITIAL_LIMIT = 60;
+const WORKLOAD_RECENT_LIMIT = 120;
 const finiteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 function plainRecord(value: unknown): value is Record<string, unknown> {
  if (value === null || typeof value !== 'object') return false;
@@ -90,6 +112,7 @@ function cloneRenderer(value: RendererSnapshot | null): RendererSnapshot | null 
  if (!plainRecord(value)
   || ![value.drawCalls, value.triangles, value.textures, value.geometries, value.pixelRatio].every(item => item === null || finiteNumber(item))
   || ![value.quality, value.gpu].every(item => item === null || typeof item === 'string')
+  || ![value.programs, value.cpuUpdateMs, value.cpuRenderSubmitMs].every(item => item === undefined || item === null || (finiteNumber(item) && item >= 0))
   || !Array.isArray(value.drawSize) || ![...value.drawSize].every(finiteNumber)) {
   throw new TypeError('Renderer diagnostics must contain finite numbers, strings or explicit nulls.');
  }
@@ -98,6 +121,9 @@ function cloneRenderer(value: RendererSnapshot | null): RendererSnapshot | null 
   textures: value.textures, geometries: value.geometries,
   pixelRatio: value.pixelRatio, drawSize: [...value.drawSize],
   quality: value.quality, gpu: value.gpu,
+  ...(value.programs !== undefined ? { programs: value.programs } : {}),
+  ...(value.cpuUpdateMs !== undefined ? { cpuUpdateMs: value.cpuUpdateMs } : {}),
+  ...(value.cpuRenderSubmitMs !== undefined ? { cpuRenderSubmitMs: value.cpuRenderSubmitMs } : {}),
  };
 }
 
@@ -173,11 +199,39 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
  const stutters: RuntimeStutter[] = [];
  const tasks: Interval[] = [];
  const actions: Action[] = [];
+ const initialWorkload: RuntimeWorkloadSample[] = [];
+ const recentWorkload: RuntimeWorkloadSample[] = [];
+ let workloadDropped = 0;
+ let workloadStart: number | null = null;
+ let workloadCount = 0;
+ let workloadObservedMs = 0;
  const dropped = { frames: 0, stutters: 0, longTasks: 0 };
  let observer: PerformanceObserver | undefined;
  let longTaskSupported = false;
 
  function collecting() { return !disposed && !paused && !hidden; }
+ function resetWorkloadInterval() {
+  workloadStart = null; workloadCount = 0; workloadObservedMs = 0;
+ }
+ function recordWorkload(interval: Interval, now: number) {
+  workloadStart ??= interval.startTime;
+  workloadCount++;
+  workloadObservedMs += interval.duration;
+  if (workloadObservedMs < WORKLOAD_INTERVAL_MS) return;
+  if (stateReadAt !== now) { cachedState = readState(); stateReadAt = now; }
+  cachedRenderer = readRenderer();
+  const sample: RuntimeWorkloadSample = {
+   startTime: workloadStart, timestamp: now, count: workloadCount,
+   observedMs: workloadObservedMs, rafHz: workloadCount * 1000 / workloadObservedMs,
+   state: cachedState, renderer: cachedRenderer,
+  };
+  if (initialWorkload.length < WORKLOAD_INITIAL_LIMIT) initialWorkload.push(sample);
+  else {
+   recentWorkload.push(sample);
+   if (recentWorkload.length > WORKLOAD_RECENT_LIMIT) { recentWorkload.shift(); workloadDropped++; }
+  }
+  resetWorkloadInterval();
+ }
  function recordTasks(entries: PerformanceEntry[]) {
   if (!collecting()) return;
   for (const entry of entries) {
@@ -218,6 +272,7 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
     if (stutters.length > EVENT_LIMIT) { stutters.shift(); dropped.stutters++; }
     cachedState = state; stateReadAt = now;
    }
+   recordWorkload(interval, now);
   }
   previousFrame = now;
   previousState = cachedState;
@@ -244,6 +299,7 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
   cachedState = readState(); cachedRenderer = readRenderer();
   cancelAnimationFrame(frameHandle); frameHandle = 0;
   previousFrame = null; previousState = null;
+  resetWorkloadInterval();
   interruptions++;
  }
  function restart() {
@@ -296,6 +352,12 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
     history: frames.filter(entry => entry.startTime + entry.duration >= chartEnd - HISTORY_MS && entry.startTime + entry.duration <= chartEnd).map(entry => ({ ...entry })),
     stutters: stutters.map(entry => ({ ...entry, state: { ...entry.state }, stateBefore: entry.stateBefore && { ...entry.stateBefore }, actions: entry.actions.map(action => ({ ...action })), recentAction: entry.recentAction && { ...entry.recentAction }, phases: [...entry.phases] })),
     state: { ...cachedState }, renderer: cachedRenderer && { ...cachedRenderer, drawSize: [...cachedRenderer.drawSize] },
+    workload: {
+     sampleIntervalMs: WORKLOAD_INTERVAL_MS, initialLimit: WORKLOAD_INITIAL_LIMIT, recentLimit: WORKLOAD_RECENT_LIMIT, dropped: workloadDropped,
+     samples: [...initialWorkload, ...recentWorkload].map(entry => ({
+      ...entry, state: { ...entry.state }, renderer: entry.renderer && { ...entry.renderer, drawSize: [...entry.renderer.drawSize] },
+     })),
+    },
     longTasks: { supported: longTaskSupported, recentCount: longTaskSupported ? recentTasks.length : null,
      recentMaxMs: longTaskSupported && recentTasks.length ? Math.max(...recentTasks.map(entry => entry.duration)) : null,
      events: tasks.map(entry => ({ ...entry })) },
@@ -315,6 +377,8 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
   clear() {
    if (disposed) return;
    frames.length = 0; stutters.length = 0; tasks.length = 0; actions.length = 0;
+   initialWorkload.length = 0; recentWorkload.length = 0; workloadDropped = 0;
+   resetWorkloadInterval();
    dropped.frames = 0; dropped.stutters = 0; dropped.longTasks = 0;
    interruptions = 0;
    lastResetAt = performance.now(); segmentStart = lastResetAt; frozenAt = lastResetAt;

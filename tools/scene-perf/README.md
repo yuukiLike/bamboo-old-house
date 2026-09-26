@@ -126,6 +126,12 @@ function disposeDiagnostics() {
 
 保持 5 秒读数窗口、30 秒帧历史和有界事件。RAF Hz 不是屏幕 FPS；主线程阻塞会同时阻塞面板，完整间隔在恢复回调后才出现。页面隐藏／暂停的边界不拼成假卡顿。
 
+导出的 `runtime.workload` 还保留低频工作负载历史，用于对照“刚打开时”和“多次切换场景后”的变化。采集器复用自己的 RAF，连续前台观察满约 1 秒后读取一次状态和 renderer；不会新增定时器或同步查询 GPU。每条样本包含 `startTime`、`timestamp`（相对导航的毫秒时间）、`count`、`observedMs`、`rafHz`、`state` 和 `renderer`。`rafHz` 按这段实际完成的回调间隔计算，遇到长卡顿不会补造每秒样本；暂停／隐藏时舍弃尚未满 1 秒的段，恢复后重新累计。
+
+`workload.samples` 固定保留开头最多 60 条，以及其后最近最多 120 条，总数最多 180，两个区间不会重复。`sampleIntervalMs`、`initialLimit`、`recentLimit` 和 `dropped` 标注采样间隔、保留上限与中段被移除的条数。它不替代 30 秒的逐帧历史；停止后冻结，`clear()` 或新建采集器后清空，导出对象与内部记录相互独立。
+
+renderer 可选提供 `programs`（已编译着色程序数）、`cpuUpdateMs` 和 `cpuRenderSubmitMs`，未知值填 `null`，旧适配器也可完全省略。这两个耗时字段来自适配器最近一次 CPU 更新和提交采样，统计口径由适配器定义；竹林项目提供最近一组 15 个通过帧率调度的场景更新 tick 的均值，未提交绘制的 tick 将提交耗时记为 0。它们不是上述 1 秒工作负载区间的均值，也不是 GPU 执行时间；提交耗时可能包含驱动等待。适配器应返回已经缓存的读数，不能为采集而调用 `gl.finish()`、等待 GPU 查询或扫描完整场景。
+
 ## 业务计时：独立 recorder
 
 ```ts
