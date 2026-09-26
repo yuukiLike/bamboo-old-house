@@ -36,15 +36,28 @@ export function createRainOcclusion(meshes:T.Mesh[],directions:readonly T.Vector
   const rows=count?Math.floor((z1+padding)/cellSize)-z0+1:0;
   const cells=new Map<number,number[]>();
   for(let triangle=0;triangle<count;triangle++){
-   let loX=Infinity,loZ=Infinity,hiX=-Infinity,hiZ=-Infinity;
-   for(let corner=0;corner<3;corner++){
-    const offset=triangle*9+corner*3;
-    const x=vertices[offset]-sx*vertices[offset+1],z=vertices[offset+2]-sz*vertices[offset+1];
-    loX=Math.min(loX,x);loZ=Math.min(loZ,z);hiX=Math.max(hiX,x);hiZ=Math.max(hiZ,z);
-   }
+   const offset=triangle*9;
+   const ax=vertices[offset]-sx*vertices[offset+1],az=vertices[offset+2]-sz*vertices[offset+1];
+   const bx=vertices[offset+3]-sx*vertices[offset+4],bz=vertices[offset+5]-sz*vertices[offset+4];
+   const cx=vertices[offset+6]-sx*vertices[offset+7],cz=vertices[offset+8]-sz*vertices[offset+7];
+   const loX=Math.min(ax,bx,cx),loZ=Math.min(az,bz,cz),hiX=Math.max(ax,bx,cx),hiZ=Math.max(az,bz,cz);
    const left=Math.floor((loX-padding)/cellSize)-x0,right=Math.floor((hiX+padding)/cellSize)-x0;
    const bottom=Math.floor((loZ-padding)/cellSize)-z0,top=Math.floor((hiZ+padding)/cellSize)-z0;
+   // A slanted triangle only occupies part of its rectangular bounds. The
+   // three inward edge normals reject cells entirely outside the triangle.
+   // Expand the cell by the same conservative margin as the outer bounds;
+   // near-degenerate projections retain the original rectangle candidates.
+   const area=(bx-ax)*(cz-az)-(bz-az)*(cx-ax),winding=area<0?-1:1;
+   const abX=(az-bz)*winding,abZ=(bx-ax)*winding;
+   const bcX=(bz-cz)*winding,bcZ=(cx-bx)*winding;
+   const caX=(cz-az)*winding,caZ=(ax-cx)*winding;
+   const extent=cellSize*.5+padding;
+   const abMin=abX*ax+abZ*az-(Math.abs(abX)+Math.abs(abZ))*extent;
+   const bcMin=bcX*bx+bcZ*bz-(Math.abs(bcX)+Math.abs(bcZ))*extent;
+   const caMin=caX*cx+caZ*cz-(Math.abs(caX)+Math.abs(caZ))*extent;
    for(let z=bottom;z<=top;z++)for(let x=left;x<=right;x++){
+    const centerX=(x+x0+.5)*cellSize,centerZ=(z+z0+.5)*cellSize;
+    if(Math.abs(area)>1e-12&&(abX*centerX+abZ*centerZ<abMin||bcX*centerX+bcZ*centerZ<bcMin||caX*centerX+caZ*centerZ<caMin))continue;
     const key=z*columns+x,cell=cells.get(key);
     if(cell)cell.push(triangle);else cells.set(key,[triangle]);
    }

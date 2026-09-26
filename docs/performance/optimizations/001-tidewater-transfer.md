@@ -117,13 +117,13 @@
 
 | 版本 | 本机地址 | 来源 |
 | --- | --- | --- |
-| 优化版 | <http://127.0.0.1:4175/> | 当前优化分支的生产构建 |
+| 第一阶段优化版 | <http://127.0.0.1:4177/> | 固定在 `83baa2e` 的独立 worktree 生产构建 |
 | 优化前 | <http://127.0.0.1:4176/> | `3f382ac` 独立 worktree 的生产构建 |
-| 优化版性能面板 | <http://127.0.0.1:4175/?perf=1&perfUI=1> | 现有项目诊断工具 |
+| 第一阶段性能面板 | <http://127.0.0.1:4177/?perf=1&perfUI=1> | 现有项目诊断工具 |
 
 可先比较首次进入时的等待，再查看井边雨景、室内地面和窗边、360° 环顾与视角切换。此版本的主要已证实收益是启动期 CPU 计算；画面构图、竹林密度和细节应当保持原样。
 
-服务在本次会话中已启动。优化版停止后可在项目根目录运行 `pnpm preview --host 127.0.0.1 --port 4175 --strictPort`。基线 worktree 位于 `/tmp/bamboo-tidewater-before-3f382ac`，其依赖软链接到主工作区；在该目录运行 `node_modules/.bin/vite preview --host 127.0.0.1 --port 4176 --strictPort` 可重启原版。
+首次交付时本阶段使用 4175；第二阶段开始后，4175 留给系列最新版本，本阶段固定到 4177 以免混淆。第一阶段 worktree 位于 `/tmp/bamboo-tidewater-stage1-83baa2e`，在其中运行 `node_modules/.bin/vite preview --host 127.0.0.1 --port 4177 --strictPort` 可重启。原始基线 worktree 位于 `/tmp/bamboo-tidewater-before-3f382ac`，在其中运行 `node_modules/.bin/vite preview --host 127.0.0.1 --port 4176 --strictPort` 可重启原版。两者依赖均软链接到主工作区。
 
 ### 复现 CPU 采集
 
@@ -135,6 +135,7 @@ node scripts/perf/optimization-bench.mjs \
   --out outputs/performance/tidewater-transfer/recheck-before.json
 
 node scripts/perf/optimization-bench.mjs \
+  --ref 83baa2e119b40d0c76a69da874d83f2088f4ff5f \
   --out outputs/performance/tidewater-transfer/recheck-after.json
 ```
 

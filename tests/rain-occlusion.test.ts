@@ -66,3 +66,45 @@ await test('cell borders, back faces, small apertures and the original ray limit
  assert.equal(occlusion.blocked(.125,-1,0,0),false);
  assert.equal(createRainOcclusion([],directions).blocked(0,0,0,0),false);
 });
+
+await test('tight candidates keep thin diagonal triangles, cell-corner hits and either winding',()=>{
+ const coordinates=[
+  [-8,0,-8,8,0,8,8.025,0,7.975],
+  [-1.125,.5,.375,1.125,.5,.375,-1.125,.5,2.625],
+  // Almost edge-on for the first rain direction; broad-phase precision
+  // must not decide whether the exact triangle test sees an intersection.
+  [0,0,0,directions[0].x,directions[0].y,directions[0].z,1,.00000001,1],
+ ];
+ const views=[...directions,new T.Vector3(0,1,0)];
+ let hits=0,misses=0;
+ for(const reverse of [false,true]){
+  const meshes=coordinates.map(points=>{
+   const geometry=new T.BufferGeometry().setAttribute('position',new T.Float32BufferAttribute(points,3));
+   geometry.setIndex(reverse?[2,1,0]:[0,1,2]);
+   const mesh=new T.Mesh(geometry,new T.MeshBasicMaterial());mesh.updateMatrixWorld(true);return mesh;
+  });
+  const occlusion=createRainOcclusion(meshes,views);
+  for(let sector=0;sector<views.length;sector++){
+   const direction=views[sector].clone().normalize();
+   const samples:T.Vector3[]=[];
+   // Exact vertices, edge midpoints and interiors also cover expanded cell
+   // boundaries without reproducing the index's separation calculations.
+   for(const mesh of meshes){
+    const position=mesh.geometry.attributes.position;
+    const a=new T.Vector3().fromBufferAttribute(position,0),b=new T.Vector3().fromBufferAttribute(position,1),c=new T.Vector3().fromBufferAttribute(position,2);
+    samples.push(a,b,c,a.clone().lerp(b,.5),b.clone().lerp(c,.5),c.clone().lerp(a,.5),a.clone().add(b).add(c).multiplyScalar(1/3));
+   }
+   for(let step=0;step<=128;step++)for(const offset of [-.04,-.001,0,.001,.025,.04]){
+    const x=-8+step*.125;samples.push(new T.Vector3(x,0,x+offset));
+   }
+   for(const sample of samples){
+    const origin=sample.clone().addScaledVector(direction,-2);
+    const expected=bruteForce(meshes,views[sector],origin);
+    assert.equal(occlusion.blocked(origin.x,origin.y,origin.z,sector),expected,`sector ${sector}, origin ${origin.toArray().join(',')}, reverse ${reverse}`);
+    if(expected)hits++;else misses++;
+   }
+  }
+  occlusion.dispose();
+ }
+ assert.ok(hits>100&&misses>100);
+});

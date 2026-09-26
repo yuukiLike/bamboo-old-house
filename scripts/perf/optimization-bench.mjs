@@ -27,7 +27,7 @@ const hash=data=>createHash('sha256').update(data).digest('hex');
 // are exposed here. All relative dependencies use the same requested ref.
 async function moduleURL(file){
  if(modules.has(file))return modules.get(file);
- let source=ref?git('show',`${ref}:${file}`):readFileSync(resolve(root,file),'utf8');
+ let source=ref?execFileSync('git',['show',`${ref}:${file}`],{cwd:root,encoding:'utf8'}):readFileSync(resolve(root,file),'utf8');
  sourceHashes[file]=hash(source);
  if(file==='src/components/scene/weather.ts')source+='\nexport {makeHeightField,weatherSurfaces};';
  source=stripTypeScriptTypes(source,{mode:'transform'});
