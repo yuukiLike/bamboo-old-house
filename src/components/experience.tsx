@@ -232,7 +232,7 @@ export default function Experience() {
  const navigate=(index:number)=>{window.scrollTo({top:(document.documentElement.scrollHeight-innerHeight)*index/4,behavior:reduced?'instant':'smooth'});};
  const weatherLabel=weather.rain>.7?'暴雨':weather.rain>0?'细雨':(weather.autumn??0)>.5?'大风':weather.wind===0?'无风':'晴风';
  const listeningCopy=weather.rain>.7?'雨落屋檐 · 一场夏日大雨':weather.rain>0?(view==='well-rain'?'井边细雨 · 檐下滴答':'细雨轻落 · 叶间滴答'):(weather.autumn??0)>.5?'风起竹海 · 带一点秋凉':view==='breeze'?'风从身旁经过 · 叶片轻轻响':{dawn:'晨鸟初醒 · 叶间微风',day:'风过竹叶 · 远处鸟鸣',noon:'竹荫正浓 · 远处夏声',dusk:'晚风渐柔 · 虫声初起',night:'月下虫鸣 · 风过竹梢'}[timeOfDay];
- return <div className={`experience is-${view} ${panorama?'is-panorama':''} ${staticMode?'is-static':''} ${soundEnabled?'is-listening':''} ${settingsPanel?'settings-open':''}`} data-time={timeOfDay} data-resolution={renderSettings.resolution} data-shadows={renderSettings.shadows}>
+ return <div className={`experience is-${view} ${panorama?'is-panorama':''} ${staticMode?'is-static':''} ${soundEnabled?'is-listening':''} ${settingsPanel?'settings-open':''}`} data-time={timeOfDay} data-resolution={renderSettings.resolution} data-shadows={renderSettings.shadows} data-frame-rate={renderSettings.frameRate}>
   {performancePanel}
   <a className="skip-link" href="#return" onClick={(e)=>{e.preventDefault();chooseView('walk',()=>navigate(4));}}>跳到结束</a>
   <div className="scene-shell" aria-hidden={!panorama}>
@@ -268,12 +268,19 @@ export default function Experience() {
     <Button ref={renderButton} className="control-button render-toggle" aria-label="画面设置" title="画面设置" aria-expanded={settingsPanel==='render'} aria-controls="render-settings" disabled={!ready||staticMode} onClick={()=>setSettingsPanel(settingsPanel==='render'?null:'render')}><Monitor size={16}/></Button>
     {settingsPanel==='render'&&<dialog open ref={renderPanel} id="render-settings" className="settings-panel render-panel" aria-labelledby="render-title" onKeyDown={event=>event.stopPropagation()}>
      <div className="settings-heading"><h2 id="render-title">画面设置</h2><Button className="settings-close" variant="ghost" aria-label="收起画面设置" onClick={()=>{setSettingsPanel(null);renderButton.current?.focus({preventScroll:true});}}><X size={15}/></Button></div>
-     <p className="settings-description">默认使用性能设置，也可随时恢复完整效果。以下选择适用于所有视角、时段与天气，不会自动调整。</p>
+     <p className="settings-description">默认兼顾清晰度与绘制负担，也可随时恢复完整效果。以下选择适用于所有视角、时段与天气，不会自动调整。</p>
      <fieldset className="render-options" aria-describedby="resolution-note"><legend>画面清晰度</legend>
       <Button variant="ghost" aria-pressed={renderSettings.resolution==='full'} onClick={()=>setRenderSettings(value=>({...value,resolution:'full'}))}>完整清晰</Button>
-      <Button variant="ghost" aria-pressed={renderSettings.resolution==='reduced'} onClick={()=>setRenderSettings(value=>({...value,resolution:'reduced'}))}>稍柔和（默认）</Button>
+      <Button variant="ghost" aria-pressed={renderSettings.resolution==='balanced'} onClick={()=>setRenderSettings(value=>({...value,resolution:'balanced'}))}>均衡清晰（默认）</Button>
+      <Button variant="ghost" aria-pressed={renderSettings.resolution==='reduced'} onClick={()=>setRenderSettings(value=>({...value,resolution:'reduced'}))}>稍柔和</Button>
      </fieldset>
-     <p id="resolution-note" className="settings-description">“稍柔和”可减轻绘制负担，细竹叶和远处纹理会略柔和。</p>
+     <p id="resolution-note" className="settings-description">移动端“均衡清晰”提高竹叶和纹理细节；“完整清晰”更锐利，耗电也更高。“稍柔和”保留较低绘制负担。</p>
+     <fieldset className="render-options" aria-describedby="frame-rate-note"><legend>画面更新上限</legend>
+      <Button variant="ghost" aria-pressed={renderSettings.frameRate==='60'} onClick={()=>setRenderSettings(value=>({...value,frameRate:'60'}))}>60 帧（默认）</Button>
+      <Button variant="ghost" aria-pressed={renderSettings.frameRate==='30'} onClick={()=>setRenderSettings(value=>({...value,frameRate:'30'}))}>省电 30 帧</Button>
+      <Button variant="ghost" aria-pressed={renderSettings.frameRate==='display'} onClick={()=>setRenderSettings(value=>({...value,frameRate:'display'}))}>跟随屏幕</Button>
+     </fieldset>
+     <p id="frame-rate-note" className="settings-description">发热时可选“省电 30 帧”，保持清晰度，运动连贯性会降低。“跟随屏幕”允许更高刷新率，耗电更高；这些是上限，不保证达到。</p>
      <fieldset className="render-options" aria-describedby="shadows-note"><legend>日光与月光下的动态阴影</legend>
       <Button variant="ghost" aria-pressed={renderSettings.shadows==='full'} onClick={()=>setRenderSettings(value=>({...value,shadows:'full'}))}>每帧跟随</Button>
       <Button variant="ghost" aria-pressed={renderSettings.shadows==='alternate'} onClick={()=>setRenderSettings(value=>({...value,shadows:'alternate'}))}>隔帧更新（默认）</Button>

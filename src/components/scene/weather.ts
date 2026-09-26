@@ -347,6 +347,8 @@ export function createWeather(scene:T.Scene,house:T.Group,camera:T.PerspectiveCa
       impactGeometry.attributes.impactCenter.needsUpdate=true;impactGeometry.attributes.impactState.needsUpdate=true;
       group.visible=lineCount>0||visibleImpacts>0||vapor.visible;
     },
+    // Audio depends on drainage even when performance collection is stopped.
+    get runoffFlow(){return runoffFlow;},
     diagnostics(){return{rainDrops:previousCount,roofCells:roof.heights.length,runoffSources:eaves.length,collisions:collisionCount,localRainTime:surfaceWeather.rainTime.value,absorptionActivity:surfaceWeather.activity.value,roofWater,runoffFlow,runoffDrops,ingressWetness:Math.max(...surfaceWeather.ingressWater.value.toArray()),ingressDrops,ingressExposedVertices:surfaces.exposedVertices,solidRainCells:shelter.stats.solidCells,shelterTriangles:shelter.stats.triangles,triangleShelterBuildMs:shelter.stats.triangleBuildMs,voxelShelterBuildMs:shelter.stats.voxelBuildMs,surfaceExposureBuildMs:exposureBuildMs,solidAt:shelter.solid,ingressAt:shelter.exposure,shelterAt:(x:number,y:number,z:number)=>roof.sample(x,z)>y+.12};},
     dispose(){surfaces.dispose();shelter.dispose();scene.remove(group);rainGeometry.dispose();centerlineMaterial.dispose();ribbonGeometry.dispose();ribbonQuad.dispose();rainMaterial.dispose();impactGeometry.dispose();quad.dispose();impactMaterial.dispose();vaporGeometry.dispose();vaporQuad.dispose();vaporMaterial.dispose();},
   };

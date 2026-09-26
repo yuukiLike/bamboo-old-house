@@ -275,6 +275,8 @@ h1,h2 { font-family:'Songti SC','STSong','Noto Serif CJK SC',serif; font-size:44
  .site-footer,.panorama-info { bottom:135px; }
  .moon-story .porch-copy,.breeze-story .porch-copy,.well-story .porch-copy { bottom:237px; }
  .is-free .room-panel { left:14px; width:calc(100vw - 28px); }
+ /* Leave the viewpoint selector usable with diagnostics expanded or collapsed. */
+ .experience.is-free { --scene-perf-top:220px; }
 }
 @media(max-width:450px) {
  .wordmark-icon { display:block; width:21px; height:23px; }

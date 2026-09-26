@@ -17,9 +17,9 @@ import { createVegetationVisibility } from './vegetation-visibility';
 import { ViewControls } from './view-controls';
 import { createInteriorContact } from './interior-contact';
 import { createViewTransition } from './view-transition';
-import { DEFAULT_RENDER_SETTINGS, scenePixelRatio, createDirectionalShadowUpdates, type RenderSettings } from './render-settings';
+import { DEFAULT_RENDER_SETTINGS, scenePixelRatio, createDirectionalShadowUpdates, createFramePacer, type RenderSettings } from './render-settings';
 import { skipZeroPointLightContributions } from './point-light-shading';
-import { beginPhase, measurePhase, phaseStatus, type FinishPhase } from '@/lib/performance';
+import { beginPhase, measurePhase, phaseStatus, performanceCollectionStopped, type FinishPhase } from '@/lib/performance';
 import { shadeWindowRecesses } from './window-light';
 import { stabilizeHouseSurfaces } from './house-surfaces';
 import { BUILD_ID, PORCH_VIEW, MOON_VIEW, BREEZE_VIEW, WELL_RAIN_VIEW, ROOM_VIEWS, PLACE_VIEWS, groundHeight, pathClearance, treePositions, cameraProgress, followWalkProgress, positionPath, targetPath, type ViewMode, type TimeOfDay, type PlaceId } from './config';
@@ -237,15 +237,15 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');
   // Every main-scene draw, including indoor prewarming, shares the policy.
   const renderScene=(interior:boolean,delta=0)=>{
-   if(shadowUpdates.update(time.value,weather.wind.value,renderSettings.shadows))directionalShadowRequests++;
+   if(shadowUpdates.update(time.value,weather.wind.value,renderSettings.shadows)&&!performanceCollectionStopped())directionalShadowRequests++;
    if(interior)interiorContact.render(delta);else renderer.render(scene,camera);
-   diagnostics.directionalShadowRequests=directionalShadowRequests;
+   if(!performanceCollectionStopped())diagnostics.directionalShadowRequests=directionalShadowRequests;
   };
   const renderFrame=(delta=0)=>{renderer.info.reset();renderScene(viewMode==='free'&&Object.hasOwn(ROOM_VIEWS,place),delta);viewTransition.render(performance.now());};
   const diagnostics:Diagnostics={renderSettings:{...renderSettings},directionalShadowRequests:0,startupMs:0,pixelRatio:renderer.getPixelRatio(),windGust:0,weather:{wind:weather.wind.value,rain:0,wetness:0,mud:0,autumn:0},fallingLeaves:{},rainEffects:{},build:BUILD_ID,quality:mobile?'mobile':'desktop',gpu:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'unavailable',viewport:[],drawSize:[],progress:0,camera:[],target:[],drawCalls:0,triangles:0,textures:0,geometries:0,frames:[],windTime:0,paused,bambooCount:field.count,viewMode,place,timeOfDay,nightMix:0,noonMix:0,dawnMix:0,duskMix:1,panorama:false,yaw:0,pitch:0,fov:70,getPoster:()=>{renderFrame();return renderer.domElement.toDataURL('image/webp',.9);},reset};window.__BAMBOO__=diagnostics;
 
   const setRenderSettings=(value:RenderSettings)=>{
-   if(value.resolution===renderSettings.resolution&&value.shadows===renderSettings.shadows)return;
+   if(value.resolution===renderSettings.resolution&&value.shadows===renderSettings.shadows&&value.frameRate===renderSettings.frameRate)return;
    const resolutionChanged=value.resolution!==renderSettings.resolution;
    renderSettings={...value};shadowUpdates.invalidate();
    if(resolutionChanged)resize();
@@ -312,13 +312,13 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   measurePhase('startup.initial-frame-submit',()=>renderFrame(),{mobile,view:viewMode,place,boundary:'cpu-submitted'});
   diagnostics.startupMs=performance.now()-started;last=performance.now();
   let frame=0;
+  const shouldRender=createFramePacer();
   const tick=(now:number)=>{
    if(disposed)return;raf=requestAnimationFrame(tick);if(hidden)return;
+   if(!shouldRender(now,renderSettings.frameRate))return;
    const delta=Math.min((now-last)/1000,.075);const actual=now-last;last=now;
-   diagnostics.pixelRatio=renderer.getPixelRatio();
    if(!paused&&!reduced)time.value+=delta;
    if(!dragging){const decay=Math.exp(-delta*(now-lastScroll<180?9:2));dragX*=decay;dragY*=decay;}
-   const mud=mudResistance(camera.position.x,camera.position.z,weather.wetness.value,pathClearance(camera.position.x,camera.position.z));
    // Both trackpad input and chapter links follow the same short camera easing.
    // Keep native scrolling; never add wheel queues, chapter dwell or mud delay.
    // Recheck the range after React restores the walking layout, and immediately
@@ -334,8 +334,25 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
     if(Math.abs(mix.value-goal)<.001)mix.value=goal;
    }
    weatherState.update(delta,reduced);controls.update(delta);environment.update();updateCamera();instanceWind.update(time.value,weather.wind.value);weatherEffects.update(delta,reduced);fallingLeaves.update(delta);hooks.onGust?.(paused||reduced?0:forestWindGust(time.value,camera.position.x,camera.position.z));renderFrame(delta);frame++;
+   if(frame%15===0){hooks.onRunoff?.(weatherEffects.runoffFlow);hooks.onBearing(Math.round(controls.bearing)%360);}
+   if(performanceCollectionStopped())return;
    if(frame>30){diagnostics.frames.push(actual);if(diagnostics.frames.length>15000)diagnostics.frames.shift();}
-   if(frame%15===0){diagnostics.windGust=forestWindGust(time.value,camera.position.x,camera.position.z);diagnostics.weather={wind:weather.wind.value,rain:weather.rain.value,wetness:weather.wetness.value,mud,autumn:weather.autumn.value};diagnostics.fallingLeaves={...fallingLeaves.stats};const rainInfo=weatherEffects.diagnostics();hooks.onRunoff?.(rainInfo.runoffFlow);diagnostics.rainEffects={...Object.fromEntries(Object.entries(rainInfo).filter(([,value])=>typeof value==='number')),sheltered:weatherEffects.isSheltered(camera.position.x,camera.position.y,camera.position.z)};diagnostics.viewport=[innerWidth,innerHeight];diagnostics.drawSize=[renderer.domElement.width,renderer.domElement.height];diagnostics.progress=progress;diagnostics.camera=camera.position.toArray();diagnostics.target=target.toArray();diagnostics.drawCalls=renderer.info.render.calls;diagnostics.triangles=renderer.info.render.triangles;diagnostics.textures=renderer.info.memory.textures;diagnostics.geometries=renderer.info.memory.geometries;diagnostics.windTime=time.value;diagnostics.paused=paused||reduced;diagnostics.viewMode=viewMode;diagnostics.place=place;diagnostics.timeOfDay=timeOfDay;diagnostics.nightMix=night.value;diagnostics.noonMix=noon.value;diagnostics.dawnMix=dawn.value;diagnostics.duskMix=dusk.value;diagnostics.panorama=controls.active;diagnostics.yaw=controls.yaw;diagnostics.pitch=controls.pitch;diagnostics.fov=camera.fov;hooks.onBearing(Math.round(controls.bearing)%360);}
+   if(frame%15===0){
+    const mud=mudResistance(camera.position.x,camera.position.z,weather.wetness.value,pathClearance(camera.position.x,camera.position.z));
+    diagnostics.pixelRatio=renderer.getPixelRatio();
+    diagnostics.windGust=forestWindGust(time.value,camera.position.x,camera.position.z);
+    diagnostics.weather={wind:weather.wind.value,rain:weather.rain.value,wetness:weather.wetness.value,mud,autumn:weather.autumn.value};
+    diagnostics.fallingLeaves={...fallingLeaves.stats};
+    const rainInfo=weatherEffects.diagnostics();
+    diagnostics.rainEffects={...Object.fromEntries(Object.entries(rainInfo).filter(([,value])=>typeof value==='number')),sheltered:weatherEffects.isSheltered(camera.position.x,camera.position.y,camera.position.z)};
+    diagnostics.viewport=[innerWidth,innerHeight];diagnostics.drawSize=[renderer.domElement.width,renderer.domElement.height];
+    diagnostics.progress=progress;diagnostics.camera=camera.position.toArray();diagnostics.target=target.toArray();
+    diagnostics.drawCalls=renderer.info.render.calls;diagnostics.triangles=renderer.info.render.triangles;
+    diagnostics.textures=renderer.info.memory.textures;diagnostics.geometries=renderer.info.memory.geometries;
+    diagnostics.windTime=time.value;diagnostics.paused=paused||reduced;diagnostics.viewMode=viewMode;diagnostics.place=place;
+    diagnostics.timeOfDay=timeOfDay;diagnostics.nightMix=night.value;diagnostics.noonMix=noon.value;diagnostics.dawnMix=dawn.value;diagnostics.duskMix=dusk.value;
+    diagnostics.panorama=controls.active;diagnostics.yaw=controls.yaw;diagnostics.pitch=controls.pitch;diagnostics.fov=camera.fov;
+   }
   };raf=requestAnimationFrame(tick);
   return {transition:viewTransition,dispose:cleanup,setRenderSettings,setWeather:(value)=>weatherState.set(value),setPaused:(value:boolean)=>{paused=value;},reset,setView,setPlace,setPanorama,setTimeOfDay:(value:TimeOfDay)=>{timeOfDay=value;}};
  }catch(error){finishConstruction?.(phaseStatus(error));cleanup();throw error;}

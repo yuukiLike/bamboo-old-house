@@ -4,6 +4,16 @@
 
 持续优化的分支关系、阶段结果和详细证据统一记录在 [3D 性能优化记录](../../docs/performance/optimization-log.md)。
 
+移动端清晰度、绘制上限与完全停止采集的功能回归可运行 `mobile-runtime-smoke.mjs`。它在独立的可见 Canary 会话中操作真实控件，检查停止后雨景、室内、声音仍可用，以及采集 RAF / 定时器 / 观察器已经释放；**不用于测量 iPhone 发热或 FPS 收益**。先启动 4175 端口的生产预览，然后从仓库根目录运行：
+
+```sh
+# 使用已有 Playwright 安装，不增加应用依赖；填入口文件的绝对路径。
+PERF_PLAYWRIGHT=/absolute/path/to/node_modules/playwright/index.mjs \
+  node scripts/perf/mobile-runtime-smoke.mjs
+```
+
+可通过 `PERF_CHROME`、`PERF_URL`、`PERF_OUT` 指定浏览器、地址和输出目录，默认输出到 `outputs/performance/mobile-runtime-smoke/`。同一输出目录会覆盖上次结果；需要保留对照时指定新目录。它包装浏览器计时与 WebGL API 来核对生命周期，读数会受探针影响。
+
 仅验证遮雨计算与植被裁剪时，可以运行 `node scripts/perf/optimization-bench.mjs --out outputs/performance/cpu-check.json`。它默认执行三轮真实建筑几何 / 确定性植被测试，支持 `--ref <commit>` 读取旧源码，输出耗时和一致性哈希，不需要浏览器。其结果不代表整页启动时间或 GPU 帧率；口径、基线及复现命令见 [Tidewater 策略迁移记录](../../docs/performance/optimizations/001-tidewater-transfer.md)。
 
 从导航之前开始录制，持续到三维画面出现，再通过真实控件记录首次进屋与再次进入。产出独立 HTML、Markdown、JSON，以及可导入 Chrome DevTools 的原始 trace。工具用于定位优化目标和复测，不修改画质，不自动判断某个函数就是瓶颈。

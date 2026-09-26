@@ -17,7 +17,7 @@ export interface ActivePhase {
 }
 export interface Diagnostics {
  version: 1;
- enabled: true;
+ enabled: boolean;
  phases: Phase[];
  droppedPhases: number;
  activePhases?: ActivePhase[];
@@ -36,8 +36,10 @@ export interface PhaseRecorder {
  beginPhase(name: string, detail?: PhaseDetail): FinishPhase;
  /** Measures synchronous work only; returned promises are not awaited. */
  measurePhase<T>(name: string, run: () => T, detail?: PhaseDetail): T;
- /** The owned live store while enabled, otherwise null. */
+ /** The owned live store, or the final frozen store after stop(). */
  read(): Diagnostics | null;
+ /** Terminal stop: preserve exportable history, discard unfinished spans. */
+ stop(): void;
  dispose(): void;
 }
 
@@ -49,10 +51,11 @@ let nextOperationId = 0;
 
 export function createPhaseRecorder(options: PhaseRecorderOptions): PhaseRecorder {
  let disposed = false;
+ let stopped = false;
  let diagnostics: Diagnostics | null = null;
 
  function enabled(): boolean {
-  if (disposed) return false;
+  if (disposed || stopped) return false;
   try { return typeof options.enabled === 'function' ? options.enabled() : options.enabled; }
   catch { return false; }
  }
@@ -70,7 +73,7 @@ export function createPhaseRecorder(options: PhaseRecorderOptions): PhaseRecorde
    }
    let finished = false;
    return (status = 'success', extra = {}) => {
-    if (finished || disposed) return;
+    if (finished || disposed || stopped) return;
     finished = true;
     // Monitoring must never turn a completed operation into a product failure.
     try {
@@ -107,7 +110,22 @@ export function createPhaseRecorder(options: PhaseRecorderOptions): PhaseRecorde
     throw error;
    }
   },
-  read: () => enabled() ? diagnostics ??= { version: 1, enabled: true, phases: [], droppedPhases: 0 } : null,
+  read() {
+   if (disposed) return null;
+   if (stopped) return diagnostics;
+   if (!enabled()) return null;
+   return diagnostics ??= { version: 1, enabled: true, phases: [], droppedPhases: 0 };
+  },
+  stop() {
+   if (disposed || stopped) return;
+   stopped = true;
+   if (!diagnostics) return;
+   diagnostics.enabled = false;
+   if (diagnostics.activePhases) diagnostics.activePhases.length = 0;
+   for (const phase of diagnostics.phases) {
+    try { performance.clearMeasures(phase.entryName); } catch { /* Leave unrelated recorders alone. */ }
+   }
+  },
   dispose() {
    if (disposed) return;
    disposed = true;

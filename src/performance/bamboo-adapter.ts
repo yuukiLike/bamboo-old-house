@@ -2,7 +2,7 @@
 import type { PerformanceAdapter } from '../../tools/scene-perf/react/types';
 import type { RendererSnapshot, RuntimeCollector, RuntimeState } from '../../tools/scene-perf/core/runtime';
 import type { ActivePhase, Phase } from '../../tools/scene-perf/core/timings';
-import { bambooTimings } from '../lib/performance';
+import { bambooTimings, stopPerformanceCollection } from '../lib/performance';
 
 declare global { interface Window { __BAMBOO_RUNTIME__?: RuntimeCollector; } }
 
@@ -52,6 +52,7 @@ function readState(): RuntimeState {
   weatherPreset: document.querySelector('.weather-toggle span')?.textContent?.trim() || null,
   resolution: root?.getAttribute('data-resolution') ?? scene?.renderSettings?.resolution ?? null,
   shadows: root?.getAttribute('data-shadows') ?? scene?.renderSettings?.shadows ?? null,
+  frameRate: root?.getAttribute('data-frame-rate') ?? scene?.renderSettings?.frameRate ?? null,
   soundEnabled: sound?.hasAttribute('aria-pressed') ? sound.getAttribute('aria-pressed') === 'true' : null,
   paused: pause?.hasAttribute('aria-pressed') ? pause.getAttribute('aria-pressed') === 'true' : scene?.paused ?? null,
   panorama: root ? classes?.contains('is-panorama') ?? null : scene?.panorama ?? null,
@@ -65,7 +66,7 @@ function readRenderer(): RendererSnapshot | null {
   drawCalls: numberOrNull(scene.drawCalls), triangles: numberOrNull(scene.triangles),
   textures: numberOrNull(scene.textures), geometries: numberOrNull(scene.geometries),
   pixelRatio: numberOrNull(scene.pixelRatio), drawSize: [...scene.drawSize],
-  quality: scene.quality ? `${scene.quality}/${scene.renderSettings?.resolution??'full'}/${scene.renderSettings?.shadows??'full'}` : null, gpu: scene.gpu || null,
+  quality: scene.quality ? `${scene.quality}/${scene.renderSettings?.resolution??'full'}/${scene.renderSettings?.shadows??'full'}/${scene.renderSettings?.frameRate??'display'}` : null, gpu: scene.gpu || null,
  };
 }
 
@@ -83,8 +84,9 @@ function stateDescription(state: RuntimeState) {
  const place = state.place ? VIEW_LABELS[String(state.place)] ?? state.place : '位置未知';
  const sound = state.soundEnabled === true ? '声音开' : state.soundEnabled === false ? '声音关' : '声音未知';
  return [view, place !== view ? place : null, sound, state.weatherPreset ?? '天气未知',
-  state.resolution==='reduced'?'画面稍柔和':state.resolution==='full'?'完整清晰':null,
+  state.resolution==='reduced'?'画面稍柔和':state.resolution==='balanced'?'均衡清晰':state.resolution==='full'?'完整清晰':null,
   state.shadows==='alternate'?'阴影隔帧':state.shadows==='full'?'阴影每帧':null,
+  state.frameRate==='display'?'绘制跟随屏幕':state.frameRate?`绘制上限 ${state.frameRate} 帧`:null,
   state.paused ? '动态暂停' : null].filter(Boolean).join(' · ');
 }
 
@@ -93,6 +95,7 @@ export const bambooPerformanceAdapter: PerformanceAdapter = {
  readState,
  readRenderer,
  readBusinessPhases: () => bambooTimings.read(),
+ stopCollection: stopPerformanceCollection,
  phaseLabels,
  startupPhase: 'startup.experience',
  readyLabel: '首屏控件已就绪',

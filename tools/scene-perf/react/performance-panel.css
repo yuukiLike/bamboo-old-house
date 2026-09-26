@@ -9,7 +9,12 @@
 .perf-panel button, .perf-panel input { font: inherit; }
 .perf-panel button { border: 0; color: inherit; cursor: pointer; }
 .perf-panel button:focus-visible, .perf-panel input:focus-visible, .perf-group summary:focus-visible { outline: 2px solid #a9d7ae; outline-offset: 3px; }
-.perf-panel-header { padding: 0; }
+.perf-panel-header { padding: 0; display: flex; align-items: center; }
+.perf-panel-title { min-width: 0; flex: 1; }
+.perf-panel .perf-stop { flex-shrink: 0; margin-right: 8px; min-height: 36px; padding: 6px 8px; border-radius: 4px; background: #b6c9b51a; }
+.perf-panel .perf-stop:disabled { opacity: .6; cursor: default; }
+.perf-panel[data-collection='stopped'] .perf-progress-indicator { animation: none; }
+.perf-panel output.perf-explanation { display: block; }
 .perf-panel-title { display: flex; align-items: center; width: 100%; gap: 9px; padding: 13px 15px; background: transparent; text-align: left; }
 .perf-panel-title > span:nth-child(2) { font-weight: 600; }
 .perf-header-time { margin-left: auto; color: #bdcfbf; font-variant-numeric: tabular-nums; }
@@ -17,7 +22,7 @@
 .perf-status-ready { background: #aad2a9; }
 .perf-status-error { background: #e0a197; }
 .perf-status-idle { background: #8fa69a; }
-.perf-panel.perf-panel-collapsed { width: 280px; }
+.perf-panel.perf-panel-collapsed { width: 360px; }
 .perf-panel-body { max-height: calc(100svh - 330px); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 15px 15px; }
 .perf-tabs { display: flex; gap: 4px; padding: 4px; margin: 1px 0 14px; border: 1px solid #bdd4c223; border-radius: 7px; background: #07130f66; }
 .perf-tabs button { flex: 1; padding: 7px 10px; border-radius: 4px; background: transparent; color: #a0b4a7; }
@@ -157,5 +162,8 @@
 .perf-panel-error { padding: 13px 15px; color: #ddba90; }
 @keyframes perf-progress-travel { from { transform: translateX(-100%); } to { transform: translateX(390%); } }
 @media (max-width: 1100px) { .perf-panel { width: 380px; } }
-@media (max-width: 900px) { .perf-panel { top: 172px; right: 14px; width: 360px; max-width: calc(100vw - 28px); } }
+@media (max-width: 900px) {
+ .perf-panel { top: var(--scene-perf-top, 172px); right: 14px; width: 360px; max-width: calc(100vw - 28px); }
+ .perf-panel-body { max-height: calc(100svh - var(--scene-perf-top, 172px) - 180px); }
+}
 @media (prefers-reduced-motion: reduce) { .perf-progress-indicator[data-indeterminate] { animation: none; opacity: .7; } }

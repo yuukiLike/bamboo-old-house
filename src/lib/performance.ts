@@ -5,6 +5,7 @@ export type { ActivePhase, Diagnostics, FinishPhase, Phase, PhaseDetail, PhaseSt
 declare global { interface Window { __BAMBOO_PERF__?: Diagnostics; } }
 
 let enabled: boolean | undefined;
+let stopped = false;
 export function phaseStatus(error: unknown): PhaseStatus {
  return error instanceof Error && (error.name === 'AbortError' || error.message === 'SCENE_DISPOSED') ? 'cancelled' : 'error';
 }
@@ -19,6 +20,12 @@ export const bambooTimings = createPhaseRecorder({
 });
 
 export const performanceEnabled = () => bambooTimings.enabled();
+/** The explicit stop also disables the scene's compatibility diagnostics. */
+export const performanceCollectionStopped = () => stopped;
+export function stopPerformanceCollection() {
+ stopped = true;
+ bambooTimings.stop();
+}
 export function beginPhase(name: string, detail?: PhaseDetail): FinishPhase {
  const finish = bambooTimings.beginPhase(name, detail);
  const data = bambooTimings.read();

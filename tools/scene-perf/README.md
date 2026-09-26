@@ -75,6 +75,8 @@ export function App() {
 
 **这个开关只控制面板及其采集资源，不控制独立的业务 recorder。** 如果要从导航开始记录完整加载过程，仍推荐通过诊断 URL 重新加载；中途开启无法恢复此前没有记录的业务阶段或 RAF。
 
+面板另提供「停止检测」按钮，停止面板所有采集、定时刷新并收起，保留最终数据可导出。宿主通过 `stopCollection()` 一并停止独立 recorder、诊断计数等，例如调用 `timings.stop()`；停止后 `timings.read()` 返回冻结的数据，`enabled` 为 `false`，迟到的异步完成回调不会再写入。停止是当前会话内的终态，重新加载可开启。宿主仍在采集业务阶段但没有接入此回调时，面板会明确提示业务采集未关闭。
+
 `PerformanceAdapter` 的变化点：
 
 | 属性 | 职责 |
@@ -88,6 +90,7 @@ export function App() {
 | `startupPhase` / `readyLabel` | 初始化失败判定所用父阶段与就绪说明；就绪时间来自 recorder 的 `readyPhase` |
 | `describeState()` / `rendererDescription` | 状态与渲染器计数口径的展示 |
 | `onCollector(collector)` | 可选宿主绑定，返回自己的清理函数；不需要额外创建 collector |
+| `stopCollection()` | 停止宿主拥有的业务计时与诊断；必须为启用业务 recorder 的项目接入，已有记录可保留供导出 |
 
 `onCollector` 若在部分完成宿主绑定后抛错，宿主需自行回滚；工具会销毁 collector，但无法取得尚未返回的清理函数。
 
@@ -104,7 +107,7 @@ const collector = createRuntimeCollector({
 });
 const timer = setInterval(() => {
   renderYourOwnMetrics(collector.snapshot());
-}, 250);
+}, 1000);
 
 // 临时停止／继续；clear 不会清 HTTP 缓存或业务阶段。
 collector.pause();
@@ -217,7 +220,7 @@ node tools/scene-perf/cli/report.mjs outputs/performance/project-after \
 
 ## 拆卸边界
 
-1. **暂停观察**：collector.pause，或面板「暂停采集」；保留证据，业务 recorder 独立运行。
+1. **暂停观察**：collector.pause，或面板「暂停实时采样」；保留证据，业务 recorder 独立运行。
 2. **移除实时工具**：卸载 hook 所在组件，或将 enabled 设为 false；普通 JS 调用 collector.dispose，并清理宿主自己的订阅和定时器。
 3. **移除业务记录**：停止创建 recorder，或 dispose 并解除宿主全局桥接；可暂时保留禁用的计时调用。业务函数不会因禁用而跳过。
 4. **完全删除源码**：移除 hook/import、宿主 adapter、业务计时调用、CLI npm scripts，再删除工具目录。对于竹屋，业务入口集中引用 `src/lib/performance.ts`，先搜索其调用点；不要直接删掉场景既有的 `__BAMBOO__`，它还承载原有诊断和业务更新。

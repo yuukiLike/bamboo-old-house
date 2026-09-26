@@ -4,7 +4,7 @@ import * as T from 'three';
 import { WebGLShadowMap } from 'three/src/renderers/webgl/WebGLShadowMap.js';
 import type { WebGLObjects } from 'three/src/renderers/webgl/WebGLObjects.js';
 import type { WebGLCapabilities } from 'three/src/renderers/webgl/WebGLCapabilities.js';
-const {DEFAULT_RENDER_SETTINGS,FULL_RENDER_SETTINGS,scenePixelRatio,createDirectionalShadowUpdates}:typeof import('../src/components/scene/render-settings')=
+const {DEFAULT_RENDER_SETTINGS,FULL_RENDER_SETTINGS,scenePixelRatio,createDirectionalShadowUpdates,createFramePacer}:typeof import('../src/components/scene/render-settings')=
  await import(new URL('../src/components/scene/render-settings.ts',import.meta.url).href);
 const {skipZeroPointLightContributions}:typeof import('../src/components/scene/point-light-shading')=
  await import(new URL('../src/components/scene/point-light-shading.ts',import.meta.url).href);
@@ -41,17 +41,43 @@ function setup(){
  return {scene,parent,sun,lamp,camera,updates,frame,draws,dispose};
 }
 
-await test('performance settings are the default and complete effects restore exactly on every device ratio',()=>{
- assert.deepEqual(DEFAULT_RENDER_SETTINGS,{resolution:'reduced',shadows:'alternate'});
- assert.deepEqual(FULL_RENDER_SETTINGS,{resolution:'full',shadows:'full'});
+await test('mobile clarity increases without removing the former light or complete-effect settings',()=>{
+ assert.deepEqual(DEFAULT_RENDER_SETTINGS,{resolution:'balanced',shadows:'alternate',frameRate:'60'});
+ assert.deepEqual(FULL_RENDER_SETTINGS,{resolution:'full',shadows:'full',frameRate:'display'});
  for(const mobile of [false,true])for(const ratio of [.75,1,1.25,1.5,2,3]){
-  const full=Math.min(ratio,mobile?1.25:1.6);
-  for(const shadows of ['full','alternate'] as const){
-   assert.equal(scenePixelRatio(ratio,mobile,{resolution:'full',shadows}),full);
-   assert.equal(scenePixelRatio(ratio,mobile,{resolution:'reduced',shadows}),full*.85);
+  const full=Math.min(ratio,mobile?2:1.6);
+  const reduced=Math.min(ratio,mobile?1.25:1.6)*.85;
+  const balanced=mobile?Math.min(ratio,1.5):Math.min(ratio,1.6)*.85;
+  for(const shadows of ['full','alternate'] as const)for(const frameRate of ['display','60','30'] as const){
+   assert.equal(scenePixelRatio(ratio,mobile,{resolution:'full',shadows,frameRate}),full);
+   assert.equal(scenePixelRatio(ratio,mobile,{resolution:'reduced',shadows,frameRate}),reduced);
+   assert.equal(scenePixelRatio(ratio,mobile,{resolution:'balanced',shadows,frameRate}),balanced);
   }
-  assert.equal(scenePixelRatio(ratio,mobile,{...DEFAULT_RENDER_SETTINGS}),full*.85);
-  assert.equal(scenePixelRatio(ratio,mobile,{...FULL_RENDER_SETTINGS}),full);
+  assert.equal(scenePixelRatio(ratio,mobile,DEFAULT_RENDER_SETTINGS),balanced);
+  assert.equal(scenePixelRatio(ratio,mobile,FULL_RENDER_SETTINGS),full);
+ }
+ assert.ok(scenePixelRatio(3,true,DEFAULT_RENDER_SETTINGS)>1.25);
+});
+
+await test('frame limits bound scene submissions on 60/120 Hz displays and recover without catch-up bursts',()=>{
+ for(const refresh of [60,120])for(const limit of ['display','60','30'] as const){
+  const render=createFramePacer();let count=0;
+  for(let tick=0;tick<refresh*10;tick++)if(render(tick*1000/refresh,limit))count++;
+  assert.equal(count,10*(limit==='display'?refresh:Number(limit)));
+ }
+ const render=createFramePacer();
+ assert.equal(render(0,'30'),true);
+ assert.equal(render(10,'30'),false);
+ assert.equal(render(10,'display'),true,'a choice takes effect on the next callback');
+ assert.equal(render(12,'display'),true);
+ assert.equal(render(15,'60'),true);
+ assert.equal(render(20000,'60'),true,'resuming after a hidden page draws immediately');
+ assert.equal(render(20001,'60'),false,'never catch up old frames');
+ assert.equal(render(20020,'60'),true);
+ for(const limit of ['60','30'] as const){
+  const jittered=createFramePacer();let count=0;
+  for(let tick=0;tick<1200;tick++)if(jittered(tick*1000/120+Math.sin(tick*1.7)*.8,limit))count++;
+  assert.ok(Math.abs(count-Number(limit)*10)<=2,`${limit} Hz must not accumulate callback jitter: ${count}`);
  }
 });
 

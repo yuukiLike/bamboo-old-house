@@ -57,6 +57,7 @@ function FrameRateGuide() {
   <summary>帧率怎么看？<span>60 FPS 是常见流畅目标</span></summary>
   <p><strong>Hz 是什么？</strong>Hz 表示每秒多少次。上方读数是近 5 秒浏览器 RAF 回调的平均频率，<strong>60 Hz ≈ 每秒 60 次回调</strong>。每次回调都是一次准备下一帧的机会。</p>
   <p>RAF 回调频率反映更新节奏，<strong>不是实际画面 FPS</strong>，也不代表检测到了屏幕刷新率。</p>
+  <p>设置画面更新上限后，场景可以跳过部分 RAF 回调；例如选择 30 帧时，面板仍可能读到 60 Hz。</p>
   <p>FPS 表示每秒画面更新多少帧。先以常见的 60 Hz 屏幕为参考：</p>
   <dl className="perf-fps-reference">
    <div><dt>约 60 FPS<small>16.7 ms / 帧</small></dt><dd><strong>流畅目标</strong>转动视角、场景运动通常更连贯。</dd></div>
@@ -148,10 +149,10 @@ export function PerformanceRuntimeView({ snapshot, health, startupLabel, startup
   <FrameRateGuide />
   <RuntimeChart snapshot={snapshot} collecting={collecting} />
   <div className="perf-runtime-actions">
-   <button type="button" data-runtime-action="pause" onClick={snapshot.status === 'paused' ? onResume : onPause} disabled={snapshot.status === 'stopped'}>{snapshot.status === 'paused' ? '继续采集' : '暂停采集'}</button>
-   <button type="button" data-runtime-action="clear" title="清空实时记录，保留加载时间线" onClick={onClear}>清空窗口</button>
+   <button type="button" data-runtime-action="pause" onClick={snapshot.status === 'paused' ? onResume : onPause} disabled={snapshot.status === 'stopped'}>{snapshot.status === 'paused' ? '继续实时采样' : '暂停实时采样'}</button>
+   <button type="button" data-runtime-action="clear" title="清空实时记录，保留加载时间线" onClick={onClear} disabled={snapshot.status === 'stopped'}>清空窗口</button>
   </div>
-  {!collecting && <p className="perf-explanation">读数与图表保留最后一次采样，恢复后继续记录；清空只影响实时窗口。</p>}
+  {!collecting && <p className="perf-explanation">{snapshot.status === 'stopped' ? '读数与图表已冻结，刷新页面可重新检测。' : '读数与图表保留最后一次采样，恢复后继续记录；清空只影响实时窗口。'}</p>}
   <p className="perf-runtime-context">{collecting ? '当前' : '最后采样时'}：{stateDescription(snapshot.state)}</p>
   <details className="perf-group" open>
    <summary><span>最近卡顿</span><span className="perf-count">{recent.length}</span></summary>

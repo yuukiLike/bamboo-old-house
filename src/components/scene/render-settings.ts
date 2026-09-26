@@ -1,17 +1,36 @@
 import * as T from 'three';
 
 export interface RenderSettings {
- resolution:'full'|'reduced';
+ resolution:'full'|'balanced'|'reduced';
  shadows:'full'|'alternate';
+ frameRate:'display'|'60'|'30';
 }
-export const FULL_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'full',shadows:'full'};
-// User-approved starting point; complete effects remain independently selectable.
-export const DEFAULT_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'reduced',shadows:'alternate'};
+export const FULL_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'full',shadows:'full',frameRate:'display'};
+// Balanced startup; complete effects and the lighter option stay selectable.
+export const DEFAULT_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'balanced',shadows:'alternate',frameRate:'60'};
 
 /** The selected configuration controls resolution. Frame timings never
  * select a setting. CSS/UI resolution is unaffected. */
 export function scenePixelRatio(deviceRatio:number,mobile:boolean,settings:RenderSettings){
- return Math.min(deviceRatio,mobile?1.25:1.6)*(settings.resolution==='reduced'?.85:1);
+ if(settings.resolution==='reduced')return Math.min(deviceRatio,mobile?1.25:1.6)*.85;
+ if(mobile)return Math.min(deviceRatio,settings.resolution==='full'?2:1.5);
+ return Math.min(deviceRatio,1.6)*(settings.resolution==='balanced'?.85:1);
+}
+
+/** Limit submissions, not animation time. Skipped callbacks do no scene/audio
+ * work; the next render receives elapsed wall time. No catch-up draw bursts. */
+export function createFramePacer(){
+ let previous=-Infinity,previousMode:RenderSettings['frameRate']|undefined;
+ return (now:number,mode:RenderSettings['frameRate'])=>{
+  const interval=mode==='display'?0:1000/Number(mode);
+  const elapsed=now-previous;
+  // Half a millisecond tolerates browser timestamp rounding at 60/120 Hz.
+  if(mode===previousMode&&elapsed>=0&&elapsed<interval-.5)return false;
+  // Carry small scheduling jitter rather than adding it to every interval.
+  // Long gaps reset the clock so old deadlines cannot trigger catch-up work.
+  previous=mode===previousMode&&elapsed>=0&&elapsed<interval*1.5?Math.min(now,previous+interval):now;
+  previousMode=mode;return true;
+ };
 }
 
 /** The scene's shadow casters have fixed placements. Their only animated
