@@ -51,20 +51,65 @@ export class SceneTransition {
  }
 }
 
-/** Capture the displayed GPU frame before committing a new viewpoint. The
- * renderer starts revealing only after it has drawn that destination. */
+/** Commit behind a compositor transition, then reveal after the destination
+ * frame is submitted. GPU snapshots remain a fallback for older browsers. */
 interface ViewTransition {
  capture:(complete:()=>void)=>()=>void;
  reveal:(complete:()=>void)=>()=>void;
  clear:()=>void;
 }
-export function createSceneTransition(current:()=>ViewTransition|undefined) {
+interface TransitionCurtain {
+ element:()=>HTMLElement|null;
+ waitForFrame:(complete:()=>void)=>()=>void;
+}
+export function createSceneTransition(current:()=>ViewTransition|undefined,curtain?:TransitionCurtain) {
  return new SceneTransition({
   animate(capture,complete) {
+   const element=curtain?.element();
+   if(element?.animate){
+    let cancelled=false,animation:Animation|undefined,cancelFrame:(()=>void)|undefined;
+    const run=()=>{
+     if(cancelled)return;
+     const opacity=capture ? 0.045 : 0;
+     const from=Number(element.style.opacity)||0;
+     try{animation=element.animate([{opacity:from},{opacity}],{duration:capture?180:240,easing:'ease-in-out',fill:'forwards'});}
+     catch{element.style.opacity=String(opacity);complete();return;}
+     animation.onfinish=()=>{
+      if(cancelled)return;
+      element.style.opacity=String(opacity);animation?.cancel();animation=undefined;
+      // Leave time for button feedback to paint before scene mutations begin.
+      complete();
+     };
+    };
+    if(capture)run();else cancelFrame=curtain!.waitForFrame(run);
+    return()=>{
+     cancelled=true;cancelFrame?.();
+     if(animation){element.style.opacity=element.ownerDocument.defaultView?.getComputedStyle(element).opacity??element.style.opacity;animation.cancel();}
+    };
+   }
    const transition=current();
    if(!transition){complete();return()=>{};}
    return capture?transition.capture(complete):transition.reveal(complete);
   },
-  clear(){current()?.clear();},
+  clear(){const element=curtain?.element();if(element)element.style.opacity='0';current()?.clear();},
  });
+}
+
+/** Independent feedback and curtain listeners share a frame boundary. A request
+ * made while drawing cannot be completed by that older frame. */
+export function createFrameReadySignal() {
+ const pending=new Set<{complete:()=>void}>();
+ const noop=()=>{};
+ return {
+  wait(complete:()=>void) {
+   const request={complete};pending.add(request);
+   return()=>{pending.delete(request);};
+  },
+  beginFrame() {
+   if(!pending.size)return noop;
+   const requests=[...pending];
+   return()=>{for(const request of requests)if(pending.delete(request))request.complete();};
+  },
+  clear(){pending.clear();},
+ };
 }

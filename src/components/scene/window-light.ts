@@ -6,7 +6,7 @@ import type { WeatherUniforms } from './weather-state';
  * Only indirect light is attenuated; actual sun and bulb shadows still apply.
  * Cycles obtains this falloff from the real room geometry in the editable scene.
  */
-export function shadeWindowRecesses(material: MeshStandardMaterial, night: { value: number }, dawn = { value: 0 }, dusk = { value: 0 }, noon = { value: 0 }, weather?:WeatherUniforms) {
+export function shadeWindowRecesses(material: MeshStandardMaterial, night: { value: number }, dawn = { value: 0 }, dusk = { value: 0 }, weather?:WeatherUniforms) {
   if (material.userData.windowRecessLighting) return;
   material.userData.windowRecessLighting = true;
   const previous = material.onBeforeCompile.bind(material);
@@ -16,7 +16,6 @@ export function shadeWindowRecesses(material: MeshStandardMaterial, night: { val
     shader.uniforms.oldHouseNight = night;
     shader.uniforms.oldHouseDawn = dawn;
     shader.uniforms.oldHouseDusk = dusk;
-    shader.uniforms.oldHouseNoon = noon;
     shader.uniforms.oldHouseRain = weather?.rain ?? {value:0};
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 windowRoomWorld;')
@@ -27,7 +26,6 @@ export function shadeWindowRecesses(material: MeshStandardMaterial, night: { val
         uniform float oldHouseNight;
         uniform float oldHouseDawn;
         uniform float oldHouseDusk;
-        uniform float oldHouseNoon;
         uniform float oldHouseRain;
         // A broad aperture supplies diffuse sky/ground bounce. Its solid angle
         // falls with distance and its direction follows the real window. This
@@ -47,7 +45,7 @@ export function shadeWindowRecesses(material: MeshStandardMaterial, night: { val
           courtyard=mix(courtyard,vec3(.69,.75,.74),oldHouseRain);
           float upper=apertureBounce(p,n,opening+vec3(0.,.30,0.),area*.55);
           float lower=apertureBounce(p,n,opening-vec3(0.,.38,0.),area*.45);
-          return (skylight*upper*12.+courtyard*lower*17.)*(1.+oldHouseNoon*.10)*(1.-oldHouseNight)*(1.-oldHouseRain*.48);
+          return (skylight*upper*12.+courtyard*lower*17.)*(1.-oldHouseNight)*(1.-oldHouseRain*.48);
         }
         vec3 oldHouseOpeningIrradiance(vec3 p,vec3 n) {
           vec3 bounce=vec3(0.);
@@ -141,5 +139,5 @@ export function shadeWindowRecesses(material: MeshStandardMaterial, night: { val
         RE_IndirectDiffuse(openingIrradiance,geometryPosition,geometryNormal,geometryViewDir,geometryClearcoatNormal,material,reflectedLight);
       `);
   };
-  material.customProgramCacheKey = () => previousKey + '|open-home-weather-window-bounce-v7';
+  material.customProgramCacheKey = () => previousKey + '|open-home-weather-window-bounce-v8';
 }

@@ -38,7 +38,6 @@ type Recording = typeof RECORDINGS[number];
 const MIX: Record<TimeOfDay, readonly number[]> = {
   dawn: [.28, .66, 0, .035],
   day: [.34, .19, .045, 0],
-  noon: [.30, .035, .055, 0],
   dusk: [.36, .10, .025, .21],
   night: [.32, 0, 0, .48],
 };

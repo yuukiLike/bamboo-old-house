@@ -131,6 +131,18 @@ await test('desktop keeps its prepared targets and mobile deactivation waits for
  } finally {contact.dispose();}
 });
 
+await test('hiding room details releases desktop targets too and full detail can be restored',async()=>{
+ const {renderer,contact}=setup(false);
+ try {
+  await contact.prepare();const targets=[...renderer.targets];
+  contact.deactivate(true);assert.equal(renderer.resident.size,0);
+  contact.deactivate(true);assert.ok(targets.every(target=>renderer.disposals.get(target)===1));
+  assert.equal(renderer.disposedMaterials.size,0);
+  contact.render();assert.ok(renderer.resident.size>0);
+  assert.equal(renderer.targets.size,8,'restoring detail reuses the existing pipeline');
+ } finally {contact.dispose();}
+});
+
 await test('resize updates physical dimensions once and leaves inactive targets unallocated until reentry',async()=>{
  const {renderer,contact}=setup();
  try {

@@ -4,13 +4,25 @@ import type { Sky } from 'three/addons/objects/Sky.js';
 import { groundHeight, seeded, SUN_PRESETS, ROOM_LIGHTS } from './config';
 
 export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
-  sun: T.DirectionalLight, ambient: T.HemisphereLight, night: { value: number }, time: { value: number }, mobile: boolean, noon = { value: 0 }, dawn = { value: 0 }, dusk = { value: 0 }, weather?:WeatherUniforms) {
+  sun: T.DirectionalLight, ambient: T.HemisphereLight, night: { value: number }, time: { value: number }, mobile: boolean, dawn = { value: 0 }, dusk = { value: 0 }, weather?:WeatherUniforms) {
   // Blend the physical daylight into a separate moonlit sky before tone mapping.
   sky.material.uniforms.uNight = night;
+  sky.material.uniforms.uDawn = dawn;
+  sky.material.uniforms.uDusk = dusk;
+  sky.material.uniforms.uDawnHorizon = { value: new T.Color(0x82b9ed) };
+  sky.material.uniforms.uDuskHorizon = { value: new T.Color(0xa9cde9) };
+  sky.material.uniforms.uDuskZenith = { value: new T.Color(0x7ba9d6) };
+  sky.material.uniforms.uDuskGold = { value: new T.Color(0xffe3a1) };
   sky.material.uniforms.uWeatherRain = weather?.rain ?? {value:0};
   sky.material.uniforms.uWeatherTime = time;
   sky.material.fragmentShader = sky.material.fragmentShader.replace('uniform float time;', `uniform float time;
     uniform float uNight;
+    uniform float uDawn;
+    uniform float uDusk;
+    uniform vec3 uDawnHorizon;
+    uniform vec3 uDuskHorizon;
+    uniform vec3 uDuskZenith;
+    uniform vec3 uDuskGold;
     uniform float uWeatherRain;
     uniform float uWeatherTime;
     float lunarNoise(vec2 p) {
@@ -26,16 +38,36 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
     // remainder looked like a second moon during the last part of the fade.
     .replace('L0 += ( vSunE * 19000.0 * Fex ) * sundisc;',
       'L0 += ( vSunE * 19000.0 * Fex ) * sundisc * (1.0 - smoothstep(0.0, 0.15, uNight));')
-    // Fully moonlit or rain-covered skies replace the daylight cloud layer.
-    // Retain it throughout every transition where it can still contribute.
+    // The simple evening sky, moonlight and rain replace daylight clouds.
+    // Retain clouds while another daytime component can still contribute.
     .replace('if ( direction.y > 0.0 && cloudCoverage > 0.0 ) {',
-      'if ( direction.y > 0.0 && cloudCoverage > 0.0 && uNight < 1.0 && uWeatherRain < 0.32 ) {')
+      'if ( direction.y > 0.0 && cloudCoverage > 0.0 && uDusk < 1.0 - uNight && uWeatherRain < 0.32 ) {')
     .replace('gl_FragColor = vec4( texColor, 1.0 );', `
       vec3 nightDirection = normalize(vWorldPosition - cameraPosition);
       vec3 clearSky = texColor;
+      // Blend daytime colours once, then fade to night. Sequential fades would
+      // briefly reintroduce the white daytime horizon between dusk and night.
+      if (uDawn > 0.0 || uDusk > 0.0) {
+        float height = max(nightDirection.y, 0.0);
+        float lowSky = 1.0 - smoothstep(.06, .42, height);
+        vec3 morningSky = mix(texColor, uDawnHorizon, lowSky);
+        vec3 eveningSky = mix(uDuskHorizon, uDuskZenith, smoothstep(0.0, .65, height));
+        vec2 azimuth = nightDirection.xz / max(length(nightDirection.xz), .0001);
+        float sunSide = smoothstep(0.0, .7, dot(azimuth, normalize(vSunDirection.xz)));
+        float goldBand = (1.0 - smoothstep(0.0, .22, height)) * sunSide;
+        // Gold recedes into clear blue before the blue deepens, avoiding a
+        // muddy yellow/blue midpoint. No disc, halo, or extra cloud layer.
+        goldBand *= 1.0 - smoothstep(0.0, .6, uNight);
+        eveningSky = mix(eveningSky, uDuskGold, goldBand);
+        float daylight = max(1.0 - uNight, .0001);
+        float morning = min(uDawn / daylight, 1.0);
+        float evening = min(uDusk / daylight, 1.0);
+        clearSky = texColor * max(0.0, 1.0 - morning - evening)
+          + morningSky * morning + eveningSky * evening;
+      }
       if (uNight > 0.0) {
       float elevation = max(nightDirection.y, 0.0);
-      vec3 nightColor = mix(vec3(.018, .033, .050), vec3(.003, .009, .024), pow(elevation, .45));
+      vec3 nightColor = mix(vec3(.026, .060, .145), vec3(.010, .028, .080), pow(elevation, .45));
       vec3 moonDirection = normalize(vec3(-14., 27., 22.));
       float moonDistance = distance(nightDirection, moonDirection);
       float moonRadius=.014;
@@ -58,7 +90,7 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
       vec2 starCell = floor(nightDirection.xz / max(.15, nightDirection.y + 1.0) * 820.0);
       float star = fract(sin(dot(starCell, vec2(127.1, 311.7))) * 43758.5453);
       nightColor += vec3(.38, .46, .58) * step(.9991, star) * smoothstep(.12, .55, elevation);
-      clearSky = mix(texColor, nightColor, uNight);
+      clearSky = mix(clearSky, nightColor, uNight);
       }
       if (uWeatherRain > 0.0) {
       vec2 cloudUV=nightDirection.xz/max(.16,nightDirection.y+.22)*2.4;
@@ -139,63 +171,88 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
   const daySky = new T.Color(0xb4d0ed), nightSky = new T.Color(0x57789f);
   const dayGround = new T.Color(0x715946), nightGround = new T.Color(0x172825);
   const daySun = new T.Color(SUN_PRESETS.day.color), moon = new T.Color(SUN_PRESETS.night.color);
-  const dayFog = new T.Color(0x8ba998), nightFog = new T.Color(0x0b1a27);
+  const dayFog = new T.Color(0x8ba998), nightFog = new T.Color(0x162c49);
   const dayPosition = new T.Vector3(...SUN_PRESETS.day.position), moonPosition = new T.Vector3(...SUN_PRESETS.night.position);
-  // A high sun and warm reflected courtyard light, with blue skylight in the
-  // eaves. Noon has its own direction and luminance, not a screen tint.
-  const noonPosition = new T.Vector3(...SUN_PRESETS.noon.position);
-  const noonSky = new T.Color(0xc9ddf5), noonGround = new T.Color(0x9d805e);
-  const noonSun = new T.Color(SUN_PRESETS.noon.color), noonFog = new T.Color(0xc0ccc0);
   const dawnPosition = new T.Vector3(...SUN_PRESETS.dawn.position), duskPosition = new T.Vector3(...SUN_PRESETS.dusk.position);
-  const dawnSky = new T.Color(0xb5cce1), duskSky = new T.Color(0x9ebee7);
-  const dawnGround = new T.Color(0x594b43), duskGround = new T.Color(0x8d6742);
+  const dawnSky = new T.Color(0xb5cce1), duskSky = new T.Color(0xdcd4cb);
+  const dawnGround = new T.Color(0x594b43), duskGround = new T.Color(0xad8f5c);
   const dawnSun = new T.Color(SUN_PRESETS.dawn.color), duskSun = new T.Color(SUN_PRESETS.dusk.color);
-  const dawnFog = new T.Color(0x99ada8), duskFog = new T.Color(0xb7b7a1);
+  const dawnFog = new T.Color(0x91bfe8), duskFog = new T.Color(0xb7cbd3);
   const skyDirection = new T.Vector3();
   const stormSky=new T.Color(0xbac6cb),stormGround=new T.Color(0x43504b),stormFog=new T.Color(0x687d80),stormNightFog=new T.Color(0x0a151c),rainFog=new T.Color();
   const autumnSky=new T.Color(0xa8cce5),autumnSun=new T.Color(0xfff4df),autumnFog=new T.Color(0xb6cbc9);
   const interiorBulbs = new Set<T.MeshStandardMaterial>();
+  let hideInteriorDetails=false;
+  const updateRoomLights=()=>{
+    const amount=hideInteriorDetails?0:night.value;
+    for(const {light,power} of roomLights){light.intensity=power*amount;light.visible=amount>0;}
+    for(const bulb of interiorBulbs){bulb.emissive.setHex(0xffbf79);bulb.emissiveIntensity=amount*2.1;}
+  };
+  const invalidateLampShadows=()=>{
+    warm.shadow.needsUpdate=downstairs.shadow.needsUpdate=true;
+    for(const {light} of roomLights)light.shadow.needsUpdate=true;
+  };
   return {
+    invalidateLampShadows,
+    setInteriorDetailsHidden(hidden:boolean){
+      if(hideInteriorDetails===hidden)return;
+      hideInteriorDetails=hidden;updateRoomLights();
+      // Detail visibility changes the cached caster set, even for porch lamps.
+      invalidateLampShadows();
+    },
     update() {
       material.uniforms.uPixelRatio.value=renderer.getPixelRatio();
-      const n = night.value, h = noon.value, a = dawn.value, e = dusk.value;
+      const n = night.value, a = dawn.value, e = dusk.value, d = Math.max(0,1-n-a-e);
+      const blend=(day:number,morning:number,evening:number,moonlit:number)=>day*d+morning*a+evening*e+moonlit*n;
+      const blendColor=(target:T.Color,day:T.Color,morning:T.Color,evening:T.Color,moonlit:T.Color)=>
+        target.setRGB(blend(day.r,morning.r,evening.r,moonlit.r),blend(day.g,morning.g,evening.g,moonlit.g),blend(day.b,morning.b,evening.b,moonlit.b));
       if (!interiorBulbs.size) scene.traverse(object => {
         if (!(object instanceof T.Mesh)) return;
         for (const material of Array.isArray(object.material)?object.material:[object.material]) {
           if (material instanceof T.MeshStandardMaterial && (material.name.startsWith('Interior_frosted_lamp_glass') || material.name.startsWith('Kitchen_frosted_bare_bulb'))) interiorBulbs.add(material);
         }
       });
-      for (const bulb of interiorBulbs) { bulb.emissive.setHex(0xffbf79); bulb.emissiveIntensity=n*2.1; }
-      // Sunlit plaster is warm while the covered gallery keeps blue skylight.
-      // A lower indirect/direct ratio preserves the photographed eave shadows.
-      ambient.color.copy(daySky).lerp(noonSky, h).lerp(dawnSky,a).lerp(duskSky,e).lerp(nightSky, n);
-      ambient.groundColor.copy(dayGround).lerp(noonGround, h).lerp(dawnGround,a).lerp(duskGround,e).lerp(nightGround, n);
-      const blend=(day:number,high:number,morning:number,evening:number,moonlit:number)=>
-        T.MathUtils.lerp(T.MathUtils.lerp(T.MathUtils.lerp(T.MathUtils.lerp(day,high,h),morning,a),evening,e),moonlit,n);
-      ambient.intensity = blend(.83,1.0,.72,.76,.5);
-      sun.color.copy(daySun).lerp(noonSun, h).lerp(dawnSun,a).lerp(duskSun,e).lerp(moon, n);
-      sun.intensity = blend(SUN_PRESETS.day.intensity,SUN_PRESETS.noon.intensity,SUN_PRESETS.dawn.intensity,SUN_PRESETS.dusk.intensity,SUN_PRESETS.night.intensity);
-      sun.position.copy(dayPosition).lerp(noonPosition, h).lerp(dawnPosition,a).lerp(duskPosition,e).lerp(moonPosition, n);
-      skyDirection.copy(sun.position).sub(sun.target.position).normalize();
-      sky.material.uniforms.sunPosition.value.copy(skyDirection);
-      sky.material.uniforms.turbidity.value = blend(2.8,2.2,3.5,2.1,2.8);
-      sky.material.uniforms.rayleigh.value = blend(1.5,2.2,1.7,1.8,1.25);
-      if (scene.fog) scene.fog.color.copy(dayFog).lerp(noonFog, h).lerp(dawnFog,a).lerp(duskFog,e).lerp(nightFog, n);
-      if (scene.fog instanceof T.FogExp2) scene.fog.density = blend(.0045,.0035,.0062,.0038,.010);
-      scene.environmentIntensity = blend(.026,.044,.021,.028,.009);
-      renderer.toneMappingExposure = blend(1.0,1.04,1.01,.98,1.08);
+      updateRoomLights();
+      // Mild reflected warmth leaves most of the gold on directly lit walls.
+      // Absolute weights avoid mixing daytime back into a dusk/night crossfade.
+      blendColor(ambient.color,daySky,dawnSky,duskSky,nightSky);
+      blendColor(ambient.groundColor,dayGround,dawnGround,duskGround,nightGround);
+      ambient.intensity = blend(.83,.72,.82,.5);
+      blendColor(sun.color,daySun,dawnSun,duskSun,moon);
+      sun.intensity = blend(SUN_PRESETS.day.intensity,SUN_PRESETS.dawn.intensity,SUN_PRESETS.dusk.intensity,SUN_PRESETS.night.intensity);
+      sun.position.set(blend(dayPosition.x,dawnPosition.x,duskPosition.x,moonPosition.x),
+        blend(dayPosition.y,dawnPosition.y,duskPosition.y,moonPosition.y),blend(dayPosition.z,dawnPosition.z,duskPosition.z,moonPosition.z));
+      // The physical sky's sun stays at the fading daylight position. Only
+      // the shared scene light moves to the moon, avoiding sweeping sky haze.
+      const daylight=d+a+e;
+      if(daylight>0){
+        skyDirection.copy(dayPosition).multiplyScalar(d).addScaledVector(dawnPosition,a).addScaledVector(duskPosition,e)
+          .multiplyScalar(1/daylight).sub(sun.target.position).normalize();
+        sky.material.uniforms.sunPosition.value.copy(skyDirection);
+      }
+      // Keep the physical sky, without a visible evening sun or painted halo.
+      sky.material.uniforms.showSunDisc.value = d+a;
+      sky.material.uniforms.turbidity.value = blend(2.8,2.1,2.1,2.8);
+      sky.material.uniforms.rayleigh.value = blend(1.5,2.25,1.8,1.25);
+      sky.material.uniforms.mieCoefficient.value = blend(.002,.0014,.0015,.002);
+      if (scene.fog) blendColor(scene.fog.color,dayFog,dawnFog,duskFog,nightFog);
+      if (scene.fog instanceof T.FogExp2) scene.fog.density = blend(.0045,.0062,.0038,.010);
+      // The cached environment map is daylight-white; reduce its evening
+      // contribution instead of rebuilding PMREM during time changes.
+      scene.environmentIntensity = blend(.026,.021,.018,.009);
+      renderer.toneMappingExposure = blend(1.0,1.01,.98,1.08);
       const rain=weather?.rain.value ?? 0, cover=Math.pow(rain,.44);
       const autumn=T.MathUtils.clamp(weather?.autumn?.value ?? 0,0,1)*(1-cover)*(1-n);
       if(autumn>0){
         // Clear cool air and a slightly cleaner sun/shade distinction. Keep
         // the plants' authored greens; the seasonal cue comes from the light.
-        ambient.color.lerp(autumnSky,autumn*.26);
+        ambient.color.lerp(autumnSky,autumn*.26*(d+a));
         ambient.intensity*=1-autumn*.045;
-        sun.color.lerp(autumnSun,autumn*.30);
+        sun.color.lerp(autumnSun,autumn*.30*(d+a));
         sun.intensity*=1+autumn*.025;
         sky.material.uniforms.turbidity.value=T.MathUtils.lerp(sky.material.uniforms.turbidity.value,1.65,autumn*.65);
         sky.material.uniforms.rayleigh.value=T.MathUtils.lerp(sky.material.uniforms.rayleigh.value,1.95,autumn*.42);
-        if(scene.fog)scene.fog.color.lerp(autumnFog,autumn*.30);
+        if(scene.fog)scene.fog.color.lerp(autumnFog,autumn*.30*(d+a));
         if(scene.fog instanceof T.FogExp2)scene.fog.density*=1-autumn*.23;
       }
       sky.material.uniforms.cloudCoverage.value=.4+cover*.55;
@@ -207,7 +264,7 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
       ambient.groundColor.lerp(stormGround,cover);
       // Diffuse overcast light remains readable; direct sun/moon and sharp
       // shadows recede together, including all material shading, not a tint.
-      ambient.intensity=T.MathUtils.lerp(ambient.intensity,blend(1.45,1.5,1.24,1.28,.45),cover);
+      ambient.intensity=T.MathUtils.lerp(ambient.intensity,blend(1.45,1.24,1.28,.45),cover);
       sun.intensity*=1-cover*.96;
       if(scene.fog)scene.fog.color.lerp(rainFog.copy(stormFog).lerp(stormNightFog,n),cover*.82);
       if(scene.fog instanceof T.FogExp2)scene.fog.density+=Math.pow(rain,2)*.04;
@@ -216,10 +273,9 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
       warm.intensity = 34 * n;
       downstairs.intensity = 6.5 * n;
       // Fully extinguished fixtures must leave Three's light list: zero power
-      // alone retains seven point-light loops and shadow-coordinate varyings
+      // alone retains point-light loops and shadow-coordinate varyings
       // in every leaf shader. Keep them present throughout the visible fade.
       warm.visible = downstairs.visible = n > 0;
-      for (const {light,power} of roomLights) { light.intensity=power*n; light.visible=n>0; }
       downstairsBulbMaterial.emissiveIntensity = n * 1.5;
       bulbMaterial.emissiveIntensity = n * 4;
       fireflies.visible = n > .005 && rain < .45;

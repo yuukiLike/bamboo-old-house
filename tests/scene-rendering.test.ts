@@ -5,7 +5,7 @@ import test from 'node:test';
 import * as T from 'three';
 const {createViewTransition}:typeof import('../src/components/scene/view-transition')=
  await import(new URL('../src/components/scene/view-transition.ts',import.meta.url).href);
-const {createSceneTransition}:typeof import('../src/components/scene-transition')=
+const {createSceneTransition,createFrameReadySignal}:typeof import('../src/components/scene-transition')=
  await import(new URL('../src/components/scene-transition.ts',import.meta.url).href);
 
 /** Model only output pixels and renderer state, not animation scheduling. This
@@ -66,12 +66,131 @@ class Renderer {
  state(){return {autoClear:this.autoClear,target:this.target,face:this.face,level:this.level,
   viewport:this.viewport.toArray(),activeViewport:this.activeViewport.toArray(),scissor:this.scissor.toArray(),scissorTest:this.scissorTest};}
 }
-function setup(){
- const renderer=new Renderer(),transition=createViewTransition(renderer as unknown as T.WebGLRenderer);
+function setup(enabled=true){
+ const renderer=new Renderer(),transition=createViewTransition(renderer as unknown as T.WebGLRenderer,undefined,enabled);
  const frame=(color:number,time:number)=>{renderer.framebuffer=color;transition.render(time);return renderer.framebuffer;};
  return {renderer,transition,frame};
 }
 function close(actual:number,expected:number){assert.ok(Math.abs(actual-expected)<1e-10,`${actual} != ${expected}`);}
+
+await test('loading feedback completes only after a requested destination frame, never its capture frame',()=>{
+ const signal=createFrameReadySignal();let completed=0;
+ const capture=signal.beginFrame();
+ signal.wait(()=>completed++);
+ capture();assert.equal(completed,0);
+ const destination=signal.beginFrame();
+ assert.equal(completed,0);destination();destination();
+ assert.equal(completed,1);
+ assert.equal(signal.beginFrame(),signal.beginFrame(),'idle frames reuse one no-op instead of allocating callbacks');
+});
+
+await test('rapid requests, cancellation and disposal cannot let an old frame clear newer feedback',()=>{
+ const signal=createFrameReadySignal();let completed=0;
+ const complete=()=>completed++;
+ const cancelOld=signal.wait(complete),oldFrame=signal.beginFrame();
+ signal.wait(complete);cancelOld();oldFrame();
+ assert.equal(completed,0,'the same callback reused by a new request has a distinct identity');
+ signal.beginFrame()();assert.equal(completed,1);
+ const cancel=signal.wait(complete),cancelledFrame=signal.beginFrame();
+ cancel();cancelledFrame();assert.equal(completed,1);
+ signal.wait(complete);const disposedFrame=signal.beginFrame();
+ signal.clear();disposedFrame();assert.equal(completed,1);
+});
+
+await test('feedback and curtain listeners both receive the destination frame without replacing each other',()=>{
+ const signal=createFrameReadySignal(),completed:string[]=[];
+ const cancel=signal.wait(()=>completed.push('cancelled'));
+ signal.wait(()=>completed.push('feedback'));
+ signal.wait(()=>{completed.push('curtain');signal.wait(()=>completed.push('later'));});
+ const frame=signal.beginFrame();cancel();frame();frame();
+ assert.deepEqual(completed,['feedback','curtain']);
+ signal.beginFrame()();assert.deepEqual(completed,['feedback','curtain','later']);
+});
+
+function setupCurtain(){
+ const {renderer,transition}=setup(false),signal=createFrameReadySignal();
+ const animations:{from:number;to:number;duration:number;onfinish:(()=>void)|null;cancelled:boolean;cancel:()=>void;finish:()=>void}[]=[];
+ let displayedOpacity='0';
+ const element={
+  style:{opacity:'0'},
+  ownerDocument:{defaultView:{getComputedStyle:()=>({opacity:displayedOpacity})}},
+  animate(frames:{opacity:number}[],options:{duration:number}){
+   const animation={from:frames[0].opacity,to:frames[1].opacity,duration:options.duration,onfinish:null as (()=>void)|null,cancelled:false,
+    cancel(){animation.cancelled=true;},
+    finish(){displayedOpacity=String(animation.to);animation.onfinish?.();},
+   };
+   animations.push(animation);return animation;
+  },
+ };
+ const navigation=createSceneTransition(()=>transition,{element:()=>element as unknown as HTMLElement,waitForFrame:complete=>signal.wait(complete)});
+ return {renderer,transition,signal,element,animations,navigation,showOpacity:(value:number)=>{displayedOpacity=String(value);}};
+}
+
+await test('mobile handoff presents subtle feedback before mutations and finishes after the destination frame',()=>{
+ const {renderer,transition,signal,element,animations,navigation}=setupCurtain();
+ const events:string[]=[];
+ const oldFrame=signal.beginFrame();
+ navigation.request(()=>{events.push('destination');signal.wait(()=>events.push('feedback'));});
+ assert.deepEqual(events,[],'button selection can paint while the cover is animating');
+ assert.equal(animations.length,1);assert.equal(animations[0].duration,180);
+ assert.ok(animations[0].to>0&&animations[0].to<=.06,'feedback must not tint or obscure the whole scenery');
+ animations[0].finish();
+ assert.deepEqual(events,['destination']);assert.equal(element.style.opacity,String(animations[0].to));
+ oldFrame();assert.equal(animations.length,1,'the old frame cannot uncover a new destination');
+ signal.beginFrame()();
+ assert.deepEqual(events,['destination','feedback']);assert.equal(animations.length,2);
+ assert.equal(animations[1].from,animations[0].to);assert.equal(animations[1].to,0);
+ animations[1].finish();assert.equal(element.style.opacity,'0');
+ assert.equal(renderer.copies,0);assert.equal(renderer.draws,0);assert.equal(renderer.textures.size,0);
+ navigation.dispose();transition.dispose();
+});
+
+await test('curtain coalesces rapid choices and resumes from its displayed opacity on interruption',()=>{
+ const {transition,signal,element,animations,navigation,showOpacity}=setupCurtain();
+ const applied:string[]=[];
+ navigation.request(()=>applied.push('moon'));navigation.request(()=>applied.push('breeze'));
+ assert.equal(animations.length,1);animations[0].finish();
+ assert.deepEqual(applied,['breeze']);signal.beginFrame()();
+ showOpacity(.02);navigation.request(()=>applied.push('well'));navigation.request(()=>applied.push('yard'));
+ assert.equal(animations[1].cancelled,true);assert.equal(animations[2].from,.02);
+ animations[1].finish();assert.equal(element.style.opacity,'0.02','a cancelled fade cannot clear the new cover');
+ animations[2].finish();assert.deepEqual(applied,['breeze','yard']);
+ const oldFrame=signal.beginFrame();navigation.dispose();oldFrame();
+ assert.equal(animations.length,3);assert.equal(element.style.opacity,'0');transition.dispose();
+});
+
+await test('curtain finish, disposal, reduced motion and animation failure never strand navigation',()=>{
+ const {transition,signal,element,animations,navigation}=setupCurtain(),applied:string[]=[];
+ navigation.request(()=>applied.push('moon'));navigation.finish();animations[0].finish();
+ assert.deepEqual(applied,['moon']);assert.equal(element.style.opacity,'0');
+ navigation.request(()=>applied.push('breeze'),false);
+ assert.deepEqual(applied,['moon','breeze']);assert.equal(animations.length,1);
+ element.animate=()=>{throw Error('animation unavailable');};
+ assert.doesNotThrow(()=>navigation.request(()=>applied.push('well')));
+ assert.deepEqual(applied,['moon','breeze','well']);
+ signal.beginFrame()();assert.equal(element.style.opacity,'0','a failed reveal still clears the feedback');
+ navigation.dispose();assert.equal(element.style.opacity,'0');transition.dispose();
+});
+
+await test('mobile navigation commits without waiting for an old frame or preparing GPU snapshots',async()=>{
+ const {renderer,transition,frame}=setup(false),navigation=createSceneTransition(()=>transition);
+ const applied:string[]=[];
+ await transition.prepare();
+ assert.equal(renderer.compiles,0);
+ assert.equal(renderer.textures.size,0);
+ navigation.request(()=>applied.push('moon'));
+ assert.deepEqual(applied,['moon']);
+ navigation.request(()=>applied.push('breeze'));
+ assert.deepEqual(applied,['moon','breeze']);
+ assert.equal(navigation.covering,false);
+ assert.equal(transition.needsRender,false);
+ close(frame(.3,10_000),.3);
+ renderer.size.set(400,700);transition.resize();
+ assert.equal(renderer.copies,0);
+ assert.equal(renderer.draws,0);
+ assert.equal(renderer.textures.size,0);
+ navigation.dispose();transition.dispose();
+});
 
 await test('rapid navigation waits for a complete frame and fades only to the latest destination',()=>{
  const {renderer,transition,frame}=setup(),navigation=createSceneTransition(()=>transition);

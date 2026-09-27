@@ -61,7 +61,10 @@ export interface RuntimeSnapshot {
  adapterErrors: string[];
  windowMs: number;
  historyMs: number;
- window: { count: number; rafHz: number | null; p95Ms: number | null; maxMs: number | null; observedMs: number; slowCount: number; };
+ window: { count: number; rafHz: number | null; p95Ms: number | null; maxMs: number | null; observedMs: number; slowCount: number;
+  /** Current foreground segment only; available even when history is omitted. */
+  segmentMaxMs?: number | null;
+ };
  history: Interval[];
  stutters: RuntimeStutter[];
  state: RuntimeState;
@@ -74,7 +77,8 @@ export interface RuntimeSnapshot {
  interruptions: number;
 }
 export interface RuntimeCollector {
- snapshot(): RuntimeSnapshot;
+ /** Compact snapshots omit histories, not collection; exports default to full detail. */
+ snapshot(options?: { details?: boolean }): RuntimeSnapshot;
  pause(): void;
  resume(): void;
  clear(): void;
@@ -168,17 +172,12 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
  function readRenderer(): RendererSnapshot | null {
   return readSafely('readRenderer', () => cloneRenderer(adapter.readRenderer ? adapter.readRenderer() : null), null);
  }
- function overlappingPhases(start: number, end: number): string[] {
+ function readPhases(): Diagnostics | null {
   return readSafely('readBusinessPhases', () => {
    const data = adapter.readBusinessPhases ? adapter.readBusinessPhases() : null;
-   if (data === null) return [];
-   validatePhases(data);
-   const complete = data.phases.filter(phase => phase.startTime < end && phase.startTime + phase.duration > start)
-    .map(phase => `${phase.detail.phase} (${phase.detail.status})`);
-   const active = (data.activePhases ?? []).filter(phase => phase.startTime < end)
-    .map(phase => `${phase.detail.phase} (running)`);
-   return [...new Set([...complete, ...active])].slice(0, 12);
-  }, []);
+   if (data !== null) validatePhases(data);
+   return data;
+  }, null);
  }
  const startedAt = performance.now();
  let lastResetAt = startedAt;
@@ -195,6 +194,7 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
  let frameHandle = 0;
  let interruptions = 0;
  let eventId = 0;
+ let annotatedEventId = 0;
  const frames: Interval[] = [];
  const stutters: RuntimeStutter[] = [];
  const tasks: Interval[] = [];
@@ -210,6 +210,22 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
  let longTaskSupported = false;
 
  function collecting() { return !disposed && !paused && !hidden; }
+ function annotateStutters(poll = false) {
+  if (!poll && annotatedEventId === eventId && !adapterErrors.has('readBusinessPhases')) return;
+  const data = readPhases();
+  if (data) {
+   for (const entry of stutters) {
+    if (entry.id <= annotatedEventId) continue;
+    const start = entry.startTime, end = start + entry.duration;
+    const complete = data.phases.filter(phase => phase.startTime < end && phase.startTime + phase.duration > start)
+     .map(phase => `${phase.detail.phase} (${phase.detail.status})`);
+    const active = (data.activePhases ?? []).filter(phase => phase.startTime < end)
+     .map(phase => `${phase.detail.phase} (running)`);
+    entry.phases = [...new Set([...complete, ...active])].slice(0, 12);
+   }
+  }
+  annotatedEventId = eventId;
+ }
  function resetWorkloadInterval() {
   workloadStart = null; workloadCount = 0; workloadObservedMs = 0;
  }
@@ -218,7 +234,7 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
   workloadCount++;
   workloadObservedMs += interval.duration;
   if (workloadObservedMs < WORKLOAD_INTERVAL_MS) return;
-  if (stateReadAt !== now) { cachedState = readState(); stateReadAt = now; }
+  if (now - stateReadAt >= WORKLOAD_INTERVAL_MS) { cachedState = readState(); stateReadAt = now; }
   cachedRenderer = readRenderer();
   const sample: RuntimeWorkloadSample = {
    startTime: workloadStart, timestamp: now, count: workloadCount,
@@ -252,7 +268,7 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
 
  function frame(now: number) {
   if (!collecting()) { frameHandle = 0; return; }
-  if (now - stateReadAt >= 250) { cachedState = readState(); stateReadAt = now; }
+  if (now - stateReadAt >= WORKLOAD_INTERVAL_MS) { cachedState = readState(); stateReadAt = now; }
   if (previousFrame !== null && now > previousFrame) {
    const interval = { startTime: previousFrame, duration: now - previousFrame };
    frames.push(interval);
@@ -261,16 +277,16 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
    while (frames.length && frames[0].startTime + frames[0].duration < oldest) frames.shift();
    if (frames.length > FRAME_LIMIT) { frames.shift(); dropped.frames++; }
    if (interval.duration >= STUTTER_MS) {
-    const state = readState();
     const recentAction = actions.findLast(action => action.startTime < interval.startTime && interval.startTime - action.startTime <= 2000);
     stutters.push({
-     ...interval, id: ++eventId, state, stateBefore: previousState && { ...previousState },
+     ...interval, id: ++eventId, state: cachedState, stateBefore: previousState,
      actions: actions.filter(action => action.startTime >= interval.startTime && action.startTime <= now).map(action => ({ ...action })),
      recentAction: recentAction ? { ...recentAction } : null,
-     phases: overlappingPhases(interval.startTime, now),
+     // Resolve phase context in one batch when the UI/export asks for it,
+     // never scan all retained phases on each already-slow frame.
+     phases: [],
     });
     if (stutters.length > EVENT_LIMIT) { stutters.shift(); dropped.stutters++; }
-    cachedState = state; stateReadAt = now;
    }
    recordWorkload(interval, now);
   }
@@ -297,6 +313,7 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
  function suspend() {
   frozenAt = performance.now();
   cachedState = readState(); cachedRenderer = readRenderer();
+  annotateStutters();
   cancelAnimationFrame(frameHandle); frameHandle = 0;
   previousFrame = null; previousState = null;
   resetWorkloadInterval();
@@ -325,7 +342,7 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
  if (collecting()) frameHandle = requestAnimationFrame(frame);
 
  const collector: RuntimeCollector = {
-  snapshot() {
+  snapshot({ details = true } = {}) {
    recordTasks(observer?.takeRecords() ?? []);
    const now = performance.now();
    const chartEnd = collecting() ? now : frozenAt;
@@ -337,9 +354,9 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
    const observedMs = sorted.reduce((sum, value) => sum + value, 0);
    const recentTasks = tasks.filter(entry => entry.startTime >= lastResetAt && entry.startTime + entry.duration > chartEnd - WINDOW_MS && entry.startTime + entry.duration <= chartEnd);
    if (collecting()) {
-    cachedState = readState(); cachedRenderer = readRenderer();
+    if (details) { cachedState = readState(); stateReadAt = now; cachedRenderer = readRenderer(); }
     // Poll the phase reader too, so a transient failure recovers without a new stutter.
-    overlappingPhases(chartEnd - WINDOW_MS, chartEnd);
+    annotateStutters(details);
    }
    return {
     version: 1, now, chartEnd, startedAt, lastResetAt, segmentStartedAt: segmentStart,
@@ -348,19 +365,20 @@ export function createRuntimeCollector(adapter: RuntimeAdapter = {}): RuntimeCol
     windowMs: WINDOW_MS, historyMs: HISTORY_MS,
     window: { count: sorted.length, rafHz: observedMs > 0 ? sorted.length * 1000 / observedMs : null,
      p95Ms: sorted.length ? sorted[Math.ceil(sorted.length * .95) - 1] : null,
-     maxMs: sorted.at(-1) ?? null, observedMs, slowCount: sorted.filter(value => value >= STUTTER_MS).length },
-    history: frames.filter(entry => entry.startTime + entry.duration >= chartEnd - HISTORY_MS && entry.startTime + entry.duration <= chartEnd).map(entry => ({ ...entry })),
-    stutters: stutters.map(entry => ({ ...entry, state: { ...entry.state }, stateBefore: entry.stateBefore && { ...entry.stateBefore }, actions: entry.actions.map(action => ({ ...action })), recentAction: entry.recentAction && { ...entry.recentAction }, phases: [...entry.phases] })),
+     maxMs: sorted.at(-1) ?? null, observedMs, slowCount: sorted.filter(value => value >= STUTTER_MS).length,
+     segmentMaxMs: selected.reduce<number | null>((max, entry) => entry.startTime >= segmentStart ? Math.max(max ?? 0, entry.duration) : max, null) },
+    history: details ? frames.filter(entry => entry.startTime + entry.duration >= chartEnd - HISTORY_MS && entry.startTime + entry.duration <= chartEnd).map(entry => ({ ...entry })) : [],
+    stutters: details ? stutters.map(entry => ({ ...entry, state: { ...entry.state }, stateBefore: entry.stateBefore && { ...entry.stateBefore }, actions: entry.actions.map(action => ({ ...action })), recentAction: entry.recentAction && { ...entry.recentAction }, phases: [...entry.phases] })) : [],
     state: { ...cachedState }, renderer: cachedRenderer && { ...cachedRenderer, drawSize: [...cachedRenderer.drawSize] },
     workload: {
      sampleIntervalMs: WORKLOAD_INTERVAL_MS, initialLimit: WORKLOAD_INITIAL_LIMIT, recentLimit: WORKLOAD_RECENT_LIMIT, dropped: workloadDropped,
-     samples: [...initialWorkload, ...recentWorkload].map(entry => ({
+     samples: details ? [...initialWorkload, ...recentWorkload].map(entry => ({
       ...entry, state: { ...entry.state }, renderer: entry.renderer && { ...entry.renderer, drawSize: [...entry.renderer.drawSize] },
-     })),
+     })) : [],
     },
     longTasks: { supported: longTaskSupported, recentCount: longTaskSupported ? recentTasks.length : null,
      recentMaxMs: longTaskSupported && recentTasks.length ? Math.max(...recentTasks.map(entry => entry.duration)) : null,
-     events: tasks.map(entry => ({ ...entry })) },
+     events: details ? tasks.map(entry => ({ ...entry })) : [] },
     dropped: { ...dropped }, interruptions,
    };
   },

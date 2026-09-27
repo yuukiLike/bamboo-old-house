@@ -33,6 +33,13 @@ module.exports = async function (context, commands) {
         `diagnostics free/${place} + free-view panel mounted; ${SETTLE_MS}ms settling allowance; then fixed observation`);
     }
 
+    if (await commands.js.run('return window.__BAMBOO__?.renderSettings?.freeMode === false')) {
+      await commands.click.bySelector('.render-toggle');
+      await commands.wait.bySelectorAndVisible('#enable-free-mode', TIMEOUT_MS);
+      await commands.click.bySelector('#enable-free-mode');
+      await commands.wait.byCondition('window.__BAMBOO__?.renderSettings?.freeMode === true', TIMEOUT_MS);
+      await commands.click.bySelector('#render-settings .settings-close');
+    }
     await enter('free-outdoor', '.free-toggle', 'courtyard');
     await enter('interior-first', '#free-viewpoints .floor-link', 'upstairs');
     await enter('outdoor-return', '#free-viewpoints .floor-link', 'courtyard');

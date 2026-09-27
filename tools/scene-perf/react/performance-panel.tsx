@@ -62,15 +62,18 @@ function phaseDetail(adapter: PerformanceAdapter, phase: ActivePhase | Phase) {
   .filter(([key, value]) => !['phase', 'operationId', 'status'].includes(key) && value !== undefined && value !== null && value !== '')
   .map(([key, value]) => `${key}=${String(value)}`).join(' · ');
 }
-function readSnapshot(adapter: PerformanceAdapter, resources: Resource[] = [], droppedResources = 0, resourceObserverSupported = true, resourceReadErrors = 0): Snapshot {
+function readSnapshot(adapter: PerformanceAdapter, resources: Resource[] = [], droppedResources = 0, resourceObserverSupported = true, resourceReadErrors = 0, details = true): Snapshot {
  const empty: Snapshot = {
   now: performance.now(), phases: [], active: [], dropped: 0, droppedActive: 0,
   resources, droppedResources, resourceObserverSupported, resourceReadErrors, businessEnabled: false, businessFailed: false,
  };
  try {
   const data = adapter.readBusinessPhases?.();
+  const startup = details ? undefined : data?.phases.findLast(phase => phase.detail.phase === adapter.startupPhase);
+  const startupActive = details ? undefined : data?.activePhases?.find(phase => phase.detail.phase === adapter.startupPhase);
   return {
-   ...empty, phases: data?.phases.slice() ?? [], active: data?.activePhases?.slice() ?? [],
+   ...empty, phases: details ? data?.phases.slice() ?? [] : startup ? [startup] : [],
+   active: details ? data?.activePhases?.slice() ?? [] : startupActive ? [startupActive] : [],
    readyAt: data?.startupReadyAt, dropped: data?.droppedPhases ?? 0, droppedActive: data?.droppedActivePhases ?? 0,
    businessEnabled: Boolean(data?.enabled),
   };
@@ -146,6 +149,13 @@ function Panel({ adapter }: { adapter: PerformanceAdapter }) {
  const downloadUrl = useRef<string | undefined>(undefined);
  const revokeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
  const runtimeCollector = useRef<ReturnType<typeof createRuntimeCollector> | null>(null);
+ const displayMode = useRef({ collapsed, view });
+ const refreshCollection = useRef<() => void>(() => {});
+
+ useEffect(() => {
+  displayMode.current = { collapsed, view };
+  refreshCollection.current();
+ }, [collapsed, view]);
 
  useEffect(() => {
   if (stopped) return;
@@ -198,25 +208,30 @@ function Panel({ adapter }: { adapter: PerformanceAdapter }) {
   } catch { observer?.disconnect(); resourceObserverSupported.current = false; }
   const refresh = () => {
    if (detached || document.hidden) return;
+   const display = displayMode.current;
    try {
-    setRuntime(runtimeCollector.current?.snapshot() ?? null);
+    setRuntime(runtimeCollector.current?.snapshot({ details: !display.collapsed && display.view === 'runtime' }) ?? null);
     setRuntimeFailed(collectorFailed);
    }
    catch { setRuntimeFailed(true); }
-   if (resourcesChanged) { retainedResources = resources.current.slice(); resourcesChanged = false; }
-   setSnapshot(readSnapshot(adapter, retainedResources, droppedResources.current, resourceObserverSupported.current, resourceReadErrors.current));
+   if (!display.collapsed && resourcesChanged) { retainedResources = resources.current.slice(); resourcesChanged = false; }
+   setSnapshot(readSnapshot(adapter, retainedResources, droppedResources.current, resourceObserverSupported.current, resourceReadErrors.current, !display.collapsed && display.view === 'timeline'));
   };
-  const firstRefresh = setTimeout(refresh, 0);
-  // RAF collection is unchanged; the diagnostic UI only needs one repaint
-  // per second. Reuse the resource snapshot until real requests arrive.
-  const timer = setInterval(refresh, 1000);
-  document.addEventListener('visibilitychange', refresh);
+  refreshCollection.current = refresh;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const visibilityChanged = () => {
+   clearInterval(timer); timer = undefined;
+   if (detached || document.hidden) return;
+   refresh(); timer = setInterval(refresh, 1000);
+  };
+  const firstRefresh = setTimeout(visibilityChanged, 0);
+  document.addEventListener('visibilitychange', visibilityChanged);
   const detach = () => {
    if (detached) return;
    detached = true;
    clearInterval(timer); observer?.disconnect();
    clearTimeout(firstRefresh);
-   document.removeEventListener('visibilitychange', refresh);
+   document.removeEventListener('visibilitychange', visibilityChanged);
    runtimeCollector.current?.dispose();
   };
   stopCollection.current = () => {
@@ -234,6 +249,7 @@ function Panel({ adapter }: { adapter: PerformanceAdapter }) {
   return () => {
    detach();
    stopCollection.current = () => {};
+   refreshCollection.current = () => {};
    try { releaseHost?.(); }
    catch { /* Host cleanup cannot prevent collector and browser cleanup. */ }
    finally { runtimeCollector.current?.dispose(); runtimeCollector.current = null; }

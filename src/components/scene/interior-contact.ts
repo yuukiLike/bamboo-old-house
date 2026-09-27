@@ -239,8 +239,8 @@ export function createInteriorContact(renderer:T.WebGLRenderer,scene:T.Scene,cam
     firstRender=false;
    } else pipeline.composer.render(delta);
   },
-  deactivate() {
-   if(disposed||!mobile)return;
+  deactivate(releaseOnDesktop=false) {
+   if(disposed||(!mobile&&!releaseOnDesktop))return;
    deactivationPending=true;if(!preparationPending)releaseTargets();
   },
   resetForViewChange() { if(!disposed)pipeline?.cachedContact.resetForViewChange(); },

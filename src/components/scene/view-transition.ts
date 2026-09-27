@@ -6,7 +6,7 @@ type Operation={kind:'capture'|'reveal';complete:()=>void;startedAt?:number;from
 
 /** One GPU snapshot of the last complete, displayed frame. Call render only
  * after the destination's normal rendering, including its postprocessing. */
-export function createViewTransition(renderer:T.WebGLRenderer,timings?:Pick<typeof import('@/lib/performance'),'beginPhase'|'measurePhase'>) {
+export function createViewTransition(renderer:T.WebGLRenderer,timings?:Pick<typeof import('@/lib/performance'),'beginPhase'|'measurePhase'>,enabled=true) {
  const beginPhase=timings?.beginPhase??(()=>()=>{});
  const measurePhase:typeof import('@/lib/performance').measurePhase=timings?.measurePhase??((_name,run)=>run());
  const scene=new T.Scene(),camera=new T.OrthographicCamera(-1,1,1,-1,0,1);
@@ -26,7 +26,7 @@ export function createViewTransition(renderer:T.WebGLRenderer,timings?:Pick<type
  const bufferSize=new T.Vector2(),logicalSize=new T.Vector2();
  const savedViewport=new T.Vector4(),savedScissor=new T.Vector4();
  let snapshot:T.FramebufferTexture|undefined,operation:Operation|undefined;
- let alpha=0,hasSnapshot=false,disposed=false,disabled=false,released=false,visualRevision=0;
+ let alpha=0,hasSnapshot=false,disposed=false,disabled=!enabled,released=false,visualRevision=0;
  let preparing:Promise<void>|undefined,preparationPending=false;
  let context={view:'walk',place:'courtyard'};
 
