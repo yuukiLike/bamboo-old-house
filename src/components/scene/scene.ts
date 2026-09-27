@@ -17,6 +17,8 @@ import { createVegetationVisibility } from './vegetation-visibility';
 import { ViewControls } from './view-controls';
 import { createInteriorContact } from './interior-contact';
 import { createViewTransition } from './view-transition';
+import { createFrameReadySignal } from '../scene-transition';
+import { WALK_SCROLL_CYCLES, walkScrollPosition } from '../walk-navigation';
 import { createIdleRendering } from './rendering-idle';
 import { DEFAULT_RENDER_SETTINGS, scenePixelRatio, resizeSceneRenderer, createDirectionalShadowUpdates, createFramePacer, type RenderSettings } from './render-settings';
 import { skipZeroPointLightContributions } from './point-light-shading';
@@ -24,9 +26,9 @@ import { beginPhase, measurePhase, phaseStatus, performanceEnabled, performanceC
 import { shadeWindowRecesses } from './window-light';
 import { stabilizeHouseSurfaces } from './house-surfaces';
 import { BUILD_ID, PORCH_VIEW, MOON_VIEW, BREEZE_VIEW, WELL_RAIN_VIEW, ROOM_VIEWS, PLACE_VIEWS, groundHeight, pathClearance, treePositions, cameraProgress, followWalkProgress, positionPath, targetPath, type ViewMode, type TimeOfDay, type PlaceId } from './config';
-export interface SceneHandle { transition:ReturnType<typeof createViewTransition>;dispose:()=>void;setRenderSettings:(value:RenderSettings)=>void;setWeather:(value:WeatherSettings)=>void;setPaused:(value:boolean)=>void;reset:()=>void;setView:(view:ViewMode)=>void;setTimeOfDay:(value:TimeOfDay)=>void;setPanorama:(value:boolean)=>void;setPlace:(value:PlaceId)=>void; }
+export interface SceneHandle { transition:ReturnType<typeof createViewTransition>;afterNextFrame:(complete:()=>void)=>()=>void;dispose:()=>void;setRenderSettings:(value:RenderSettings)=>void;setWeather:(value:WeatherSettings)=>void;setPaused:(value:boolean)=>void;reset:()=>void;setView:(view:ViewMode)=>void;setTimeOfDay:(value:TimeOfDay)=>void;setPanorama:(value:boolean)=>void;setPlace:(value:PlaceId)=>void; }
 interface Hooks {onProgress:(state:string,value:number|null)=>void;onFailure:()=>void;onPanorama:(value:boolean)=>void;onBearing:(value:number)=>void;onGust?:(strength:number)=>void;onRunoff?:(flow:number)=>void;}
-interface Diagnostics {programs:number;cpuUpdateMs:number|null;cpuRenderSubmitMs:number|null;renderSettings:RenderSettings;directionalShadowRequests:number;startupMs:number;pixelRatio:number;windGust:number;weather:{wind:number;rain:number;wetness:number;mud:number;autumn:number};fallingLeaves:Record<string,number>;rainEffects:Record<string,unknown>;build:string;quality:string;gpu:string;viewport:number[];drawSize:number[];progress:number;camera:number[];target:number[];drawCalls:number;triangles:number;textures:number;geometries:number;frames:number[];windTime:number;paused:boolean;bambooCount:number;viewMode:ViewMode;place:PlaceId;timeOfDay:TimeOfDay;nightMix:number;noonMix:number;dawnMix:number;duskMix:number;panorama:boolean;yaw:number;pitch:number;fov:number;getPoster:()=>string;reset:()=>void;}
+interface Diagnostics {programs:number;cpuUpdateMs:number|null;cpuRenderSubmitMs:number|null;renderSettings:RenderSettings;directionalShadowRequests:number;startupMs:number;pixelRatio:number;windGust:number;weather:{wind:number;rain:number;wetness:number;mud:number;autumn:number};fallingLeaves:Record<string,number>;rainEffects:Record<string,unknown>;build:string;quality:string;gpu:string;viewport:number[];drawSize:number[];progress:number;camera:number[];target:number[];drawCalls:number;triangles:number;textures:number;geometries:number;frames:number[];windTime:number;paused:boolean;bambooCount:number;viewMode:ViewMode;place:PlaceId;timeOfDay:TimeOfDay;nightMix:number;dawnMix:number;duskMix:number;panorama:boolean;yaw:number;pitch:number;fov:number;getPoster:()=>string;reset:()=>void;}
 declare global { interface Window { __BAMBOO__?:Diagnostics; } }
 
 const include=/^[ \t]*#include +<([\w\d./]+)>/gm;
@@ -93,16 +95,17 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
  mount.appendChild(renderer.domElement);
  // Mobile navigation must not wait for another old-view draw and framebuffer copy.
  const viewTransition=createViewTransition(renderer,{beginPhase,measurePhase},!mobile);
+ const frameReady=createFrameReadySignal();
  const scene=new T.Scene();const camera=new T.PerspectiveCamera(54,innerWidth/innerHeight,.12,750);camera.name='Bamboo_View';
- const time={value:0},night={value:0},noon={value:0},dawn={value:0},dusk={value:1};let cleanEnvironment=()=>{},cleanContact=()=>{},cleanWeather=()=>{},cleanLeaves=()=>{},cleanWind=()=>{},cleanShadows=()=>{};
+ const time={value:0},night={value:0},dawn={value:0},dusk={value:1};let cleanEnvironment=()=>{},cleanContact=()=>{},cleanWeather=()=>{},cleanLeaves=()=>{},cleanWind=()=>{},cleanShadows=()=>{};
  const weatherState=createWeatherState(time,night),weather=weatherState.uniforms;
- const idleRendering=createIdleRendering(camera,[time,night,noon,dawn,dusk,weather.wind,weather.rain,weather.wetness,weather.autumn]);
+ const idleRendering=createIdleRendering(camera,[time,night,dawn,dusk,weather.wind,weather.rain,weather.wetness,weather.autumn]);
  const loadedGroups:T.Group[]=[];const controller=new AbortController();let disposed=false,compiling=false,resourcesReleased=false,raf=0;
  const textureSet=new Set<T.Texture>(),materialSet=new Set<T.Material>(),geometrySet=new Set<T.BufferGeometry>();
  const disposeObjects=(root:T.Object3D)=>root.traverse(o=>{if(o instanceof T.Mesh||o instanceof T.Points){geometrySet.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materialSet.add(m);for(const value of Object.values(m))if(value instanceof T.Texture)textureSet.add(value);}if(o.customDepthMaterial)materialSet.add(o.customDepthMaterial);}if(o instanceof T.Light&&'shadow' in o)(o.shadow as T.LightShadow).dispose();});
  const releaseResources=()=>{const bitmaps=new Set<ImageBitmap>();textureSet.forEach(t=>{const data:unknown=t.source?.data;if(typeof ImageBitmap!=='undefined'&&data instanceof ImageBitmap)bitmaps.add(data);t.dispose();});materialSet.forEach(m=>m.dispose());geometrySet.forEach(g=>g.dispose());bitmaps.forEach(bitmap=>bitmap.close());textureSet.clear();materialSet.clear();geometrySet.clear();};
  const finalizeResources=()=>{if(resourcesReleased)return;resourcesReleased=true;viewTransition.dispose();cleanContact();cleanLeaves();cleanWind();cleanShadows();cleanWeather();disposeObjects(scene);loadedGroups.forEach(disposeObjects);if(scene.environment)textureSet.add(scene.environment);releaseResources();cleanEnvironment();renderer.dispose();renderer.forceContextLoss();};
- const cleanup=()=>{if(disposed)return;disposed=true;signal?.removeEventListener('abort',cleanup);controller.abort();cancelAnimationFrame(raf);removeEvents();renderer.domElement.remove();delete window.__BAMBOO__;if(!compiling)finalizeResources();};
+ const cleanup=()=>{if(disposed)return;disposed=true;frameReady.clear();signal?.removeEventListener('abort',cleanup);controller.abort();cancelAnimationFrame(raf);removeEvents();renderer.domElement.remove();delete window.__BAMBOO__;if(!compiling)finalizeResources();};
  let removeEvents=()=>{};
  let finishConstruction:FinishPhase|undefined;
  signal?.addEventListener('abort',cleanup,{once:true});
@@ -151,7 +154,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   void models.catch(()=>{});
   const yieldLoading=async(state:string)=>{hooks.onProgress(state,null);await new Promise<void>(resolve=>setTimeout(resolve,0));if(disposed)throw new Error('SCENE_DISPOSED');};
   await yieldLoading('正在铺开竹林…');
-  const environment=measurePhase('scene.environment-build',()=>addEnvironment(scene,renderer,mobile,time,night,noon,dawn,dusk,weather),{mobile});cleanEnvironment=environment.dispose;
+  const environment=measurePhase('scene.environment-build',()=>addEnvironment(scene,renderer,mobile,time,night,dawn,dusk,weather),{mobile});cleanEnvironment=environment.dispose;
   const [house,bamboo,understory,foliage,porchBamboo,fuel]=await models;
   measurePhase('scene.house-surfaces',()=>stabilizeHouseSurfaces(house));
   await yieldLoading('正在安放老屋…');
@@ -174,7 +177,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
      shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 courtyardWorld;').replace('#include <color_fragment>','#include <color_fragment>\nfloat courtEdge=min(min(courtyardWorld.x+10.95,-4.35-courtyardWorld.x),6.30-courtyardWorld.z);\ndiffuseColor.a*=smoothstep(.04,.80,courtEdge);');
     };material.customProgramCacheKey=()=> 'courtyard-edge-feather-1';
    }
-   shadeWindowRecesses(material,night,dawn,dusk,noon,weather);
+   shadeWindowRecesses(material,night,dawn,dusk,weather);
   }}}});
   scene.add(house);addBackgroundFoliage(scene,foliage,weather);addUnderstoryAssets(scene,understory,mobile,weather);bamboo.updateMatrixWorld(true);const field=addBamboo(scene,bamboo,time,mobile,night,weather);
   addPorchBamboo(scene,porchBamboo,time,night,bamboo,weather);
@@ -221,7 +224,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const controls=new ViewControls(renderer.domElement,()=>setPanorama(false));
   let progress=0,displayProgress=0,lastScroll=0,resyncWalkCamera=true,walkScrollRange=0,paused=matchMedia('(prefers-reduced-motion:reduce)').matches,dragging=false,dragX=0,dragY=0,pointerX=0,pointerY=0,previousX=0,previousY=0;
   const media=matchMedia('(prefers-reduced-motion:reduce)');let reduced=media.matches;
-  const syncWalkScroll=()=>{if(!controls.active&&viewMode==='walk')progress=T.MathUtils.clamp(scrollY/Math.max(1,document.documentElement.scrollHeight-innerHeight),0,1);};
+  const syncWalkScroll=()=>{if(!controls.active&&viewMode==='walk')progress=walkScrollPosition(scrollY,document.documentElement.scrollHeight-innerHeight).progress;};
   const scroll=()=>{if(controls.active||viewMode!=='walk')return;lastScroll=performance.now();dragging=false;};
   let resizePending=false;
   const requestResize=()=>{resizePending=true;};
@@ -250,8 +253,12 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
    if(interior)interiorContact.render(delta);else {interiorContact.deactivate();renderer.render(scene,camera);}
    if(performanceEnabled())diagnostics.directionalShadowRequests=directionalShadowRequests;
   };
-  const renderFrame=(delta=0)=>{renderer.info.reset();renderScene(viewMode==='free'&&Object.hasOwn(ROOM_VIEWS,place),delta);viewTransition.render(performance.now());};
-  const diagnostics:Diagnostics={programs:0,cpuUpdateMs:null,cpuRenderSubmitMs:null,renderSettings:{...renderSettings},directionalShadowRequests:0,startupMs:0,pixelRatio:renderer.getPixelRatio(),windGust:0,weather:{wind:weather.wind.value,rain:0,wetness:0,mud:0,autumn:0},fallingLeaves:{},rainEffects:{},build:BUILD_ID,quality:mobile?'mobile':'desktop',gpu:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'unavailable',viewport:[],drawSize:[],progress:0,camera:[],target:[],drawCalls:0,triangles:0,textures:0,geometries:0,frames:[],windTime:0,paused,bambooCount:field.count,viewMode,place,timeOfDay,nightMix:0,noonMix:0,dawnMix:0,duskMix:1,panorama:false,yaw:0,pitch:0,fov:70,getPoster:()=>{renderFrame();return renderer.domElement.toDataURL('image/webp',.9);},reset};window.__BAMBOO__=diagnostics;
+  const renderFrame=(delta=0)=>{
+   const complete=frameReady.beginFrame();
+   renderer.info.reset();renderScene(viewMode==='free'&&Object.hasOwn(ROOM_VIEWS,place),delta);viewTransition.render(performance.now());
+   complete();
+  };
+  const diagnostics:Diagnostics={programs:0,cpuUpdateMs:null,cpuRenderSubmitMs:null,renderSettings:{...renderSettings},directionalShadowRequests:0,startupMs:0,pixelRatio:renderer.getPixelRatio(),windGust:0,weather:{wind:weather.wind.value,rain:0,wetness:0,mud:0,autumn:0},fallingLeaves:{},rainEffects:{},build:BUILD_ID,quality:mobile?'mobile':'desktop',gpu:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'unavailable',viewport:[],drawSize:[],progress:0,camera:[],target:[],drawCalls:0,triangles:0,textures:0,geometries:0,frames:[],windTime:0,paused,bambooCount:field.count,viewMode,place,timeOfDay,nightMix:0,dawnMix:0,duskMix:1,panorama:false,yaw:0,pitch:0,fov:70,getPoster:()=>{renderFrame();return renderer.domElement.toDataURL('image/webp',.9);},reset};window.__BAMBOO__=diagnostics;
 
   const setRenderSettings=(value:RenderSettings)=>{
    if(value.resolution===renderSettings.resolution&&value.shadows===renderSettings.shadows&&value.frameRate===renderSettings.frameRate)return;
@@ -343,12 +350,18 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
    if(!controls.active&&viewMode==='walk'){
     const range=Math.max(1,document.documentElement.scrollHeight-innerHeight);
     syncWalkScroll();
-    displayProgress=resyncWalkCamera||range!==walkScrollRange||reduced?progress:followWalkProgress(displayProgress,progress,actual/1000,range);
+    displayProgress=resyncWalkCamera||range!==walkScrollRange||reduced?progress:followWalkProgress(displayProgress,progress,actual/1000,range/WALK_SCROLL_CYCLES,true);
     walkScrollRange=range;resyncWalkCamera=false;
    }
-   for(const [mix,period] of [[night,'night'],[noon,'noon'],[dawn,'dawn'],[dusk,'dusk']] as const){
-    const goal=Number(timeOfDay===period);mix.value=reduced?goal:T.MathUtils.damp(mix.value,goal,2.4,delta);
-    if(Math.abs(mix.value-goal)<.001)mix.value=goal;
+   const timeFade=timeOfDay==='night'||night.value>0?1.6:2.4;
+   let timeSettled=true;
+   for(const [mix,period] of [[night,'night'],[dawn,'dawn'],[dusk,'dusk']] as const){
+    const goal=Number(timeOfDay===period);mix.value=reduced?goal:T.MathUtils.damp(mix.value,goal,timeFade,delta);
+    if(Math.abs(mix.value-goal)>=.001)timeSettled=false;
+   }
+   // Finish together so an interrupted fade cannot leave a daylight remainder.
+   if(timeSettled){
+    night.value=Number(timeOfDay==='night');dawn.value=Number(timeOfDay==='dawn');dusk.value=Number(timeOfDay==='dusk');
    }
    weatherState.update(delta,reduced);controls.update(delta);environment.update();updateCamera();instanceWind.update(time.value,weather.wind.value);weatherEffects.update(delta,reduced);fallingLeaves.update(delta);hooks.onGust?.(paused||reduced?0:forestWindGust(time.value,camera.position.x,camera.position.z));
    // A frozen clock alone is insufficient: daylight/weather can still ease,
@@ -382,11 +395,11 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
     diagnostics.cpuRenderSubmitMs=cpuSamples?cpuRenderTotal/cpuSamples:null;
     cpuSamples=cpuUpdateTotal=cpuRenderTotal=0;
     diagnostics.windTime=time.value;diagnostics.paused=paused||reduced;diagnostics.viewMode=viewMode;diagnostics.place=place;
-    diagnostics.timeOfDay=timeOfDay;diagnostics.nightMix=night.value;diagnostics.noonMix=noon.value;diagnostics.dawnMix=dawn.value;diagnostics.duskMix=dusk.value;
+    diagnostics.timeOfDay=timeOfDay;diagnostics.nightMix=night.value;diagnostics.dawnMix=dawn.value;diagnostics.duskMix=dusk.value;
     diagnostics.panorama=controls.active;diagnostics.yaw=controls.yaw;diagnostics.pitch=controls.pitch;diagnostics.fov=camera.fov;
    }
   };raf=requestAnimationFrame(tick);
-  return {transition:viewTransition,dispose:cleanup,setRenderSettings,setWeather:(value)=>weatherState.set(value),setPaused:(value:boolean)=>{if(paused!==value){idleRendering.invalidate();shadowUpdates.invalidate();}paused=value;},reset,setView,setPlace,setPanorama,setTimeOfDay:(value:TimeOfDay)=>{timeOfDay=value;}};
+  return {transition:viewTransition,afterNextFrame:(complete)=>{if(disposed)return()=>{};idleRendering.invalidate();return frameReady.wait(complete);},dispose:cleanup,setRenderSettings,setWeather:(value)=>weatherState.set(value),setPaused:(value:boolean)=>{if(paused!==value){idleRendering.invalidate();shadowUpdates.invalidate();}paused=value;},reset,setView,setPlace,setPanorama,setTimeOfDay:(value:TimeOfDay)=>{timeOfDay=value;}};
  }catch(error){finishConstruction?.(phaseStatus(error));cleanup();throw error;}
 }
 

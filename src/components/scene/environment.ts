@@ -12,7 +12,7 @@ float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
 float fbm(vec2 p){return noise(p)*.5+noise(p*2.13)*.25+noise(p*4.07)*.125+noise(p*8.31)*.0625;}
 `;
-export function addEnvironment(scene:T.Scene,renderer:T.WebGLRenderer,mobile:boolean,time:{value:number},night:{value:number},noon={value:0},dawn={value:0},dusk={value:0},weather?:WeatherUniforms) {
+export function addEnvironment(scene:T.Scene,renderer:T.WebGLRenderer,mobile:boolean,time:{value:number},night:{value:number},dawn={value:0},dusk={value:0},weather?:WeatherUniforms) {
  const sky=new Sky(); sky.scale.setScalar(450000);
  // Opaque surfaces write their depth first, so hidden sky fragments never
  // run the cloud shader. The sky still precedes transparent glass and rain.
@@ -52,7 +52,7 @@ export function addEnvironment(scene:T.Scene,renderer:T.WebGLRenderer,mobile:boo
  addFootpath(scene,terrain);
  addUnderstory(scene,mobile);
  const terrainArt=addTerrainArt(scene,mobile,groundHeight,pathClearance);
- const cycle=addDayCycle(scene,renderer,sky,sun,ambient,night,time,mobile,noon,dawn,dusk,weather);
+ const cycle=addDayCycle(scene,renderer,sky,sun,ambient,night,time,mobile,dawn,dusk,weather);
  return {sun,update:()=>{cycle.update();reservoirWater.update();},dispose:()=>{terrainArt.dispose();env.dispose();}};
 }
 export function addUnderstory(scene:T.Scene,mobile:boolean){

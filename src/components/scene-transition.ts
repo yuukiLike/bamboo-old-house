@@ -68,3 +68,21 @@ export function createSceneTransition(current:()=>ViewTransition|undefined) {
   clear(){current()?.clear();},
  });
 }
+
+/** A request made while drawing cannot be completed by that older frame. */
+export function createFrameReadySignal() {
+ let pending:{complete:()=>void}|undefined;
+ const noop=()=>{};
+ return {
+  wait(complete:()=>void) {
+   const request={complete};pending=request;
+   return()=>{if(pending===request)pending=undefined;};
+  },
+  beginFrame() {
+   const request=pending;
+   if(!request)return noop;
+   return()=>{if(pending===request){pending=undefined;request.complete();}};
+  },
+  clear(){pending=undefined;},
+ };
+}

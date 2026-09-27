@@ -1,13 +1,14 @@
 import { Vector3, CatmullRomCurve3, MathUtils } from 'three';
 export const BUILD_ID = 'bamboo-2026-09-13-grove-and-controls';
 export type ViewMode = 'porch' | 'walk' | 'free' | 'moon' | 'breeze' | 'well-rain';
-export type TimeOfDay = 'dawn' | 'day' | 'noon' | 'dusk' | 'night';
+export type TimeOfDay = 'dawn' | 'day' | 'dusk' | 'night';
 // Shared with the editable Blender environment export (metres, web Y up).
 export const SUN_PRESETS = {
  dawn: { position: [-30, 12, 24], color: 0xffe1b5, intensity: 2.8 },
  day: { position: [22, 20, 30], color: 0xffedcc, intensity: 4.2 },
- noon: { position: [-16, 48, 30], color: 0xffe7c2, intensity: 5.0 },
- dusk: { position: [24, 10, 34], color: 0xffd393, intensity: 5.0 },
+ // Low light enters from the open +X bank, below the eaves and beside the
+ // dense foreground canopy that otherwise shades the right-hand facade.
+ dusk: { position: [30, 9.3, 34], color: 0xffdd86, intensity: 4.4 },
  night: { position: [-14, 27, 22], color: 0x8eb5e8, intensity: .72 },
 } as const;
 // Stand one step inside the open gallery: the eaves and end pier frame a
@@ -60,10 +61,9 @@ export const CAMERA_STOPS = [
  { p:[-9.7,1.70,14.8], t:[-2.7,2.7,0] },
  { p:[-2.4,1.70,8.8], t:[-1.2,2.2,.2] },
  { p:FOREST_SLOPE_VIEW.p, t:FOREST_SLOPE_VIEW.t },
- { p:[-16.9447,1.95,20.388689], t:[-.80035,6.849482,0] },
 ];
-export const positionPath=new CatmullRomCurve3(CAMERA_STOPS.map(s=>new Vector3(...s.p)),false,'centripetal');
-export const targetPath=new CatmullRomCurve3(CAMERA_STOPS.map(s=>new Vector3(...s.t)),false,'centripetal');
+export const positionPath=new CatmullRomCurve3(CAMERA_STOPS.map(s=>new Vector3(...s.p)),true,'centripetal');
+export const targetPath=new CatmullRomCurve3(CAMERA_STOPS.map(s=>new Vector3(...s.t)),true,'centripetal');
 export function cameraProgress(progress:number){
  // The authored curve already connects the viewpoints smoothly. A separate
  // dwell around every chapter discarded wheel input and felt like getting stuck.
@@ -72,12 +72,14 @@ export function cameraProgress(progress:number){
 /** A short, time-based follow shared by wheel and chapter navigation.
  * Always follow the latest page position; there is no queued animation or
  * weather-dependent delay. Use real elapsed time, not the physics time cap. */
-export function followWalkProgress(current:number,target:number,elapsedSeconds:number,scrollRangePixels:number):number {
+export function followWalkProgress(current:number,target:number,elapsedSeconds:number,scrollRangePixels:number,loop=false):number {
+ if(loop)target=current+MathUtils.euclideanModulo(target-current+.5,1)-.5;
  const alpha=1-Math.exp(-30*Math.max(0,elapsedSeconds));
  const next=current+(target-current)*alpha;
  // Finish at the exact page position once less than a quarter CSS pixel
  // remains, so an imperceptible tail cannot keep the camera updating.
- return Math.abs(target-next)*Math.max(1,scrollRangePixels)<.25?target:next;
+ const result=Math.abs(target-next)*Math.max(1,scrollRangePixels)<.25?target:next;
+ return loop?MathUtils.euclideanModulo(result,1):result;
 }
 export function seeded(seed:number){return()=>{seed|=0; seed=seed+0x6D2B79F5|0; let n=Math.imul(seed^seed>>>15,1|seed); n=n+Math.imul(n^n>>>7,61|n)^n; return ((n^n>>>14)>>>0)/4294967296;};}
 export const SHORE={waterY:-1.65, rightX:38, frontZ:68, waterStartZ:18};

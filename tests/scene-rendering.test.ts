@@ -5,7 +5,7 @@ import test from 'node:test';
 import * as T from 'three';
 const {createViewTransition}:typeof import('../src/components/scene/view-transition')=
  await import(new URL('../src/components/scene/view-transition.ts',import.meta.url).href);
-const {createSceneTransition}:typeof import('../src/components/scene-transition')=
+const {createSceneTransition,createFrameReadySignal}:typeof import('../src/components/scene-transition')=
  await import(new URL('../src/components/scene-transition.ts',import.meta.url).href);
 
 /** Model only output pixels and renderer state, not animation scheduling. This
@@ -72,6 +72,30 @@ function setup(enabled=true){
  return {renderer,transition,frame};
 }
 function close(actual:number,expected:number){assert.ok(Math.abs(actual-expected)<1e-10,`${actual} != ${expected}`);}
+
+await test('loading feedback completes only after a requested destination frame, never its capture frame',()=>{
+ const signal=createFrameReadySignal();let completed=0;
+ const capture=signal.beginFrame();
+ signal.wait(()=>completed++);
+ capture();assert.equal(completed,0);
+ const destination=signal.beginFrame();
+ assert.equal(completed,0);destination();destination();
+ assert.equal(completed,1);
+ assert.equal(signal.beginFrame(),signal.beginFrame(),'idle frames reuse one no-op instead of allocating callbacks');
+});
+
+await test('rapid requests, cancellation and disposal cannot let an old frame clear newer feedback',()=>{
+ const signal=createFrameReadySignal();let completed=0;
+ const complete=()=>completed++;
+ const cancelOld=signal.wait(complete),oldFrame=signal.beginFrame();
+ signal.wait(complete);cancelOld();oldFrame();
+ assert.equal(completed,0,'the same callback reused by a new request has a distinct identity');
+ signal.beginFrame()();assert.equal(completed,1);
+ const cancel=signal.wait(complete),cancelledFrame=signal.beginFrame();
+ cancel();cancelledFrame();assert.equal(completed,1);
+ signal.wait(complete);const disposedFrame=signal.beginFrame();
+ signal.clear();disposedFrame();assert.equal(completed,1);
+});
 
 await test('mobile navigation commits without waiting for an old frame or preparing GPU snapshots',async()=>{
  const {renderer,transition,frame}=setup(false),navigation=createSceneTransition(()=>transition);

@@ -4,6 +4,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 import * as T from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { SUN_PRESETS } from '../src/components/scene/config.ts';
 
 // Resolve the real module graph for Node's test runner without changing the
 // application's extensionless imports or adding test-only production exports.
@@ -24,14 +25,26 @@ function moduleUrl(source: URL): string {
 }
 const { addEnvironment }: typeof import('../src/components/scene/environment') =
   await import(moduleUrl(new URL('../src/components/scene/environment.ts', import.meta.url)));
+const { addDayCycle }: typeof import('../src/components/scene/day-cycle') =
+  await import(moduleUrl(new URL('../src/components/scene/day-cycle.ts', import.meta.url)));
 const { createWeatherState }: typeof import('../src/components/scene/weather-state') =
   await import(new URL('../src/components/scene/weather-state.ts', import.meta.url).href);
 
-await test('HDR-safe environment generation preserves the live moon, stars and rain sky', context => {
+function disposeScene(scene: T.Scene) {
+  scene.traverse(object => {
+    if (object instanceof T.Mesh || object instanceof T.Points) {
+      object.geometry.dispose();
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) material.dispose();
+    }
+    if (object instanceof T.Light && 'shadow' in object) (object as T.DirectionalLight).shadow.dispose();
+  });
+}
+
+await test('HDR-safe environment preserves natural evening light, moon, stars and rain', context => {
   const scene = new T.Scene();
   const renderer = { getPixelRatio: () => 1.25 } as unknown as T.WebGLRenderer;
   const target = new T.WebGLRenderTarget(1, 1, { type: T.HalfFloatType });
-  const time = { value: 0 }, night = { value: 0 };
+  const time = { value: 0 }, night = { value: 0 }, dawn = { value: 0 }, dusk = { value: 0 };
   const weather = createWeatherState(time, night);
   let pmremShader = '';
   let capturedSky: Sky | undefined;
@@ -44,7 +57,7 @@ await test('HDR-safe environment generation preserves the live moon, stars and r
     return target;
   });
   const environment = addEnvironment(scene, renderer, true, time, night,
-    { value: 0 }, { value: 0 }, { value: 0 }, weather.uniforms);
+    dawn, dusk, weather.uniforms);
   try {
     assert.equal(fromScene.mock.callCount(), 1);
     assert.equal(scene.environment, target.texture);
@@ -58,7 +71,7 @@ await test('HDR-safe environment generation preserves the live moon, stars and r
       'PMREM must limit the assigned daylight output');
     assert.ok(pmrem.indexOf(limit) < pmrem.indexOf('#include<tonemapping_fragment>'),
       'the HDR limit must run before tone mapping');
-    assert.doesNotMatch(pmrem, /moonDisc|rainSky/,
+    assert.doesNotMatch(pmrem, /moonDisc|rainSky|uDawnHorizon|uDuskHorizon/,
       'environment lighting is generated before the live day/night/weather blend');
 
     const finalShader = compact(capturedSky.material.fragmentShader);
@@ -74,7 +87,26 @@ await test('HDR-safe environment generation preserves the live moon, stars and r
     assert.match(finalShader, /floatmoonDisc=/, 'the composed shader must render the moon');
     assert.match(finalShader, /nightColor\+=vec3\([^;]+step\(\.9991,star\)/,
       'the composed shader must add stars to night colour');
-    assert.match(finalShader, /clearSky=mix\(texColor,nightColor,uNight\)/);
+    assert.match(finalShader, /clearSky=mix\(clearSky,nightColor,uNight\)/);
+    assert.match(finalShader, /morningSky=mix\(texColor,uDawnHorizon,lowSky\)/);
+    assert.match(finalShader, /eveningSky=mix\(uDuskHorizon,uDuskZenith,smoothstep\(0\.0,\.65,height\)\)/);
+    assert.match(finalShader, /sunSide=smoothstep\(0\.0,\.7,dot\(azimuth,normalize\(vSunDirection.xz\)\)\)/,
+      'gold stays on the sun-facing half of the sky with a feathered boundary');
+    assert.match(finalShader, /goldBand=\(1\.0-smoothstep\(0\.0,\.22,height\)\)\*sunSide/,
+      'the gold band occupies half the previous vertical extent');
+    assert.match(finalShader, /goldBand\*=1\.0-smoothstep\(0\.0,\.6,uNight\)/,
+      'gold must recede to blue before nightfall, without a muddy colour midpoint');
+    assert.match(finalShader, /morning=min\(uDawn\/daylight,1\.0\)/);
+    assert.match(finalShader, /evening=min\(uDusk\/daylight,1\.0\)/);
+    assert.match(finalShader, /clearSky=texColor\*max\(0\.0,1\.0-morning-evening\)\+morningSky\*morning\+eveningSky\*evening/);
+    assert.ok(finalShader.indexOf('eveningSky*evening') < finalShader.indexOf('clearSky=mix(clearSky,nightColor,uNight)'),
+      'moonlight must replace the warm horizon during the night transition');
+    assert.ok(finalShader.indexOf('eveningSky*evening') < finalShader.indexOf('clearSky=mix(clearSky,rainSky,cover)'),
+      'overcast weather must replace the clear-sky horizon');
+    assert.doesNotMatch(finalShader, /sunsetDisc|sunsetGradient|sunsetSky|sunsetDistance/,
+      'evening has no painted red halo or replacement sun');
+    assert.match(finalShader, /floatsundisc=[^;]+\*showSunDisc;/,
+      'the native sky uniform must control the visible solar disc');
     assert.match(finalShader, /clearSky=mix\(clearSky,rainSky,cover\)/);
     assert.match(finalShader, /gl_FragColor=vec4\(clearSky,1\.0\)/,
       'the final output must use the blended sky rather than raw daylight');
@@ -87,6 +119,8 @@ await test('HDR-safe environment generation preserves the live moon, stars and r
 
     const uniforms = capturedSky.material.uniforms;
     assert.equal(uniforms.uNight, night);
+    assert.equal(uniforms.uDawn, dawn);
+    assert.equal(uniforms.uDusk, dusk);
     assert.equal(uniforms.uWeatherRain, weather.uniforms.rain);
     assert.equal(uniforms.uWeatherTime, time);
     for (const [nightAmount, rainAmount] of [[1, 0], [1, 1], [0, 1], [0, 0]]) {
@@ -99,14 +133,113 @@ await test('HDR-safe environment generation preserves the live moon, stars and r
       assert.equal(uniforms.uWeatherRain.value, rainAmount);
       assert.equal(uniforms.uWeatherTime.value, time.value);
     }
+    for (const amount of [0, .25, .75, 1]) {
+      dusk.value = amount; environment.update();
+      assert.equal(uniforms.showSunDisc.value, 1-amount,
+        'the evening sun disappears smoothly without removing the actual directional light');
+    }
+    night.value=0;weather.set({wind:.28,rain:0});weather.update(1/60,true);environment.update();
+    assert.equal(environment.sun.color.getHex(),SUN_PRESETS.dusk.color);
+    assert.deepEqual(environment.sun.position.toArray(),[...SUN_PRESETS.dusk.position]);
+    assert.equal(environment.sun.intensity,SUN_PRESETS.dusk.intensity);
+    assert.ok(environment.sun.color.r>environment.sun.color.g&&environment.sun.color.g>environment.sun.color.b);
+    const ambient = scene.children.find((object): object is T.HemisphereLight => object instanceof T.HemisphereLight);
+    assert.ok(ambient);
+    const shade = ambient.color.clone().add(ambient.groundColor).multiplyScalar(.5 * ambient.intensity);
+    assert.ok(shade.r > shade.g * 1.1 && shade.r < shade.g * 1.3 && shade.b > shade.r * .55,
+      'shaded plaster keeps mild reflected warmth without the former broad amber wash');
+    assert.ok(ambient.intensity < .83, 'soft warm fill must retain the side-lit sun/shade contrast');
+    assert.ok(ambient.groundColor.r > ambient.groundColor.g && ambient.groundColor.g > ambient.groundColor.b);
+    assert.ok(scene.environmentIntensity <= .02, 'cached daylight-white reflections must not wash out the golden-hour fill');
+    assert.ok(renderer.toneMappingExposure <= 1, 'brighter facade lighting must not come from raising global exposure');
+    const eveningHorizon: T.Color = uniforms.uDuskHorizon.value;
+    const eveningZenith: T.Color = uniforms.uDuskZenith.value;
+    const eveningGold: T.Color = uniforms.uDuskGold.value;
+    const morningHorizon: T.Color = uniforms.uDawnHorizon.value;
+    for (const horizon of [morningHorizon, eveningHorizon, eveningZenith, eveningGold]) {
+      assert.ok(horizon.toArray().every(channel => channel > 0 && channel <= 1),
+        'the horizon must retain colour below HDR clipping');
+    }
+    for (const blue of [eveningHorizon, eveningZenith]) {
+      assert.ok(blue.b > blue.g && blue.g > blue.r);
+      assert.ok(.2126*blue.r+.7152*blue.g+.0722*blue.b > .3,
+        'both levels of the evening sky stay clear and luminous, not dark and grey');
+    }
+    assert.ok(eveningGold.r > eveningGold.g && eveningGold.g > eveningGold.b * 1.8);
+    assert.ok(morningHorizon.b > morningHorizon.g * 1.5 && morningHorizon.g > morningHorizon.r * 1.5);
+    assert.ok(scene.fog && scene.fog.color.b > scene.fog.color.r,
+      'distant evening foliage retains the cool autumn air instead of an all-over gold tint');
+
+    weather.set({wind:.28,rain:0,autumn:1});weather.update(1/60,true);environment.update();
+    assert.equal(environment.sun.color.getHex(),SUN_PRESETS.dusk.color,
+      'autumn weather must not whiten the golden-hour side light');
+    weather.set({wind:.28,rain:1,autumn:0});weather.update(1/60,true);environment.update();
+    assert.ok(ambient.color.b > ambient.color.r, 'storm fill still replaces the dry evening warmth');
+    assert.ok(environment.sun.intensity < .3, 'rain still suppresses direct golden sunlight');
+
+    weather.set({wind:.28,rain:0});weather.update(1/60,true);dusk.value=0;dawn.value=1;environment.update();
+    assert.ok(scene.fog && scene.fog.color.b > scene.fog.color.g && scene.fog.color.g > scene.fog.color.r,
+      'morning distance haze continues the blue horizon');
+    assert.ok(uniforms.rayleigh.value > 2 && uniforms.mieCoefficient.value < .002,
+      'clear morning air reduces white forward haze and retains blue scattering');
+    assert.equal(environment.sun.color.getHex(),SUN_PRESETS.dawn.color);
+    assert.deepEqual(environment.sun.position.toArray(),[...SUN_PRESETS.dawn.position]);
+
+    dawn.value=0;environment.update();
+    assert.equal(environment.sun.color.getHex(),SUN_PRESETS.day.color);
+    assert.equal(uniforms.showSunDisc.value,1);
+    assert.equal(uniforms.uDawn.value,0);assert.equal(uniforms.uDusk.value,0);
+    assert.equal(fromScene.mock.callCount(),1,'time and weather changes must not regenerate the environment map');
+    assert.equal(scene.children.filter(object => object instanceof T.DirectionalLight).length,1);
   } finally {
     environment.dispose();
-    scene.traverse(object => {
-      if (object instanceof T.Mesh || object instanceof T.Points) {
-        object.geometry.dispose();
-        for (const material of Array.isArray(object.material) ? object.material : [object.material]) material.dispose();
-      }
-      if (object instanceof T.Light && 'shadow' in object) (object as T.DirectionalLight).shadow.dispose();
-    });
+    disposeScene(scene);
   }
+});
+
+await test('dusk and night crossfade without leaking daylight, a solar disc or a moving daylight sky', () => {
+  const scene = new T.Scene(), sky = new Sky(), sun = new T.DirectionalLight(), ambient = new T.HemisphereLight();
+  const renderer = { getPixelRatio: () => 1 } as unknown as T.WebGLRenderer;
+  const fog = new T.FogExp2(0xffffff);
+  scene.fog = fog;
+  scene.add(sky, sun, ambient);
+  sun.target.position.set(-1,0,3);
+  const time = {value:0}, night = {value:0}, dawn = {value:0}, dusk = {value:1};
+  const cycle = addDayCycle(scene,renderer,sky,sun,ambient,night,time,false,dawn,dusk);
+  const sample = (n:number, a:number, e:number) => {
+    night.value=n;dawn.value=a;dusk.value=e;cycle.update();
+    return [...sun.color.toArray(), ...sun.position.toArray(), sun.intensity,
+      ...ambient.color.toArray(), ...ambient.groundColor.toArray(), ambient.intensity,
+      ...fog.color.toArray(), fog.density, scene.environmentIntensity, renderer.toneMappingExposure];
+  };
+  try {
+    const evening=sample(0,0,1), eveningDirection=sky.material.uniforms.sunPosition.value.clone();
+    const moonlit=sample(1,0,0), morning=sample(0,1,0);
+    const close=(actual:number[],expected:number[],label:string)=>actual.forEach((value,index)=>
+      assert.ok(Math.abs(value-expected[index])<1e-10, `${label}, channel ${index}: ${value} != ${expected[index]}`));
+    sample(0,0,1);
+    for (const reverse of [false,true]) for (let step=0;step<=60;step++) {
+      const n=reverse?1-step/60:step/60;
+      close(sample(n,0,1-n),evening.map((value,index)=>T.MathUtils.lerp(value,moonlit[index],n)),`night ${n}`);
+      assert.equal(sky.material.uniforms.showSunDisc.value,0,'dusk/night transitions must never bring back the solar disc');
+      assert.ok(sky.material.uniforms.sunPosition.value.distanceTo(eveningDirection)<1e-10,
+        'physical daylight scattering must not follow the directional light as it moves to the moon');
+    }
+    close(sample(.3,.2,.5), evening.map((value,index)=>value*.5+morning[index]*.2+moonlit[index]*.3),
+      'an interrupted transition retains only the three active periods');
+  } finally { disposeScene(scene); }
+});
+
+await test('four distinct times retain the approved low golden side light',()=>{
+ assert.deepEqual(Object.keys(SUN_PRESETS),['dawn','day','dusk','night']);
+ assert.deepEqual(SUN_PRESETS.dusk.position,[30,9.3,34]);
+ const direction=new T.Vector3(...SUN_PRESETS.dusk.position).sub(new T.Vector3(-1,0,3)).normalize();
+ assert.ok(direction.z>.65,'the +Z courtyard facade must receive direct light, not a backlit silhouette');
+ assert.ok(direction.x>.65,'light enters beside the foreground canopy through the open +X bank');
+ assert.ok(direction.y>.15&&direction.y<.25,'keep evening light below the deep gallery roof');
+ const colour=new T.Color(SUN_PRESETS.dusk.color).getRGB({r:0,g:0,b:0},T.SRGBColorSpace);
+ assert.ok(colour.r>colour.g&&colour.g>colour.b);
+ assert.ok(colour.g>=.84&&colour.g<=.9,'golden evening light must retain enough green to stay yellow rather than orange-red');
+ assert.ok(colour.b>=.48&&colour.b<=.58,'clear gold retains more blue than the former dull amber without becoming pale cream');
+ assert.ok(SUN_PRESETS.dusk.intensity<=SUN_PRESETS.day.intensity*1.1,'lift the side-lit highlights without overpowering daylight');
 });
