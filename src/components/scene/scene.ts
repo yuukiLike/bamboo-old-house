@@ -91,7 +91,8 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
  renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;
  renderer.info.autoReset=false;
  mount.appendChild(renderer.domElement);
- const viewTransition=createViewTransition(renderer,{beginPhase,measurePhase});
+ // Mobile navigation must not wait for another old-view draw and framebuffer copy.
+ const viewTransition=createViewTransition(renderer,{beginPhase,measurePhase},!mobile);
  const scene=new T.Scene();const camera=new T.PerspectiveCamera(54,innerWidth/innerHeight,.12,750);camera.name='Bamboo_View';
  const time={value:0},night={value:0},noon={value:0},dawn={value:0},dusk={value:1};let cleanEnvironment=()=>{},cleanContact=()=>{},cleanWeather=()=>{},cleanLeaves=()=>{},cleanWind=()=>{},cleanShadows=()=>{};
  const weatherState=createWeatherState(time,night),weather=weatherState.uniforms;
@@ -245,9 +246,9 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');
   // Every main-scene draw, including indoor prewarming, shares the policy.
   const renderScene=(interior:boolean,delta=0)=>{
-   if(shadowUpdates.update(time.value,weather.wind.value,renderSettings.shadows)&&!performanceCollectionStopped())directionalShadowRequests++;
+   if(shadowUpdates.update(time.value,weather.wind.value,renderSettings.shadows)&&performanceEnabled())directionalShadowRequests++;
    if(interior)interiorContact.render(delta);else {interiorContact.deactivate();renderer.render(scene,camera);}
-   if(!performanceCollectionStopped())diagnostics.directionalShadowRequests=directionalShadowRequests;
+   if(performanceEnabled())diagnostics.directionalShadowRequests=directionalShadowRequests;
   };
   const renderFrame=(delta=0)=>{renderer.info.reset();renderScene(viewMode==='free'&&Object.hasOwn(ROOM_VIEWS,place),delta);viewTransition.render(performance.now());};
   const diagnostics:Diagnostics={programs:0,cpuUpdateMs:null,cpuRenderSubmitMs:null,renderSettings:{...renderSettings},directionalShadowRequests:0,startupMs:0,pixelRatio:renderer.getPixelRatio(),windGust:0,weather:{wind:weather.wind.value,rain:0,wetness:0,mud:0,autumn:0},fallingLeaves:{},rainEffects:{},build:BUILD_ID,quality:mobile?'mobile':'desktop',gpu:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'unavailable',viewport:[],drawSize:[],progress:0,camera:[],target:[],drawCalls:0,triangles:0,textures:0,geometries:0,frames:[],windTime:0,paused,bambooCount:field.count,viewMode,place,timeOfDay,nightMix:0,noonMix:0,dawnMix:0,duskMix:1,panorama:false,yaw:0,pitch:0,fov:70,getPoster:()=>{renderFrame();return renderer.domElement.toDataURL('image/webp',.9);},reset};window.__BAMBOO__=diagnostics;
@@ -297,12 +298,11 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   // Three polls program readiness asynchronously; retain its material properties until that settles.
   try{
    await viewTransition.prepare();
-   // Phones need the opening view first. Eager night shadows and indoor
-   // HDR/MSAA passes add a large GPU allocation/draw burst after model loading.
-   // Keep desktop prewarming; mobile builds the room pipeline on first entry.
-   for(const mix of mobile?[0]:[0,1]){
+   // Link both light-count variants before navigation, including on phones.
+   // Mobile still skips night shadow draws and indoor HDR/MSAA allocation.
+   for(const mix of [0,1]){
     night.value=mix;environment.update();
-    hooks.onProgress(mix?'正在点亮屋内灯火…':'正在准备日光与阴影…',100);
+    hooks.onProgress(mix?'正在准备月色与灯火…':'正在准备日光与阴影…',100);
     finishCompile=beginPhase('startup.shader-compile',{mobile,nightMix:mix});
     await renderer.compileAsync(scene,camera);finishCompile(disposed?'cancelled':'success');if(disposed)break;
     if(mobile)continue;
@@ -361,7 +361,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
    frame++;
    if(measuring){cpuSamples++;cpuUpdateTotal+=renderStarted-updateStarted;if(renderSubmitted)cpuRenderTotal+=performance.now()-renderStarted;}
    if(frame%15===0){hooks.onRunoff?.(weatherEffects.runoffFlow);hooks.onBearing(Math.round(controls.bearing)%360);}
-   if(performanceCollectionStopped())return;
+   if(!measuring)return;
    if(frame>30){diagnostics.frames.push(actual);if(diagnostics.frames.length>15000)diagnostics.frames.shift();}
    if(frame%15===0){
     const mud=mudResistance(camera.position.x,camera.position.z,weather.wetness.value,pathClearance(camera.position.x,camera.position.z));

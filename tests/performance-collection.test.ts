@@ -44,6 +44,82 @@ function rendererSnapshot(): RendererSnapshot {
  return { drawCalls: 200, triangles: 8000000, textures: 100, geometries: 250, pixelRatio: 2, drawSize: [804, 1516], quality: 'full', gpu: 'test' };
 }
 
+await test('slow frames reuse sampled state and defer phase annotation until a snapshot', context => {
+ const clock = runtimeClock(context);
+ const recorder = createPhaseRecorder({ namespace: 'low-impact-test', enabled: true });
+ let stateReads = 0, phaseReads = 0;
+ const collector = createRuntimeCollector({
+  readState: () => { stateReads++; return { view: 'moon' }; },
+  readBusinessPhases: () => { phaseReads++; return recorder.read(); },
+ });
+ try {
+  const finish = recorder.beginPhase('view.request-to-commit');
+  clock.advance(0);
+  for (let frame = 0; frame < 20; frame++) clock.advance(80);
+  finish();
+  assert.ok(stateReads <= 3, `expected low-rate state reads, got ${stateReads}`);
+  assert.equal(phaseReads, 0, 'the RAF callback must not scan business phase history');
+  const compact = collector.snapshot({ details: false });
+  assert.equal(phaseReads, 1, 'all pending stutters share one phase read');
+  assert.equal(compact.window.rafHz, 12.5);
+  assert.deepEqual(compact.stutters, []);
+  assert.deepEqual(compact.history, []);
+  assert.deepEqual(compact.workload.samples, []);
+  const full = collector.snapshot();
+  assert.deepEqual(compact.window, full.window);
+  assert.equal(full.stutters.length, 20);
+  assert.equal(full.history.length, 20);
+  assert.equal(full.workload.samples.length, 1);
+  assert.ok(full.stutters.every(entry => entry.phases.includes('view.request-to-commit (success)')));
+  full.stutters[0].phases.length = 0;
+  assert.deepEqual(collector.snapshot().stutters[0].phases, ['view.request-to-commit (success)']);
+ } finally { collector.dispose(); recorder.dispose(); }
+});
+
+await test('compact snapshots do not reread state or renderer and stopping preserves pending annotations', context => {
+ const clock = runtimeClock(context);
+ const recorder = createPhaseRecorder({ namespace: 'compact-stop-test', enabled: true });
+ let reads = 0;
+ const collector = createRuntimeCollector({
+  readState: () => { reads++; return { view: 'breeze' }; },
+  readRenderer: () => { reads++; return rendererSnapshot(); },
+  readBusinessPhases: () => recorder.read(),
+ });
+ try {
+  clock.advance(0);
+  for (let frame = 0; frame < 60; frame++) {
+   clock.advance(20);
+   const previous = reads;
+   collector.snapshot({ details: false });
+   assert.equal(reads, previous);
+  }
+  const finish = recorder.beginPhase('view.commit');
+  clock.advance(80); finish();
+  collector.dispose(); recorder.stop();
+  const stoppedReads = reads;
+  assert.deepEqual(collector.snapshot().stutters.at(-1)?.phases, ['view.commit (success)']);
+  assert.equal(reads, stoppedReads);
+  assert.equal(clock.pendingFrames(), 0);
+ } finally { collector.dispose(); recorder.dispose(); }
+});
+
+await test('compact health data distinguishes new foreground stalls from pre-pause history', context => {
+ const clock = runtimeClock(context);
+ const collector = createRuntimeCollector();
+ try {
+  clock.advance(0); clock.advance(200);
+  assert.equal(collector.snapshot({ details: false }).window.segmentMaxMs, 200);
+  collector.pause(); clock.advance(200); collector.resume();
+  assert.equal(collector.snapshot({ details: false }).window.segmentMaxMs, null);
+  clock.advance(0); clock.advance(20);
+  const compact = collector.snapshot({ details: false });
+  assert.equal(compact.window.maxMs, 200);
+  assert.equal(compact.window.segmentMaxMs, 20);
+  assert.deepEqual(compact.history, []);
+  assert.deepEqual(compact.window, collector.snapshot().window);
+ } finally { collector.dispose(); }
+});
+
 await test('stopping business collection freezes history, releases owned measures and rejects late completions', () => {
  const recorder = createPhaseRecorder({ namespace: 'stop-test', enabled: true });
  performance.measure('another-recorder', { start: 0, end: 1 });

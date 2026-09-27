@@ -66,12 +66,32 @@ class Renderer {
  state(){return {autoClear:this.autoClear,target:this.target,face:this.face,level:this.level,
   viewport:this.viewport.toArray(),activeViewport:this.activeViewport.toArray(),scissor:this.scissor.toArray(),scissorTest:this.scissorTest};}
 }
-function setup(){
- const renderer=new Renderer(),transition=createViewTransition(renderer as unknown as T.WebGLRenderer);
+function setup(enabled=true){
+ const renderer=new Renderer(),transition=createViewTransition(renderer as unknown as T.WebGLRenderer,undefined,enabled);
  const frame=(color:number,time:number)=>{renderer.framebuffer=color;transition.render(time);return renderer.framebuffer;};
  return {renderer,transition,frame};
 }
 function close(actual:number,expected:number){assert.ok(Math.abs(actual-expected)<1e-10,`${actual} != ${expected}`);}
+
+await test('mobile navigation commits without waiting for an old frame or preparing GPU snapshots',async()=>{
+ const {renderer,transition,frame}=setup(false),navigation=createSceneTransition(()=>transition);
+ const applied:string[]=[];
+ await transition.prepare();
+ assert.equal(renderer.compiles,0);
+ assert.equal(renderer.textures.size,0);
+ navigation.request(()=>applied.push('moon'));
+ assert.deepEqual(applied,['moon']);
+ navigation.request(()=>applied.push('breeze'));
+ assert.deepEqual(applied,['moon','breeze']);
+ assert.equal(navigation.covering,false);
+ assert.equal(transition.needsRender,false);
+ close(frame(.3,10_000),.3);
+ renderer.size.set(400,700);transition.resize();
+ assert.equal(renderer.copies,0);
+ assert.equal(renderer.draws,0);
+ assert.equal(renderer.textures.size,0);
+ navigation.dispose();transition.dispose();
+});
 
 await test('rapid navigation waits for a complete frame and fades only to the latest destination',()=>{
  const {renderer,transition,frame}=setup(),navigation=createSceneTransition(()=>transition);

@@ -35,7 +35,7 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
       vec3 clearSky = texColor;
       if (uNight > 0.0) {
       float elevation = max(nightDirection.y, 0.0);
-      vec3 nightColor = mix(vec3(.018, .033, .050), vec3(.003, .009, .024), pow(elevation, .45));
+      vec3 nightColor = mix(vec3(.026, .060, .145), vec3(.010, .028, .080), pow(elevation, .45));
       vec3 moonDirection = normalize(vec3(-14., 27., 22.));
       float moonDistance = distance(nightDirection, moonDirection);
       float moonRadius=.014;
@@ -139,7 +139,7 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
   const daySky = new T.Color(0xb4d0ed), nightSky = new T.Color(0x57789f);
   const dayGround = new T.Color(0x715946), nightGround = new T.Color(0x172825);
   const daySun = new T.Color(SUN_PRESETS.day.color), moon = new T.Color(SUN_PRESETS.night.color);
-  const dayFog = new T.Color(0x8ba998), nightFog = new T.Color(0x0b1a27);
+  const dayFog = new T.Color(0x8ba998), nightFog = new T.Color(0x162c49);
   const dayPosition = new T.Vector3(...SUN_PRESETS.day.position), moonPosition = new T.Vector3(...SUN_PRESETS.night.position);
   // A high sun and warm reflected courtyard light, with blue skylight in the
   // eaves. Noon has its own direction and luminance, not a screen tint.

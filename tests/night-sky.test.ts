@@ -62,6 +62,14 @@ await test('HDR-safe environment generation preserves the live moon, stars and r
       'environment lighting is generated before the live day/night/weather blend');
 
     const finalShader = compact(capturedSky.material.fragmentShader);
+    const gradient = finalShader.match(/nightColor=mix\(vec3\(([^)]+)\),vec3\(([^)]+)\),/);
+    assert.ok(gradient, 'night sky keeps its horizon-to-zenith gradient');
+    for (const colour of gradient.slice(1).map(value => value.split(',').map(Number))) {
+      const [red, green, blue] = colour;
+      assert.ok(blue > green * 2 && green > red, 'moonlit sky should read as deep blue');
+      assert.ok(.2126 * red + .7152 * green + .0722 * blue >= .025,
+        'even the zenith must retain visible colour instead of near-black');
+    }
     assert.ok(finalShader.includes(limit));
     assert.match(finalShader, /floatmoonDisc=/, 'the composed shader must render the moon');
     assert.match(finalShader, /nightColor\+=vec3\([^;]+step\(\.9991,star\)/,
