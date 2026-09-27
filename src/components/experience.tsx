@@ -305,8 +305,8 @@ export default function Experience() {
    </span>
   </output>
   <header className="site-header">
-   <a className="wordmark" href="#bamboo" onClick={(e)=>{e.preventDefault();chooseView('walk',returnHome);}} aria-label="竹林里的老屋，回到竹林"><span className="wordmark-icon" aria-hidden="true" /><span>竹林老屋</span></a>
-   <div className="header-aside"><span className="memory-label">一处老屋 · 四时竹声</span>
+   <a className="wordmark" href="#bamboo" onClick={(e)=>{e.preventDefault();chooseView('walk',returnHome);}} aria-label="四时竹声，回到竹林"><span className="wordmark-icon" aria-hidden="true" /><span>四时竹声</span></a>
+   <div className="header-aside">
    <ToggleGroup className="day-switch" value={[timeOfDay]} onValueChange={(values)=>{if(values[0]==='dawn'||values[0]==='day'||values[0]==='dusk'||values[0]==='night')chooseTime(values[0]);}} aria-label="选择清晨、白天、傍晚或夜晚" disabled={!ready||staticMode}>
     <ToggleGroupItem value="dawn" aria-label="清晨"><Sunrise size={15} strokeWidth={1.5}/><span>清晨</span></ToggleGroupItem>
     <ToggleGroupItem value="day" aria-label="白天"><Sun size={15} strokeWidth={1.5}/><span>白天</span></ToggleGroupItem>
@@ -369,11 +369,11 @@ export default function Experience() {
        <ToggleGroupItem value="full" aria-label="每帧跟随">每帧</ToggleGroupItem>
       </ToggleGroup>
      </div>
-     <div className="render-row"><span id="render-house-label">老屋远景</span>
+     <div className="render-row"><span id="render-house-label">建筑远景</span>
       <ToggleGroup className="render-segments" value={[renderSettings.houseDetail]} aria-labelledby="render-house-label" onValueChange={values=>{const houseDetail=values[0];if(houseDetail==='lean'||houseDetail==='balanced'||houseDetail==='full')setRenderSettings(value=>({...value,houseDetail}));}}>
-       <ToggleGroupItem value="lean" aria-label="精简老屋远景">精简</ToggleGroupItem>
-       <ToggleGroupItem value="balanced" aria-label="均衡老屋远景">均衡</ToggleGroupItem>
-       <ToggleGroupItem value="full" aria-label="原始老屋远景">原始</ToggleGroupItem>
+       <ToggleGroupItem value="lean" aria-label="精简建筑远景">精简</ToggleGroupItem>
+       <ToggleGroupItem value="balanced" aria-label="均衡建筑远景">均衡</ToggleGroupItem>
+       <ToggleGroupItem value="full" aria-label="原始建筑远景">原始</ToggleGroupItem>
       </ToggleGroup>
      </div>
      <label className="render-detail-toggle" htmlFor="enable-free-mode"><span>自由模式</span><input id="enable-free-mode" type="checkbox" role="switch" aria-checked={renderSettings.freeMode} checked={renderSettings.freeMode} onChange={event=>chooseRenderSettings({...renderSettings,freeMode:event.target.checked})}/></label>
@@ -399,7 +399,7 @@ export default function Experience() {
   {view==='porch'&&<main id="porch" className="porch-story" aria-label="从木廊望向竹林">
    <div className="porch-copy"><p className="chapter-kicker">木廊望竹 / {{dawn:'清晨初醒',day:'日光正好',dusk:'夕阳渐暖',night:'月色渐深'}[timeOfDay]}</p>
     <h1>{{dawn:<>天刚亮，<br/>风已过竹梢。</>,day:<>风过竹林，<br/>就是家乡。</>,dusk:<>晚光穿过竹叶，<br/>落在旧木上。</>,night:<>灯还亮着，<br/>竹林已入夜。</>}[timeOfDay]}</h1>
-    <p>{{dawn:'山色还凉，远处的鸟先醒了。',day:'站在老屋里，听竹叶轻轻响。',dusk:'沿着照片里的光，慢慢想起那一年。',night:'楼下留着一盏灯，竹林里有点点萤光。'}[timeOfDay]}</p>
+    <p>{{dawn:'山色还凉，远处的鸟先醒了。',day:'倚在廊下，听竹叶轻轻响。',dusk:'沿着照片里的光，慢慢想起那一年。',night:'楼下留着一盏灯，竹林里有点点萤光。'}[timeOfDay]}</p>
    </div>
   </main>}
   {view==='moon'&&<main className="porch-story moon-story" aria-label="竹林望月"><div className="porch-copy"><p className="chapter-kicker">竹林望月 / 今夜有风</p><h1>抬头是月亮，<br/>身旁是竹声。</h1><p>沿着小路停一停，让眼睛慢慢习惯月色。</p></div></main>}
@@ -418,7 +418,7 @@ export default function Experience() {
     <Button variant="ghost" className="floor-link" disabled={!ready||staticMode} onClick={()=>choosePlace(inside?'courtyard':'upstairs')}>{inside?<Compass size={14}/>:<DoorOpen size={14}/>}<span>{inside?'去屋前':'到厅堂'}</span></Button>
    </aside>
   </main>}
-  <main className="narrative" hidden={view!=='walk'} aria-label="竹林老屋的四段记忆" style={staticMode?undefined:{height:`calc(${chapters.length*WALK_SCROLL_CYCLES*100}svh + 100dvh)`}}>
+  <main className="narrative" hidden={view!=='walk'} aria-label="四时竹声的四段风景" style={staticMode?undefined:{height:`calc(${chapters.length*WALK_SCROLL_CYCLES*100}svh + 100dvh)`}}>
    {chapters.map((item,index)=><section id={item.id} key={item.id} className={`chapter ${chapter===index?'active':''}`} aria-labelledby={`${item.id}-heading`}>
     <div className="chapter-copy" aria-hidden={chapter!==index}>
      <p className="chapter-kicker">0{index+1} / {item.eyebrow}</p>

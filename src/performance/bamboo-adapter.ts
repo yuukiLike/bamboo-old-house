@@ -16,7 +16,7 @@ const phaseLabels: Record<string, string> = {
  'startup.interior-warmup-submit': '室内预热提交', 'startup.initial-frame-submit': '首帧渲染提交',
  'model.download': '下载模型', 'model.buffer-assembly': '拼接模型缓冲', 'model.parse': '解析模型与纹理',
  'scene.environment-build': '生成环境', 'scene.house-surfaces': '整理房屋表面',
- 'scene.house-and-vegetation-build': '装配老屋与竹林', 'scene.forest-floor-build': '构建林下地表',
+ 'scene.house-and-vegetation-build': '装配建筑与竹林', 'scene.forest-floor-build': '构建林下地表',
  'scene.weather-build': '构建风雨与雨水遮挡', 'scene.falling-leaves-build': '构建落叶',
  'scene.render-setup': '准备场景渲染', 'interior.pipeline-build': '创建室内后处理',
  'interior.render-targets-prepare': '准备室内渲染目标', 'interior.shader-compile': '编译室内着色器',
@@ -90,7 +90,7 @@ function stateDescription(state: RuntimeState) {
   state.resolution==='reduced'?'画面稍柔和':state.resolution==='balanced'?'均衡清晰':state.resolution==='full'?'完整清晰':null,
   state.shadows==='off'?'实时阴影关闭':state.shadows==='alternate'?'阴影隔帧':state.shadows==='full'?'阴影每帧':null,
   state.frameRate==='display'?'绘制跟随屏幕':state.frameRate?`绘制上限 ${state.frameRate} 帧`:null,
-  state.houseDetail==='lean'?'老屋远景精简':state.houseDetail==='balanced'?'老屋远景均衡':state.houseDetail==='full'?'老屋原始细节':null,
+  state.houseDetail==='lean'?'建筑远景精简':state.houseDetail==='balanced'?'建筑远景均衡':state.houseDetail==='full'?'建筑原始细节':null,
   state.freeMode===true?'自由模式开启':null,
   state.paused ? '动态暂停' : null].filter(Boolean).join(' · ');
 }

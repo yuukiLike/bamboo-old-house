@@ -146,7 +146,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
    const gltf=await loader.parseAsync(buffer.buffer,'/models/');if(disposed){disposeObjects(gltf.scene);releaseResources();throw new Error('SCENE_DISPOSED');}loadedGroups.push(gltf.scene);finish();return gltf.scene;
    }catch(error){finish(controller.signal.aborted?'cancelled':phaseStatus(error));throw error;}
   };
-  hooks.onStage?.('正在唤醒竹林与老屋');
+  hooks.onStage?.('正在唤醒竹林与庭院');
   const houseIndices=loadHouseLod(controller.signal);void houseIndices.catch(()=>{});
   const models=Promise.all([fetchModel('/models/architecture.glb',0),fetchModel('/models/bamboo.glb',1),fetchModel('/models/understory.glb',2),fetchModel('/models/background-foliage.glb',3),fetchModel('/models/porch-bamboo.glb',4),fetchModel('/models/dry-fuel.glb',5)]);
   // Begin downloads before generating terrain and textures on the main thread.

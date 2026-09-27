@@ -1,6 +1,6 @@
 export const WALK_CHAPTERS = [
- { id:'bamboo', name:'竹林', eyebrow:'一段水边的记忆', title:'竹林里的老屋', copy:'我曾走过这里。' },
- { id:'approach', name:'靠近', eyebrow:'竹影之间', title:'穿过竹影，\n老屋就在眼前。', copy:'' },
+ { id:'bamboo', name:'竹林', eyebrow:'关于外婆家的记忆', title:'四时竹声', copy:'长大才知晓，\n外婆家的竹林，就是世外桃源。' },
+ { id:'approach', name:'靠近', eyebrow:'竹影之间', title:'穿过竹影，\n一处人家。', copy:'' },
  { id:'courtyard', name:'屋前', eyebrow:'屋檐之下', title:'光落在旧木上。', copy:'' },
  { id:'forest-slope', name:'竹林坡地', eyebrow:'竹林坡地', title:'落叶贴着泥土，\n风从林间经过。', copy:'听见雨滴，也闻见夏天。' },
 ] as const;
