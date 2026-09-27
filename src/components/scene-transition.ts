@@ -68,23 +68,34 @@ export function createSceneTransition(current:()=>ViewTransition|undefined,curta
    const element=curtain?.element();
    if(element?.animate){
     let cancelled=false,animation:Animation|undefined,cancelFrame:(()=>void)|undefined;
+    let deadline:ReturnType<typeof setTimeout>|undefined;
+    const releaseAnimation=()=>{
+     clearTimeout(deadline);deadline=undefined;
+     if(animation){animation.onfinish=null;animation.oncancel=null;animation.cancel();animation=undefined;}
+    };
     const run=()=>{
      if(cancelled)return;
      const opacity=capture ? 0.045 : 0;
-     const from=Number(element.style.opacity)||0;
-     try{animation=element.animate([{opacity:from},{opacity}],{duration:capture?180:240,easing:'ease-in-out',fill:'forwards'});}
-     catch{element.style.opacity=String(opacity);complete();return;}
-     animation.onfinish=()=>{
-      if(cancelled)return;
-      element.style.opacity=String(opacity);animation?.cancel();animation=undefined;
+     const from=Number(element.style.opacity)||0,duration=capture?180:240;
+     let settled=false;
+     const settle=()=>{
+      if(cancelled||settled)return;
+      settled=true;element.style.opacity=String(opacity);releaseAnimation();
       // Leave time for button feedback to paint before scene mutations begin.
       complete();
      };
+     try{animation=element.animate([{opacity:from},{opacity}],{duration,easing:'ease-in-out',fill:'forwards'});}
+     catch{settle();return;}
+     animation.onfinish=settle;animation.oncancel=settle;
+     // The visual effect must not own navigation indefinitely if its completion
+     // event is interrupted or never delivered. New choices still replace pending work.
+     deadline=setTimeout(settle,duration+100);
     };
     if(capture)run();else cancelFrame=curtain!.waitForFrame(run);
     return()=>{
      cancelled=true;cancelFrame?.();
-     if(animation){element.style.opacity=element.ownerDocument.defaultView?.getComputedStyle(element).opacity??element.style.opacity;animation.cancel();}
+     if(animation)element.style.opacity=element.ownerDocument.defaultView?.getComputedStyle(element).opacity??element.style.opacity;
+     releaseAnimation();
     };
    }
    const transition=current();

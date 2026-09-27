@@ -109,14 +109,14 @@ await test('feedback and curtain listeners both receive the destination frame wi
 
 function setupCurtain(){
  const {renderer,transition}=setup(false),signal=createFrameReadySignal();
- const animations:{from:number;to:number;duration:number;onfinish:(()=>void)|null;cancelled:boolean;cancel:()=>void;finish:()=>void}[]=[];
+ const animations:{from:number;to:number;duration:number;onfinish:(()=>void)|null;oncancel:(()=>void)|null;cancelled:boolean;cancel:()=>void;finish:()=>void}[]=[];
  let displayedOpacity='0';
  const element={
   style:{opacity:'0'},
   ownerDocument:{defaultView:{getComputedStyle:()=>({opacity:displayedOpacity})}},
   animate(frames:{opacity:number}[],options:{duration:number}){
-   const animation={from:frames[0].opacity,to:frames[1].opacity,duration:options.duration,onfinish:null as (()=>void)|null,cancelled:false,
-    cancel(){animation.cancelled=true;},
+   const animation={from:frames[0].opacity,to:frames[1].opacity,duration:options.duration,onfinish:null as (()=>void)|null,oncancel:null as (()=>void)|null,cancelled:false,
+    cancel(){if(animation.cancelled)return;animation.cancelled=true;animation.oncancel?.();},
     finish(){displayedOpacity=String(animation.to);animation.onfinish?.();},
    };
    animations.push(animation);return animation;
@@ -170,6 +170,39 @@ await test('curtain finish, disposal, reduced motion and animation failure never
  assert.deepEqual(applied,['moon','breeze','well']);
  signal.beginFrame()();assert.equal(element.style.opacity,'0','a failed reveal still clears the feedback');
  navigation.dispose();assert.equal(element.style.opacity,'0');transition.dispose();
+});
+
+await test('an interrupted curtain commits the latest choice and leaves subsequent navigation usable',()=>{
+ const {transition,signal,element,animations,navigation}=setupCurtain(),applied:string[]=[];
+ try{
+  navigation.request(()=>applied.push('moon'));navigation.request(()=>applied.push('breeze'));
+  animations[0].cancel();
+  assert.deepEqual(applied,['breeze'],'cancelling visual feedback must not strand the requested scene');
+  signal.beginFrame()();
+  navigation.request(()=>applied.push('well'));
+  assert.deepEqual(applied,['breeze'],'replacing the old reveal must not commit the new cover early');
+  animations.at(-1)!.finish();assert.deepEqual(applied,['breeze','well']);
+  signal.beginFrame()();animations.at(-1)!.cancel();
+  assert.equal(element.style.opacity,'0');assert.equal(navigation.covering,false);
+ }finally{navigation.dispose();transition.dispose();}
+});
+
+await test('missing animation completion cannot hold later scene choices indefinitely',context=>{
+ context.mock.timers.enable({apis:['setTimeout']});
+ const {transition,signal,element,animations,navigation}=setupCurtain(),applied:string[]=[];
+ try{
+  navigation.request(()=>applied.push('moon'));
+  const lateFinish=animations[0].onfinish;
+  context.mock.timers.tick(180);assert.equal(applied.length,0,'allow time for the normal completion event');
+  navigation.request(()=>applied.push('breeze'));
+  context.mock.timers.tick(120);
+  assert.deepEqual(applied,['breeze'],'a missing finish event must commit the latest request');
+  lateFinish?.();assert.deepEqual(applied,['breeze'],'a late event must not commit twice');
+  signal.beginFrame()();context.mock.timers.tick(400);
+  assert.equal(element.style.opacity,'0','a missing reveal event must also release the curtain');
+  navigation.request(()=>applied.push('well'));navigation.dispose();
+  context.mock.timers.tick(1000);assert.deepEqual(applied,['breeze'],'unmount must cancel the deadline');
+ }finally{navigation.dispose();transition.dispose();}
 });
 
 await test('mobile navigation commits without waiting for an old frame or preparing GPU snapshots',async()=>{
