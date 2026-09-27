@@ -50,6 +50,13 @@ function triangles(root:T.Object3D,camera?:T.Camera){
  return count;
 }
 
+function placementFingerprint(trees:ReturnType<typeof treePositions>){
+ // Trigonometric last bits differ across V8 platforms; retain 10 nm precision
+ // for positions rather than requiring byte-identical floating-point strings.
+ const source=JSON.stringify(trees,(_key,value:unknown)=>typeof value==='number'?Number(value.toFixed(8)):value);
+ return createHash('sha256').update(source).digest('hex');
+}
+
 await test('real house LOD retains weather attributes, omits only distant furnishings and restores exact near resources',async context=>{
  const {group:house,texture}=await model('architecture'),scene=new T.Scene(),camera=new T.PerspectiveCamera(64,1,.1,750);
  stabilizeHouseSurfaces(house);scene.add(house);
@@ -144,7 +151,7 @@ await test('an optional LOD download cannot hold startup indefinitely and abort 
 
 await test('lake-facing density adds layered clumps without changing existing culms, branch bindings or camera clearance',context=>{
  const trees=treePositions(),original=trees.slice(0,1448),added=trees.slice(1448);
- assert.equal(createHash('sha256').update(JSON.stringify(original)).digest('hex'),'b20b7f03413897a625c4d7cbe9e995b9a80c173da18042db1add4c52a154ec10');
+ assert.equal(placementFingerprint(original),'c09b5a7a1168133cb8ba37be04f4eacc915f0441cd898f8414002b744f0f6879');
  assert.deepEqual(trees,treePositions());assert.deepEqual(porchBranchPlacements(trees),porchBranchPlacements(original));
  assert.ok(added.length>=160);
  const bank=(items:typeof trees)=>items.filter(p=>p.x>18&&p.x<36&&p.z>8&&p.z<42);
@@ -159,4 +166,16 @@ await test('lake-facing density adds layered clumps without changing existing cu
   for(const tree of added)assert.ok(Math.min(Math.hypot(tree.x-p.x,tree.z-p.z),Math.hypot(tree.x-phone.x,tree.z-phone.z))>.75);
  }
  context.diagnostic(JSON.stringify({before:original.length,after:trees.length,added:added.length,bankBefore:bank(original).length,bankAfter:bank(trees).length}));
+});
+
+await test('placement fingerprint ignores numeric tail noise but detects geometry and branch changes',()=>{
+ const original=treePositions().slice(0,1448),fingerprint=placementFingerprint(original);
+ const tailNoise=original.map(tree=>({...tree,x:tree.x+Number.EPSILON*tree.x,z:tree.z-Number.EPSILON*tree.z,leanX:tree.leanX+Number.EPSILON}));
+ assert.equal(placementFingerprint(tailNoise),fingerprint);
+ for(const key of ['x','z','s','rotation','variant','leanX','leanZ'] as const){
+  const changed=original.map(tree=>({...tree}));changed[0][key]+=.0001;
+  assert.notEqual(placementFingerprint(changed),fingerprint,`${key} changes must remain observable`);
+ }
+ assert.notEqual(placementFingerprint(original.slice(1)),fingerprint,'missing culms remain observable');
+ assert.notEqual(placementFingerprint([...original].reverse()),fingerprint,'branch-binding order remains observable');
 });
