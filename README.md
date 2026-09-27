@@ -1,6 +1,6 @@
 # 竹林里的老屋 · Bamboo Old House
 
-基于 Three.js 的交互式 3D 老屋场景，在竹林、木廊与房间之间漫游，感受晨昏、风雨和自然声景。支持沿路漫游、自由视角、360° 环顾与竹林望月，可切换五个时段和四档天气。
+基于 Three.js 的交互式 3D 老屋场景，在竹林、木廊与房间之间漫游，感受晨昏、风雨和自然声景。支持沿路漫游、自由视角、360° 环顾与竹林望月，可切换四个时段和四档天气。
 
 使用 React、TypeScript、Three.js、Tailwind CSS 与 Vinext/Vite，源码位于 [`src/`](src/)。
 
@@ -24,6 +24,7 @@
 | 林下植被 | [`understory.glb`](public/models/understory.glb) | 林下与山坡上的蕨类、草丛 |
 | 干柴堆 | [`dry-fuel.glb`](public/models/dry-fuel.glb) | 院落中的干柴堆 |
 | 竹子 LOD | [`bamboo-lod.json`](src/components/scene/generated/bamboo-lod.json) | 从竹子模型生成的远景简化数据 |
+| 老屋 LOD | [`architecture-lod.bin`](public/models/architecture-lod.bin)、[`house-lod.json`](src/components/scene/generated/house-lod.json) | 复用原贴图与顶点属性的压缩远景索引 |
 | 自然录音 | [`public/audio/`](public/audio/) | 九段风、雨、鸟鸣与虫鸣等录音；[来源与致谢](public/audio/credits.md) |
 | 备用画面 | [桌面](public/scene-poster.webp)、[手机](public/scene-poster-mobile.webp) | 静态场景画面 |
 | 图标 | [`icon.svg`](public/icon.svg)、[`favicon.svg`](public/favicon.svg) | 网站图标 |
@@ -38,6 +39,7 @@ GLB 已内嵌贴图与缓冲数据。声音在用户主动操作后播放，并�
 | --- | --- |
 | 模型、贴图或录音 | 导出到 `../blender-two/website/public/` 后执行 `pnpm sync` |
 | 竹子模型 | 同步后执行 `node scripts/generate-bamboo-lod.mjs`，将 `bamboo.glb` 与生成的 `bamboo-lod.json` 一起提交 |
+| 老屋模型 | 同步后执行 `node --experimental-strip-types scripts/generate-house-lod.mjs`，将 `architecture.glb` 与生成的 `architecture-lod.bin`、`house-lod.json` 一起提交 |
 | 模型增删改名、地形、布局、相机、灯光或天气效果 | 同时合并原项目 `website/components/scene/` 到本项目 `src/components/scene/` 的对应代码 |
 | 页面或交互 | 对照原项目 `website/app/`、`website/components/experience.tsx`，合并到本项目 `src/` 的对应位置 |
 
@@ -45,9 +47,35 @@ GLB 已内嵌贴图与缓冲数据。声音在用户主动操作后播放，并�
 
 ## 修改验证
 
-目标为 `main` 的 PR 和 `main` 更新会运行 [CI](.github/workflows/ci.yml)，检查类型、lint、回归测试、竹子 LOD 数据一致性和生产构建，统一显示为 `Checks`。
+目标为 `main` 的 PR 和 `main` 更新会运行 [CI](.github/workflows/ci.yml)，检查类型、lint、回归测试、竹子 LOD 数据一致性和生产构建，并核查可部署资源，统一显示为 `Checks`。本地 `pnpm check` 还包含老屋 LOD 数据一致性检查。
 
 涉及渲染或交互的修改，还需在手机与桌面预览中确认实际效果，尤其是首次进入、昼夜切换、风雨和视角切换。
+
+## 画面设置
+
+右上角的「画面设置」以紧凑分段控件提供「性能 / 均衡 / 完整」三个档位，也可以单独调整清晰度、帧率上限、阴影和老屋远景。手机默认「性能」，桌面默认「均衡」；选择不根据帧率自动改变，只作用于当前访问。标题旁的复位按钮恢复对应设备的默认画面，不改变自由模式。
+
+手机的默认配置为较低分辨率、30 帧绘制上限、关闭实时阴影、精简老屋远景。不同档位不再改变竹林模型或叶片数量；清晰度、阴影和动态流畅度仍有取舍。这是降低渲染负担的配置，不是帧率保证，选择完整档位也不会自动开启自由模式。
+
+| 老屋远景 | 行为 |
+| --- | --- |
+| 精简 | 较早切换远景，距离更远时使用第二级简化 |
+| 均衡 | 保守的远景简化，近处保留原始模型 |
+| 原始 | 关闭老屋 LOD，所有距离使用原始模型 |
+
+自由模式在所有设备上默认关闭，从画面设置主动开启后，可选屋外位置和六个房间。「院内竹荫」作为固定视角常驻；关闭自由模式时退回这里。已移除“隐藏房间内部的细节”开关，不再按画质档位过滤室内入口。
+
+老屋使用 Three.js 原生 LOD 和 20% 距离滞回。标准 60° 视野下，均衡模式约 24 米启用远景；精简模式约 16 米启用第一层、24 米启用第二层。「林间的风」默认视角进入远景层。只有远景副本略去安全分组的室内陈设，七盏室内灯随远景层停用，两盏廊灯保留。靠近、放大观察或进入房间时恢复原始老屋、陈设及按昼夜变化的室内灯光；室内始终使用原始建筑。
+
+老屋生成器复用已安装的 `meshoptimizer`：`simplifyWithAttributes` 在 2 / 5 厘米误差预算内简化建筑，并约束真实烘焙的雨水属性；`reorderMesh` 改善索引缓存顺序，`encodeIndexBuffer` 压缩索引。不会在手机上现场减面。
+
+竹海补密保留；撤回本轮额外的竹竿减面、竹叶内部减面和精简档抽叶。竹林恢复此前的渲染策略：近景原始竹竿，远景原有 5 毫米误差预算索引，原有远处及移动端整叶采样不变，不受老屋远景档位影响。
+
+LOD 下载失败、超时或索引不兼容时保留对应原模型几何。远景略去陈设不移除建筑外壳，也不销毁原贴图和模型，因此恢复细节不必重新下载，但不意味着彻底释放模型内存。关闭实时阴影会释放已分配的阴影图；切到老屋远景时释放不再使用的室内后处理目标，重新入室再按需创建。
+
+首次进入只保留静态底图到实时场景的淡入，不显示重复的进度卡片，也不再将下载进度频繁写入 React 状态。失败时仍提供静态回退和重新载入入口；场景切换与声音加载的轻量反馈保留。
+
+按本轮要求，模型更新后只做类型、lint 与生产构建，不运行自动化测试、浏览器检查或真机性能测试；不能据此承诺视觉无差异或具体帧率提升。
 
 ## 性能采集
 

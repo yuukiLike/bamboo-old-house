@@ -182,7 +182,24 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
   const stormSky=new T.Color(0xbac6cb),stormGround=new T.Color(0x43504b),stormFog=new T.Color(0x687d80),stormNightFog=new T.Color(0x0a151c),rainFog=new T.Color();
   const autumnSky=new T.Color(0xa8cce5),autumnSun=new T.Color(0xfff4df),autumnFog=new T.Color(0xb6cbc9);
   const interiorBulbs = new Set<T.MeshStandardMaterial>();
+  let hideInteriorDetails=false;
+  const updateRoomLights=()=>{
+    const amount=hideInteriorDetails?0:night.value;
+    for(const {light,power} of roomLights){light.intensity=power*amount;light.visible=amount>0;}
+    for(const bulb of interiorBulbs){bulb.emissive.setHex(0xffbf79);bulb.emissiveIntensity=amount*2.1;}
+  };
+  const invalidateLampShadows=()=>{
+    warm.shadow.needsUpdate=downstairs.shadow.needsUpdate=true;
+    for(const {light} of roomLights)light.shadow.needsUpdate=true;
+  };
   return {
+    invalidateLampShadows,
+    setInteriorDetailsHidden(hidden:boolean){
+      if(hideInteriorDetails===hidden)return;
+      hideInteriorDetails=hidden;updateRoomLights();
+      // Detail visibility changes the cached caster set, even for porch lamps.
+      invalidateLampShadows();
+    },
     update() {
       material.uniforms.uPixelRatio.value=renderer.getPixelRatio();
       const n = night.value, a = dawn.value, e = dusk.value, d = Math.max(0,1-n-a-e);
@@ -195,7 +212,7 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
           if (material instanceof T.MeshStandardMaterial && (material.name.startsWith('Interior_frosted_lamp_glass') || material.name.startsWith('Kitchen_frosted_bare_bulb'))) interiorBulbs.add(material);
         }
       });
-      for (const bulb of interiorBulbs) { bulb.emissive.setHex(0xffbf79); bulb.emissiveIntensity=n*2.1; }
+      updateRoomLights();
       // Mild reflected warmth leaves most of the gold on directly lit walls.
       // Absolute weights avoid mixing daytime back into a dusk/night crossfade.
       blendColor(ambient.color,daySky,dawnSky,duskSky,nightSky);
@@ -256,10 +273,9 @@ export function addDayCycle(scene: T.Scene, renderer: T.WebGLRenderer, sky: Sky,
       warm.intensity = 34 * n;
       downstairs.intensity = 6.5 * n;
       // Fully extinguished fixtures must leave Three's light list: zero power
-      // alone retains seven point-light loops and shadow-coordinate varyings
+      // alone retains point-light loops and shadow-coordinate varyings
       // in every leaf shader. Keep them present throughout the visible fade.
       warm.visible = downstairs.visible = n > 0;
-      for (const {light,power} of roomLights) { light.intensity=power*n; light.visible=n>0; }
       downstairsBulbMaterial.emissiveIntensity = n * 1.5;
       bulbMaterial.emissiveIntensity = n * 4;
       fireflies.visible = n > .005 && rain < .45;

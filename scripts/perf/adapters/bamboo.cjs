@@ -28,6 +28,8 @@ function readState() {
     resolution: d?.renderSettings?.resolution ?? root?.getAttribute('data-resolution') ?? (d ? 'full' : null),
     shadows: d?.renderSettings?.shadows ?? root?.getAttribute('data-shadows') ?? (d ? 'full' : null),
     frameRate: d?.renderSettings?.frameRate ?? root?.getAttribute('data-frame-rate') ?? (d ? 'display' : null),
+    houseDetail: d?.renderSettings?.houseDetail ?? root?.getAttribute('data-house-detail') ?? (d ? 'full' : null),
+    freeMode: d?.renderSettings?.freeMode ?? (root?.getAttribute('data-free-mode') === 'true'),
     soundEnabled: booleanAttribute(sound, 'aria-pressed'),
     soundBusy: sound ? soundLabel === '取消载入自然声' : null,
     soundError: sound ? soundLabel === '重试环境声音' || note.includes('声音暂未载入') : null,
@@ -45,7 +47,7 @@ function isReady() {
     throw new Error('Page entered static fallback; 3D capture is unavailable');
   }
   const mount = document.querySelector('.scene-mount.ready');
-  const control = document.querySelector('.free-toggle');
+  const control = document.querySelector('.yard-toggle') ?? document.querySelector('.free-toggle');
   return Number(window.__BAMBOO__?.startupMs) > 0 && !!mount &&
     Number(getComputedStyle(mount).opacity) >= 0.999 &&
     !!control && !control.disabled;
@@ -58,12 +60,12 @@ module.exports = {
   readBusinessPhases,
   readState,
   isReady,
-  readyDescription: 'startupMs > 0, .scene-mount.ready opacity >= 0.999, free-view control enabled; then fixed observation',
+  readyDescription: 'startupMs > 0, .scene-mount.ready opacity >= 0.999, courtyard-view control enabled (legacy: free-view control); then fixed observation',
   frameCapacity: 15000,
   frameLimitation: 'startup 从 createScene 开始，不含先前导航与动态模块导入；应用帧跳过最初 30 帧，末端 renderer 计数约每 15 帧刷新。perf=1 下成功的 view.reveal 记录实际切换结束，不改变轮询就绪条件。',
   phaseLimitation: 'view.capture 包含等候场景帧，view.reveal 包含等候目标帧和淡入；view.request-to-commit 的结束是状态请求与场景设置完成，startup.controls-ready 才确认 React 提交后控件就绪。',
   measurePrefix: 'bamboo:',
-  stateFields: ['view', 'place', 'timeOfDay', 'soundEnabled', 'soundBusy', 'soundError', 'paused', 'panorama', 'settingsPanel', 'weather.preset', 'resolution', 'shadows', 'frameRate'],
+  stateFields: ['view', 'place', 'timeOfDay', 'soundEnabled', 'soundBusy', 'soundError', 'paused', 'panorama', 'settingsPanel', 'weather.preset', 'resolution', 'shadows', 'frameRate', 'houseDetail', 'freeMode'],
   optionalStateFields: ['volume', 'weatherBusy', 'weatherError'],
   nullableStateFields: ['settingsPanel'],
 };

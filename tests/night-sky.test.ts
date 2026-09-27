@@ -4,7 +4,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 import * as T from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
-import { SUN_PRESETS } from '../src/components/scene/config.ts';
+import { ROOM_LIGHTS, SUN_PRESETS } from '../src/components/scene/config.ts';
 
 // Resolve the real module graph for Node's test runner without changing the
 // application's extensionless imports or adding test-only production exports.
@@ -39,6 +39,39 @@ function disposeScene(scene: T.Scene) {
     if (object instanceof T.Light && 'shadow' in object) (object as T.DirectionalLight).shadow.dispose();
   });
 }
+
+await test('hidden interiors disable all seven room lights but retain two porch lights throughout the night fade',()=>{
+ const scene=new T.Scene(),sky=new Sky(),sun=new T.DirectionalLight(),ambient=new T.HemisphereLight();
+ const renderer={getPixelRatio:()=>1} as unknown as T.WebGLRenderer;
+ const night={value:1},time={value:0};scene.add(sky,sun,ambient);
+ const bulb=new T.MeshStandardMaterial();bulb.name='Interior_frosted_lamp_glass';scene.add(new T.Mesh(new T.SphereGeometry(),bulb));
+ const cycle=addDayCycle(scene,renderer,sky,sun,ambient,night,time,true);
+ const rooms=ROOM_LIGHTS.map(spec=>scene.getObjectByName(spec.name) as T.PointLight);
+ const porch=['Upper_floor_warm_light','Ground_floor_dim_light'].map(name=>scene.getObjectByName(name) as T.PointLight);
+ try {
+  assert.equal(rooms.length,7);assert.ok([...rooms,...porch].every(light=>light instanceof T.PointLight));
+  cycle.update();
+  for(const hidden of [true,false,true,false]){
+   for(const light of [...rooms,...porch])light.shadow.needsUpdate=false;
+   cycle.setInteriorDetailsHidden(hidden);
+   assert.ok([...rooms,...porch].every(light=>light.shadow.needsUpdate),'invalidate cached shadows when furnishing visibility changes');
+   for(const amount of [1,.7,.01,0,.01,.7,1]){
+    night.value=amount;cycle.update();
+    for(const [index,light] of rooms.entries()){
+     assert.equal(light.visible,!hidden&&amount>0);
+     assert.equal(light.intensity,hidden?0:ROOM_LIGHTS[index].power*amount);
+     assert.equal(light.shadow.autoUpdate,false);
+    }
+    assert.ok(porch.every(light=>light.visible===(amount>0)));
+    assert.equal(porch[0].intensity,34*amount);assert.equal(porch[1].intensity,6.5*amount);
+    assert.equal(bulb.emissiveIntensity,hidden?0:amount*2.1);
+   }
+   for(const light of [...rooms,...porch])light.shadow.needsUpdate=false;
+   cycle.setInteriorDetailsHidden(hidden);
+   assert.ok([...rooms,...porch].every(light=>!light.shadow.needsUpdate),'unchanged settings do not keep refreshing lamp shadows');
+  }
+ } finally {disposeScene(scene);}
+});
 
 await test('HDR-safe environment preserves natural evening light, moon, stars and rain', context => {
   const scene = new T.Scene();

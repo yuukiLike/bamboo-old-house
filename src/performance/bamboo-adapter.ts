@@ -31,8 +31,8 @@ const phaseLabels: Record<string, string> = {
 };
 const VIEW_LABELS: Record<string, string> = {
  moon: '竹林望月', breeze: '林间的风', well: '井边', 'well-rain': '井旁听雨', porch: '木廊',
- walk: '步行', free: '自由看看', outdoor: '院坝', interior: '楼上',
- courtyard: '屋前空地', 'yard-edge': '院边竹荫', upstairs: '二层厅堂', store: '仓库',
+ walk: '步行', yard:'院内竹荫', free: '自由模式', outdoor: '院坝', interior: '楼上',
+ courtyard: '屋前空地', 'yard-edge': '院内竹荫', upstairs: '二层厅堂', store: '仓库',
  'room-one': '住屋一', 'room-two': '住屋二', hall: '一楼堂屋', kitchen: '一楼厨房',
 };
 
@@ -53,6 +53,8 @@ function readState(): RuntimeState {
   resolution: root?.getAttribute('data-resolution') ?? scene?.renderSettings?.resolution ?? null,
   shadows: root?.getAttribute('data-shadows') ?? scene?.renderSettings?.shadows ?? null,
   frameRate: root?.getAttribute('data-frame-rate') ?? scene?.renderSettings?.frameRate ?? null,
+  houseDetail: root?.getAttribute('data-house-detail') ?? scene?.renderSettings?.houseDetail ?? null,
+  freeMode: root?.hasAttribute('data-free-mode') ? root.getAttribute('data-free-mode')==='true' : scene?.renderSettings?.freeMode ?? null,
   soundEnabled: sound?.hasAttribute('aria-pressed') ? sound.getAttribute('aria-pressed') === 'true' : null,
   paused: pause?.hasAttribute('aria-pressed') ? pause.getAttribute('aria-pressed') === 'true' : scene?.paused ?? null,
   panorama: root ? classes?.contains('is-panorama') ?? null : scene?.panorama ?? null,
@@ -86,8 +88,10 @@ function stateDescription(state: RuntimeState) {
  const sound = state.soundEnabled === true ? '声音开' : state.soundEnabled === false ? '声音关' : '声音未知';
  return [view, place !== view ? place : null, sound, state.weatherPreset ?? '天气未知',
   state.resolution==='reduced'?'画面稍柔和':state.resolution==='balanced'?'均衡清晰':state.resolution==='full'?'完整清晰':null,
-  state.shadows==='alternate'?'阴影隔帧':state.shadows==='full'?'阴影每帧':null,
+  state.shadows==='off'?'实时阴影关闭':state.shadows==='alternate'?'阴影隔帧':state.shadows==='full'?'阴影每帧':null,
   state.frameRate==='display'?'绘制跟随屏幕':state.frameRate?`绘制上限 ${state.frameRate} 帧`:null,
+  state.houseDetail==='lean'?'老屋远景精简':state.houseDetail==='balanced'?'老屋远景均衡':state.houseDetail==='full'?'老屋原始细节':null,
+  state.freeMode===true?'自由模式开启':null,
   state.paused ? '动态暂停' : null].filter(Boolean).join(' · ');
 }
 

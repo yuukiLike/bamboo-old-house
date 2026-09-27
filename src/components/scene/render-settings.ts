@@ -2,12 +2,17 @@ import * as T from 'three';
 
 export interface RenderSettings {
  resolution:'full'|'balanced'|'reduced';
- shadows:'full'|'alternate';
+ shadows:'full'|'alternate'|'off';
  frameRate:'display'|'60'|'30';
+ houseDetail:'full'|'balanced'|'lean';
+ freeMode:boolean;
 }
-export const FULL_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'full',shadows:'full',frameRate:'display'};
+export const FULL_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'full',shadows:'full',frameRate:'display',houseDetail:'full',freeMode:false};
 // Balanced startup; complete effects and the lighter option stay selectable.
-export const DEFAULT_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'balanced',shadows:'alternate',frameRate:'60'};
+export const DEFAULT_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'balanced',shadows:'alternate',frameRate:'60',houseDetail:'balanced',freeMode:false};
+export const PERFORMANCE_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'reduced',shadows:'off',frameRate:'30',houseDetail:'lean',freeMode:false};
+export const MOBILE_SCENE_QUERY='(max-width:700px), (hover:none) and (pointer:coarse)';
+export const defaultRenderSettings=(mobile:boolean):RenderSettings=>({...mobile?PERFORMANCE_RENDER_SETTINGS:DEFAULT_RENDER_SETTINGS});
 
 /** The selected configuration controls resolution. Frame timings never
  * select a setting. CSS/UI resolution is unaffected. */
@@ -59,6 +64,7 @@ export function createDirectionalShadowUpdates(light:T.DirectionalLight){
  return {
   invalidate(){invalidated=true;},
   update(time:number,wind:number,mode:RenderSettings['shadows']){
+   if(mode==='off')return false;
    if(!light.visible||!light.castShadow)return false;
    light.getWorldPosition(position);light.target.getWorldPosition(target);
    const camera=shadow.camera;

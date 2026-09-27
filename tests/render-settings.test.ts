@@ -42,16 +42,16 @@ function setup(){
 }
 
 await test('mobile clarity increases without removing the former light or complete-effect settings',()=>{
- assert.deepEqual(DEFAULT_RENDER_SETTINGS,{resolution:'balanced',shadows:'alternate',frameRate:'60'});
- assert.deepEqual(FULL_RENDER_SETTINGS,{resolution:'full',shadows:'full',frameRate:'display'});
+ assert.deepEqual(DEFAULT_RENDER_SETTINGS,{resolution:'balanced',shadows:'alternate',frameRate:'60',houseDetail:'balanced',freeMode:false});
+ assert.deepEqual(FULL_RENDER_SETTINGS,{resolution:'full',shadows:'full',frameRate:'display',houseDetail:'full',freeMode:false});
  for(const mobile of [false,true])for(const ratio of [.75,1,1.25,1.5,2,3]){
   const full=Math.min(ratio,mobile?2:1.6);
   const reduced=Math.min(ratio,mobile?1.25:1.6)*.85;
   const balanced=mobile?Math.min(ratio,1.5):Math.min(ratio,1.6)*.85;
-  for(const shadows of ['full','alternate'] as const)for(const frameRate of ['display','60','30'] as const){
-   assert.equal(scenePixelRatio(ratio,mobile,{resolution:'full',shadows,frameRate}),full);
-   assert.equal(scenePixelRatio(ratio,mobile,{resolution:'reduced',shadows,frameRate}),reduced);
-   assert.equal(scenePixelRatio(ratio,mobile,{resolution:'balanced',shadows,frameRate}),balanced);
+  for(const shadows of ['off','full','alternate'] as const)for(const frameRate of ['display','60','30'] as const)for(const houseDetail of ['full','balanced','lean'] as const){
+   assert.equal(scenePixelRatio(ratio,mobile,{...FULL_RENDER_SETTINGS,resolution:'full',shadows,frameRate,houseDetail}),full);
+   assert.equal(scenePixelRatio(ratio,mobile,{...FULL_RENDER_SETTINGS,resolution:'reduced',shadows,frameRate,houseDetail}),reduced);
+   assert.equal(scenePixelRatio(ratio,mobile,{...FULL_RENDER_SETTINGS,resolution:'balanced',shadows,frameRate,houseDetail}),balanced);
   }
   assert.equal(scenePixelRatio(ratio,mobile,DEFAULT_RENDER_SETTINGS),balanced);
   assert.equal(scenePixelRatio(ratio,mobile,FULL_RENDER_SETTINGS),full);

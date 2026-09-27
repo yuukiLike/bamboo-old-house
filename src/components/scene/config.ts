@@ -1,6 +1,6 @@
 import { Vector3, CatmullRomCurve3, MathUtils } from 'three';
 export const BUILD_ID = 'bamboo-2026-09-13-grove-and-controls';
-export type ViewMode = 'porch' | 'walk' | 'free' | 'moon' | 'breeze' | 'well-rain';
+export type ViewMode = 'porch' | 'walk' | 'yard' | 'free' | 'moon' | 'breeze' | 'well-rain';
 export type TimeOfDay = 'dawn' | 'day' | 'dusk' | 'night';
 // Shared with the editable Blender environment export (metres, web Y up).
 export const SUN_PRESETS = {
@@ -47,7 +47,7 @@ export const ROOM_VIEWS: Record<RoomId, {label:string; p:number[]; t:number[]; f
 // Outdoor places use absolute standing eye heights on the actual courtyard surface.
 export const OUTDOOR_VIEWS = {
  courtyard: {label:'屋前空地',p:[-1.5,1.4274203222107813,11],t:[-.5,3,-.5],fov:68},
- 'yard-edge': {label:'院边竹荫',p:[7.5,1.6034467727,8.3],t:[-2.7,2.6,.7],fov:64},
+ 'yard-edge': {label:'院内竹荫',p:[7.5,1.6034467727,8.3],t:[-2.7,2.6,.7],fov:64},
 } as const;
 export const PLACE_VIEWS = {...OUTDOOR_VIEWS,...ROOM_VIEWS};
 export type PlaceId = keyof typeof PLACE_VIEWS;
@@ -214,6 +214,19 @@ export function treePositions(){
   for(let j=0;j<4;j++){
    const angle=clumpRandom()*Math.PI*2,r=.14+clumpRandom()*.66;
    add(cx+Math.cos(angle)*r,cz+Math.sin(angle)*r,.22+clumpRandom()*.16,j===3?cluster%4:3);
+  }
+ }
+ // Fill the lake-facing gap with staggered mature and younger crowns. Append
+ // with a separate seed to preserve all existing culms and branch bindings.
+ const lakeRandom=seeded(927602);
+ for(let cluster=0;cluster<28;cluster++){
+  const cx=21+lakeRandom()*13,cz=8+lakeRandom()*43;
+  for(let j=0;j<6;j++){
+   const angle=lakeRandom()*Math.PI*2,r=.2+lakeRandom()*1.05;
+   const x=cx+Math.cos(angle)*r,z=cz+Math.sin(angle)*r;
+   const s=j<3?.9+lakeRandom()*.5:.24+lakeRandom()*.26;
+   if(groundHeight(x,z)<-.9)continue;
+   add(x,z,s,(cluster+j)%4);
   }
  }
  const phonePath=Array.from({length:501},(_,i)=>{

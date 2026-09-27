@@ -187,11 +187,17 @@ module.exports = async function (context, commands) {
       await stage('chapter-home', '探索章节：回到竹林', () => click('.exploration-nav a[href="#bamboo"]'),
         `${viewReady('walk')} && document.querySelector('.exploration-nav a[href="#bamboo"]')?.getAttribute('aria-current') === 'step' && window.__BAMBOO__?.progress <= 0.01`,
         'first chapter selected through navigation and renderer loop progress <= 0.01');
-      await stage('view-free', '观看方式：自由看看', () => click('.free-toggle'), viewReady('free'),
+      await prepare('从画面设置启用自由模式', async () => {
+        await click('.render-toggle');
+        if (await commands.js.run('return document.querySelector("#enable-free-mode")?.checked === false')) await click('#enable-free-mode');
+        await waitFor('window.__BAMBOO__?.renderSettings?.freeMode === true');
+        await click('.render-panel .settings-close');
+      });
+      await stage('view-free', '观看方式：自由模式', () => click('.free-toggle'), viewReady('free'),
         'diagnostics viewMode=free and free-view panel mounted');
 
       for (const [place, label] of [
-        ['yard-edge', '院边竹荫'], ['upstairs', '二层厅堂'], ['store', '仓库'], ['room-one', '住屋一'],
+        ['yard-edge', '院内竹荫'], ['upstairs', '二层厅堂'], ['store', '仓库'], ['room-one', '住屋一'],
         ['room-two', '住屋二'], ['hall', '一楼堂屋'], ['kitchen', '一楼厨房'], ['courtyard', '屋前空地'],
       ]) {
         await stage(`place-${place}`, `停留位置：${label}`, async () => {
