@@ -97,6 +97,81 @@ await test('rapid requests, cancellation and disposal cannot let an old frame cl
  signal.clear();disposedFrame();assert.equal(completed,1);
 });
 
+await test('feedback and curtain listeners both receive the destination frame without replacing each other',()=>{
+ const signal=createFrameReadySignal(),completed:string[]=[];
+ const cancel=signal.wait(()=>completed.push('cancelled'));
+ signal.wait(()=>completed.push('feedback'));
+ signal.wait(()=>{completed.push('curtain');signal.wait(()=>completed.push('later'));});
+ const frame=signal.beginFrame();cancel();frame();frame();
+ assert.deepEqual(completed,['feedback','curtain']);
+ signal.beginFrame()();assert.deepEqual(completed,['feedback','curtain','later']);
+});
+
+function setupCurtain(){
+ const {renderer,transition}=setup(false),signal=createFrameReadySignal();
+ const animations:{from:number;to:number;duration:number;onfinish:(()=>void)|null;cancelled:boolean;cancel:()=>void;finish:()=>void}[]=[];
+ let displayedOpacity='0';
+ const element={
+  style:{opacity:'0'},
+  ownerDocument:{defaultView:{getComputedStyle:()=>({opacity:displayedOpacity})}},
+  animate(frames:{opacity:number}[],options:{duration:number}){
+   const animation={from:frames[0].opacity,to:frames[1].opacity,duration:options.duration,onfinish:null as (()=>void)|null,cancelled:false,
+    cancel(){animation.cancelled=true;},
+    finish(){displayedOpacity=String(animation.to);animation.onfinish?.();},
+   };
+   animations.push(animation);return animation;
+  },
+ };
+ const navigation=createSceneTransition(()=>transition,{element:()=>element as unknown as HTMLElement,waitForFrame:complete=>signal.wait(complete)});
+ return {renderer,transition,signal,element,animations,navigation,showOpacity:(value:number)=>{displayedOpacity=String(value);}};
+}
+
+await test('mobile handoff presents subtle feedback before mutations and finishes after the destination frame',()=>{
+ const {renderer,transition,signal,element,animations,navigation}=setupCurtain();
+ const events:string[]=[];
+ const oldFrame=signal.beginFrame();
+ navigation.request(()=>{events.push('destination');signal.wait(()=>events.push('feedback'));});
+ assert.deepEqual(events,[],'button selection can paint while the cover is animating');
+ assert.equal(animations.length,1);assert.equal(animations[0].duration,180);
+ assert.ok(animations[0].to>0&&animations[0].to<=.06,'feedback must not tint or obscure the whole scenery');
+ animations[0].finish();
+ assert.deepEqual(events,['destination']);assert.equal(element.style.opacity,String(animations[0].to));
+ oldFrame();assert.equal(animations.length,1,'the old frame cannot uncover a new destination');
+ signal.beginFrame()();
+ assert.deepEqual(events,['destination','feedback']);assert.equal(animations.length,2);
+ assert.equal(animations[1].from,animations[0].to);assert.equal(animations[1].to,0);
+ animations[1].finish();assert.equal(element.style.opacity,'0');
+ assert.equal(renderer.copies,0);assert.equal(renderer.draws,0);assert.equal(renderer.textures.size,0);
+ navigation.dispose();transition.dispose();
+});
+
+await test('curtain coalesces rapid choices and resumes from its displayed opacity on interruption',()=>{
+ const {transition,signal,element,animations,navigation,showOpacity}=setupCurtain();
+ const applied:string[]=[];
+ navigation.request(()=>applied.push('moon'));navigation.request(()=>applied.push('breeze'));
+ assert.equal(animations.length,1);animations[0].finish();
+ assert.deepEqual(applied,['breeze']);signal.beginFrame()();
+ showOpacity(.02);navigation.request(()=>applied.push('well'));navigation.request(()=>applied.push('yard'));
+ assert.equal(animations[1].cancelled,true);assert.equal(animations[2].from,.02);
+ animations[1].finish();assert.equal(element.style.opacity,'0.02','a cancelled fade cannot clear the new cover');
+ animations[2].finish();assert.deepEqual(applied,['breeze','yard']);
+ const oldFrame=signal.beginFrame();navigation.dispose();oldFrame();
+ assert.equal(animations.length,3);assert.equal(element.style.opacity,'0');transition.dispose();
+});
+
+await test('curtain finish, disposal, reduced motion and animation failure never strand navigation',()=>{
+ const {transition,signal,element,animations,navigation}=setupCurtain(),applied:string[]=[];
+ navigation.request(()=>applied.push('moon'));navigation.finish();animations[0].finish();
+ assert.deepEqual(applied,['moon']);assert.equal(element.style.opacity,'0');
+ navigation.request(()=>applied.push('breeze'),false);
+ assert.deepEqual(applied,['moon','breeze']);assert.equal(animations.length,1);
+ element.animate=()=>{throw Error('animation unavailable');};
+ assert.doesNotThrow(()=>navigation.request(()=>applied.push('well')));
+ assert.deepEqual(applied,['moon','breeze','well']);
+ signal.beginFrame()();assert.equal(element.style.opacity,'0','a failed reveal still clears the feedback');
+ navigation.dispose();assert.equal(element.style.opacity,'0');transition.dispose();
+});
+
 await test('mobile navigation commits without waiting for an old frame or preparing GPU snapshots',async()=>{
  const {renderer,transition,frame}=setup(false),navigation=createSceneTransition(()=>transition);
  const applied:string[]=[];
