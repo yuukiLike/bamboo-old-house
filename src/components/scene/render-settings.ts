@@ -12,7 +12,7 @@ export const FULL_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'full',sh
 export const DEFAULT_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'balanced',shadows:'alternate',frameRate:'60',houseDetail:'balanced',freeMode:false};
 export const PERFORMANCE_RENDER_SETTINGS:Readonly<RenderSettings>={resolution:'reduced',shadows:'off',frameRate:'30',houseDetail:'lean',freeMode:false};
 export const MOBILE_SCENE_QUERY='(max-width:700px), (hover:none) and (pointer:coarse)';
-export const defaultRenderSettings=(mobile:boolean):RenderSettings=>({...mobile?PERFORMANCE_RENDER_SETTINGS:DEFAULT_RENDER_SETTINGS});
+export const defaultRenderSettings=(mobile:boolean):RenderSettings=>({...mobile?PERFORMANCE_RENDER_SETTINGS:DEFAULT_RENDER_SETTINGS,shadows:'alternate'});
 
 /** The selected configuration controls resolution. Frame timings never
  * select a setting. CSS/UI resolution is unaffected. */
