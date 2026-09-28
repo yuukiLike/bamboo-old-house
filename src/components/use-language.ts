@@ -6,12 +6,10 @@ import { HTML_LANG, localeFromPathname, localePath, type Locale } from '@/conten
 /** Language changes update copy in place: the WebGL scene and audio stay alive. */
 export function useLanguage(initialLocale: Locale) {
   const [locale, setLocale] = useState(initialLocale);
-  const [showLanguageSwitch, setShowLanguageSwitch] = useState(false);
   useEffect(() => {
     const onPopState = () => {
       const next = localeFromPathname(location.pathname);
       if (next) setLocale(next);
-      setShowLanguageSwitch(new URLSearchParams(location.search).get('localeTest') === '1');
     };
     onPopState();
     window.addEventListener('popstate', onPopState);
@@ -30,5 +28,5 @@ export function useLanguage(initialLocale: Locale) {
     history.replaceState(history.state, '', `${localePath(next)}${location.search}${location.hash}`);
     setLocale(next);
   };
-  return { locale, changeLanguage, showLanguageSwitch, t: getContent(locale) };
+  return { locale, changeLanguage, t: getContent(locale) };
 }

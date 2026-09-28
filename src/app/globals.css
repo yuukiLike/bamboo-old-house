@@ -382,12 +382,11 @@ html:lang(en) :is(.well-story,.breeze-story) .porch-copy { max-width:340px; }
 html:lang(en) :is(.well-story,.breeze-story) h1 { font-size:31px; }
 html:lang(ja) :is(.well-story,.breeze-story) .porch-copy { max-width:370px; }
 html:lang(ja) :is(.well-story,.breeze-story) h1 { font-size:26px; }
-.site-header { align-items:flex-start; }
-.site-header[data-locale-test='true'] { --language-switch-height:43px; }
+.site-header { align-items:flex-start; --language-switch-height:32px; }
 .wordmark { min-width:0; }
 html:lang(en) .wordmark { max-width:280px; line-height:1.2; }
-.language-switch { position:absolute; top:76px; left:48px; display:flex; align-items:center; gap:16px; }
-.language-switch a { position:relative; display:inline-flex; align-items:center; min-height:36px; font-family:var(--font-sans); font-size:11px; letter-spacing:.03em; color:#d9dfd4; text-shadow:var(--control-text-shadow); opacity:.65; }
+.language-switch { position:absolute; top:76px; left:48px; display:flex; align-items:center; gap:8px; }
+.language-switch a { position:relative; display:inline-flex; align-items:center; justify-content:center; min-width:28px; min-height:28px; font-family:var(--font-sans); font-size:10px; letter-spacing:.08em; color:#d9dfd4; text-shadow:var(--control-text-shadow); opacity:.75; }
 .language-switch a:hover,.language-switch a[aria-current='page'] { opacity:1; color:#fffaf0; }
 .language-switch a[aria-current='page']::after { content:''; position:absolute; height:1px; width:12px; bottom:5px; left:calc(50% - 6px); background:currentColor; }
 html:lang(en) .header-aside { gap:6px; }
@@ -415,8 +414,7 @@ html:lang(en) .render-segments button,html:lang(ja) .render-segments button { fo
  html:lang(en) .header-aside { gap:2px; }
  html:lang(en) .wordmark { font-size:18px; max-width:180px; line-height:1.15; }
  html:lang(ja) .wordmark { font-size:16px; line-height:1.5; }
- .language-switch { left:14px; top:calc(max(12px,env(safe-area-inset-top)) + 48px); gap:18px; }
- .language-switch a { min-height:40px; font-size:11px; }
+ .language-switch { left:14px; top:calc(max(12px,env(safe-area-inset-top)) + 48px); gap:4px; }
  .day-switch { top:calc(max(12px,env(safe-area-inset-top)) + 48px + var(--language-switch-height,0px)); }
  .chapter-copy,.is-walk .chapter-copy { top:max(178px,24svh); max-width:360px; max-height:calc(100svh - max(178px,24svh) - 170px); }
  .chapter-kicker { font-size:12px; margin-bottom:12px; }
