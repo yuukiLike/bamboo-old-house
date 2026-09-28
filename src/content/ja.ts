@@ -205,6 +205,7 @@ export const ja = {
     "credits": "録音素材とクレジット",
     "fullscreenLabel": "全画面表示。Escキーまたは画面をダブルクリックで終了",
     "fullscreen": "全画面表示",
+    "github": "GitHubでソースを見る・スターを付ける（新しいタブで開く）",
     "soundRetryHint": "音声を読み込めませんでした。音のボタンを押すと再試行できます。",
     "still": "静止画表示 · スクロールして読めます",
     "reducedMotion": "動きを抑えて表示しています。見回したり、時間帯を変えたりできます。",

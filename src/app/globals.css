@@ -220,6 +220,9 @@ h1,h2 { font-family:'Songti SC','STSong','Noto Serif CJK SC',serif; font-size:44
 @keyframes sound-invitation { 0%,100% { box-shadow:0 3px 14px #081b1659; } 45% { box-shadow:0 0 0 5px #b6d98a33,0 3px 18px #081b1666; } }
 @keyframes sound-hint-arrival { 0% { opacity:0; translate:0 -4px; } 10%,85% { opacity:1; translate:0 0; } 100% { opacity:0; translate:0 0; } }
 .header-icon { width:var(--control-height); min-width:var(--control-height); height:var(--control-height); padding:0 !important; }
+.github-link { display:inline-flex; flex:none; align-items:center; justify-content:center; color:#c4d8ac; border-radius:7px; transition:color .2s ease,background .2s ease; }
+.github-link::before { content:''; width:21px; height:21px; background:currentColor; mask:url('/github.svg') center / contain no-repeat; filter:drop-shadow(0 1px 3px #0b1814cc); }
+.github-link:hover,.github-link:focus-visible { color:#edf5d6; background:#b6d98a1a; }
 .settings-panel { position:absolute; top:calc(var(--control-height) + 12px); left:auto; right:0; margin:0; color:inherit; width:304px; min-width:0; max-width:calc(100vw - 28px); padding:12px 16px 16px; max-height:calc(100svh - 220px); overflow:auto; overscroll-behavior:contain; border:1px solid var(--control-border); border-radius:var(--control-radius); background:var(--control-surface); backdrop-filter:blur(12px); box-shadow:0 12px 32px #0003; }
 .weather-panel,.render-panel { width:360px; }
 .settings-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -458,6 +461,8 @@ html:lang(en) .render-segments button,html:lang(ja) .render-segments button { fo
 }
 
 @media(max-width:360px) {
+ .header-aside :is(.weather-toggle,.render-toggle,.fullscreen-toggle) { width:36px; min-width:36px; }
+ html:lang(en) .wordmark { font-size:16px; }
  html:lang(en) .chapter h1 { font-size:32px; }
  html:lang(en) .chapter p:not(.chapter-kicker) { white-space:normal; font-size:13px; line-height:1.7; }
 }

@@ -203,6 +203,7 @@ export const zh = {
     "credits": "自然录音与来源",
     "fullscreenLabel": "全屏欣赏，Esc 或双击画面退出",
     "fullscreen": "全屏欣赏",
+    "github": "在 GitHub 查看项目、点亮 Star（新标签页打开）",
     "soundRetryHint": "声音暂未载入，点击声音按钮可重试。",
     "still": "静态观看 · 可沿路阅读",
     "reducedMotion": "已减少动态 · 仍可主动环顾和切换昼夜",

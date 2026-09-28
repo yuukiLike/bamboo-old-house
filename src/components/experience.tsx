@@ -422,6 +422,7 @@ export default function Experience({ initialLocale }: { initialLocale: Locale })
     </dialog>}
    </div>
    <Button className="control-button header-icon fullscreen-toggle" aria-label={t.ui.fullscreenLabel} title={t.ui.fullscreen} disabled={!ready||staticMode||sceneBusy} onClick={event=>{setSettingsPanel(null);enterImmersive(event.currentTarget);}}><Maximize size={17}/></Button>
+   <a className="control-button header-icon github-link" href="https://github.com/yuukiLike/bamboo-old-house" target="_blank" rel="noopener noreferrer" aria-label={t.ui.github} title={t.ui.github} />
    </div>
   </header>
   {soundError&&settingsPanel===null&&<output className="sound-message">{t.ui.soundRetryHint}</output>}

@@ -205,6 +205,7 @@ export const en = {
     "credits": "Recordings and credits",
     "fullscreenLabel": "Full screen; press Esc or double-click the scene to exit",
     "fullscreen": "Full screen",
+    "github": "View and star on GitHub (opens in a new tab)",
     "soundRetryHint": "Sound could not load. Select the sound button to try again.",
     "still": "Still view · Scroll to read",
     "reducedMotion": "Reduced motion is on. You can still look around and change the time of day.",
