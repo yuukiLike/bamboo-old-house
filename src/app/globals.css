@@ -209,13 +209,12 @@ h1,h2 { font-family:'Songti SC','STSong','Noto Serif CJK SC',serif; font-size:44
 /* Weather stays at hand; picture and sound share one settings entrance. */
 .header-aside { gap:12px; }
 .sound-controls,.weather-controls,.render-controls { position:relative; display:flex; align-items:center; gap:3px; }
-.sound-toggle[aria-pressed='true'],.weather-toggle[aria-expanded='true'],.render-toggle[aria-expanded='true'] { color:var(--control-active-text); background:transparent; }
-.sound-controls .sound-toggle { border:1px solid #8bb774; border-radius:7px; background:#23472f; color:#f1f6d9; font-weight:600; text-shadow:none; box-shadow:0 3px 14px #081b1659; }
-.sound-controls .sound-toggle:hover { background:#315c3c; border-color:#b6d98a; color:#fffde9; }
-.sound-controls .sound-toggle[aria-pressed='true'] { background:#365e3d; border-color:#b6d98a; color:#f5ffde; }
+.weather-toggle[aria-expanded='true'],.render-toggle[aria-expanded='true'] { color:var(--control-active-text); background:transparent; }
+.sound-controls .sound-toggle { border:1px solid transparent; border-radius:7px; }
 .sound-controls .sound-toggle::after { content:none; }
-.sound-controls .sound-toggle>svg { filter:none; stroke-width:1.8; }
-.sound-controls[data-hint='true'] .sound-toggle { animation:sound-invitation 1.6s ease-out 2; }
+.sound-controls[data-hint='true'] .sound-toggle { border-color:#8bb774; background:#23472f; color:#f1f6d9; text-shadow:none; box-shadow:0 3px 14px #081b1659; animation:sound-invitation 1.6s ease-out 2; }
+.sound-controls[data-hint='true'] .sound-toggle:hover { background:#315c3c; border-color:#b6d98a; color:#fffde9; }
+.sound-controls[data-hint='true'] .sound-toggle>svg { filter:none; stroke-width:1.8; }
 .sound-hint { position:absolute; top:calc(100% + 12px); right:0; z-index:1; width:max-content; max-width:calc(100vw - 32px); padding:9px 13px; border:1px solid #87ae7159; border-radius:7px; background:#142d22f5; color:#e7f1d4; font-size:12px; line-height:1.6; font-weight:400; letter-spacing:.02em; pointer-events:none; box-shadow:0 4px 16px #081b1633; animation:sound-hint-arrival 6s ease both; }
 @keyframes sound-invitation { 0%,100% { box-shadow:0 3px 14px #081b1659; } 45% { box-shadow:0 0 0 5px #b6d98a33,0 3px 18px #081b1666; } }
 @keyframes sound-hint-arrival { 0% { opacity:0; translate:0 -4px; } 10%,85% { opacity:1; translate:0 0; } 100% { opacity:0; translate:0 0; } }
