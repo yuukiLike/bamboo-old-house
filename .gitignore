@@ -39,3 +39,6 @@ next-env.d.ts
 
 # local build records
 *.tsbuildinfo
+
+# local promotion drafts and publishing notes
+/docs/promotion/

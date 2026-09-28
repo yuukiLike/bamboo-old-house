@@ -159,6 +159,7 @@ export const ja = {
     "enableAmbience": "音をオンにする",
     "listening": "再生中",
     "listen": "音を聞く",
+    "soundHint": "音をオンにして、竹林の音を。",
     "settingsLabel": "画面とサウンドの設定",
     "settings": "設定",
     "closeSettings": "設定を閉じる",

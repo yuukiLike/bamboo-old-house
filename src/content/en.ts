@@ -159,6 +159,7 @@ export const en = {
     "enableAmbience": "Turn sound on",
     "listening": "Sound on",
     "listen": "Listen",
+    "soundHint": "Turn on sound to hear the bamboo grove.",
     "settingsLabel": "Graphics and sound settings",
     "settings": "Settings",
     "closeSettings": "Close settings",

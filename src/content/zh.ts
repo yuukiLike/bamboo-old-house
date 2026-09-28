@@ -157,6 +157,7 @@ export const zh = {
     "enableAmbience": "开启环境声音",
     "listening": "正在聆听",
     "listen": "聆听竹林",
+    "soundHint": "点这里，听见竹林。",
     "settingsLabel": "画面与声音设置",
     "settings": "设置",
     "closeSettings": "收起设置",

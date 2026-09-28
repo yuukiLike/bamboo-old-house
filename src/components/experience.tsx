@@ -66,6 +66,7 @@ export default function Experience({ initialLocale }: { initialLocale: Locale })
  const [soundEnabled,setSoundEnabled] = useState(false);
  const [soundBusy,setSoundBusy] = useState(false);
  const [soundError,setSoundError] = useState(false);
+ const [soundHintVisible,setSoundHintVisible] = useState(true);
  const [settingsPanel,setSettingsPanel] = useState<'weather' | 'preferences' | null>(null);
  const [renderSettings,setRenderSettings] = useState<RenderSettings>({...DEFAULT_RENDER_SETTINGS});
  const matchesProfile=(profile:Readonly<RenderSettings>)=>Object.entries(profile).every(([key,value])=>key==='freeMode'||renderSettings[key as keyof RenderSettings]===value);
@@ -171,6 +172,11 @@ export default function Experience({ initialLocale }: { initialLocale: Locale })
    return ()=>{disposed=true;clearTimeout(stageTimer);finishStage?.('cancelled');finishStartup('cancelled');resetRoof();controller.abort();engine.current?.dispose();engine.current=null;};
  },[attempt,finishSceneFeedback,exitImmersive]);
  useEffect(()=>{if(ready)beginPhase('startup.controls-ready',{attempt,boundary:'react-committed'})();},[ready,attempt]);
+ useEffect(()=>{
+   if(!ready||staticMode||!soundHintVisible)return;
+   const timer=setTimeout(()=>setSoundHintVisible(false),6000);
+   return()=>clearTimeout(timer);
+ },[ready,staticMode,soundHintVisible]);
  useEffect(()=>{engine.current?.setDescription(t.ui.canvas);},[t.ui.canvas,ready]);
  useEffect(()=>{engine.current?.setPaused(reduced);},[reduced,ready]);
  useEffect(()=>{
@@ -216,6 +222,7 @@ export default function Experience({ initialLocale }: { initialLocale: Locale })
  };
  const playSound=async(value:boolean,nextView=view,nextTime=timeOfDay,nextWeather=weather)=>{
    const request=++soundRequest.current;
+   setSoundHintVisible(false);
    setSoundError(false);setSoundBusy(true);
    if(!value){weatherRequest.current++;setWeatherBusy(false);setWeatherError(false);setSettingsPanel(panel=>panel==='weather'?null:panel);}
    try {
@@ -307,6 +314,7 @@ export default function Experience({ initialLocale }: { initialLocale: Locale })
  const activityBusy=ready&&(sceneBusy||soundBusy||weatherBusy);
  const pendingView=sceneBusy?selectedDestination.view:null;
  const soundLoading=soundBusy||weatherBusy;
+ const showSoundHint=ready&&!staticMode&&soundHintVisible&&!soundEnabled&&!soundBusy;
  return <div className={`experience is-${view} ${panorama?'is-panorama':''} ${staticMode?'is-static':''} ${immersive?'is-immersive':''} ${soundEnabled?'is-listening':''} ${activityBusy?'is-busy':''} ${settingsPanel?'settings-open':''}`} lang={HTML_LANG[locale]} data-locale={locale} data-entering={entering} data-time={timeOfDay} data-resolution={renderSettings.resolution} data-shadows={renderSettings.shadows} data-frame-rate={renderSettings.frameRate} data-house-detail={renderSettings.houseDetail} data-free-mode={renderSettings.freeMode}>
   {performancePanel}
   <a className="skip-link" href="#view-controls" onClick={(e)=>{e.preventDefault();document.querySelector<HTMLButtonElement>('#view-controls button')?.focus({preventScroll:true});}}>{t.ui.skip}</a>
@@ -336,6 +344,10 @@ export default function Experience({ initialLocale }: { initialLocale: Locale })
     <ToggleGroupItem value="dusk" aria-label={t.ui.dusk} title={t.ui.goldenLight}><Sunset size={15} strokeWidth={1.5}/><span>{t.ui.dusk}</span></ToggleGroupItem>
     <ToggleGroupItem value="night" aria-label={t.ui.night}><Moon size={15} strokeWidth={1.5}/><span>{t.ui.night}</span></ToggleGroupItem>
    </ToggleGroup>
+   <div className="sound-controls" data-hint={showSoundHint}>
+    <Button className="control-button sound-toggle" onClick={toggleSound} aria-busy={soundLoading} aria-label={soundBusy?t.ui.cancelSound:soundEnabled?t.ui.disableAmbience:soundError?t.ui.retryAmbience:t.ui.enableAmbience} aria-pressed={soundEnabled} disabled={!ready||staticMode}>{soundLoading?<LoaderCircle className="loading-spinner" size={16}/>:soundEnabled?<Volume2 size={16}/>:<VolumeX size={16}/>}<span>{soundEnabled?t.ui.listening:soundError?t.ui.retrySound:t.ui.listen}</span></Button>
+    {showSoundHint&&<span className="sound-hint" aria-hidden="true">{t.ui.soundHint}</span>}
+   </div>
    <div className="weather-controls">
     <Button ref={weatherButton} className="control-button weather-toggle" onClick={()=>setSettingsPanel(settingsPanel==='weather'?null:'weather')} aria-label={t.ui.adjustWeather} aria-expanded={settingsPanel==='weather'} aria-controls="weather-settings" disabled={!ready||staticMode}>{weather.rain>0?<CloudRain size={16}/>:<Wind size={16}/>}<span>{weatherLabel}</span></Button>
     {settingsPanel==='weather'&&<dialog open ref={weatherPanel} id="weather-settings" className="settings-panel weather-panel" aria-labelledby="weather-title" onKeyDown={event=>event.stopPropagation()}>
@@ -344,9 +356,6 @@ export default function Experience({ initialLocale }: { initialLocale: Locale })
      <fieldset className="weather-presets" aria-label={t.ui.chooseWeather}>{Object.entries(WEATHER_PRESETS).map(([key,preset])=><Button key={key} variant="ghost" aria-pressed={Math.abs(weather.wind-preset.wind)<.005&&Math.abs(weather.rain-preset.rain)<.005&&Math.abs((weather.autumn??0)-('autumn' in preset?preset.autumn:0))<.005} onClick={()=>chooseWeather({...preset})}>{preset.rain===0?<Wind size={14}/>:<CloudRain size={14}/>}<span>{t.weather[key as keyof typeof WEATHER_PRESETS]}</span></Button>)}</fieldset>
      <output className="weather-listening-note">{weatherError||soundError?<><span>{soundError?t.ui.soundFailure:t.ui.rainFailure}</span><Button variant="ghost" disabled={soundBusy} onClick={()=>soundError?toggleSound():chooseWeather(weather)}>{soundError?t.ui.retrySound:t.ui.retryRain}</Button></>:weatherBusy||soundBusy?t.ui.soundLoading:soundEnabled?t.ui.adjustVolume:<><span>{t.ui.enableSoundHint}</span><Button variant="ghost" disabled={soundBusy} onClick={toggleSound}>{t.ui.enableSound}</Button></>}</output>
     </dialog>}
-   </div>
-   <div className="sound-controls">
-    <Button className="control-button sound-toggle" onClick={toggleSound} aria-busy={soundLoading} aria-label={soundBusy?t.ui.cancelSound:soundEnabled?t.ui.disableAmbience:soundError?t.ui.retryAmbience:t.ui.enableAmbience} aria-pressed={soundEnabled} disabled={!ready||staticMode}>{soundLoading?<LoaderCircle className="loading-spinner" size={16}/>:soundEnabled?<Volume2 size={16}/>:<VolumeX size={16}/>}<span>{soundEnabled?t.ui.listening:soundError?t.ui.retrySound:t.ui.listen}</span></Button>
    </div>
    <div className="render-controls">
     <Button ref={settingsButton} className="control-button render-toggle header-icon" aria-label={t.ui.settingsLabel} title={t.ui.settingsLabel} aria-expanded={settingsPanel==='preferences'} aria-controls="experience-settings" disabled={!ready||staticMode} onClick={()=>setSettingsPanel(settingsPanel==='preferences'?null:'preferences')}><SlidersHorizontal size={17}/></Button>
