@@ -2,7 +2,7 @@
 
 [English](README.md) · **简体中文** · [日本語](README.ja.md)
 
-竹林深处，外婆的老屋。一段可以走进去的 3D 记忆。
+竹海里的故乡，风还认得旧时的屋檐。一段可以走进去的 3D 记忆。
 
 **[走进竹林 →](https://yuuki.fans/cn)** · [English experience](https://yuuki.fans/) · [日本語で見る](https://yuuki.fans/ja)
 

@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md) · **日本語**
 
-竹林に囲まれた祖母の家。歩いてたどれる、小さな 3D の記憶です。
+竹の海に、ふるさとの面影。戻らぬ日々をそっとたどる、小さな 3D の風景。
 
 **[竹林を訪ねる →](https://yuuki.fans/ja)** · [English experience](https://yuuki.fans/) · [中文体验](https://yuuki.fans/cn)
 

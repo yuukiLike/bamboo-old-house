@@ -2,7 +2,7 @@
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
-A small, interactive 3D memory of my grandmother’s house, hidden in a bamboo grove.
+My home lies where the bamboo meets the sky; what time has taken, memory shall keep. A childhood remembered in 3D.
 
 **[Step into the grove →](https://yuuki.fans/)** · [中文体验](https://yuuki.fans/cn) · [日本語で見る](https://yuuki.fans/ja)
 
