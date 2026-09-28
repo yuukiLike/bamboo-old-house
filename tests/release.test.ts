@@ -11,7 +11,7 @@ import {
 
 async function writeLocalizedPages(directory: string) {
   for (const [file, language] of [
-    ['index.html', 'zh-CN'], ['en.html', 'en'], ['ja.html', 'ja'],
+    ['index.html', 'en'], ['cn.html', 'zh-CN'], ['en.html', 'en'], ['ja.html', 'ja'],
   ]) {
     await writeFile(join(directory, file), `<html lang="${language}"><body>Bamboo</body></html>`);
   }
@@ -25,7 +25,7 @@ await test('release requires an HTML entry point and accepts assets up to 25 MiB
   await writeLocalizedPages(directory);
   await writeFile(join(directory, 'model.glb'), '');
   await truncate(join(directory, 'model.glb'), maxAssetBytes);
-  assert.equal((await inspectAssets(directory)).files, 5);
+  assert.equal((await inspectAssets(directory)).files, 6);
   await truncate(join(directory, 'model.glb'), maxAssetBytes + 1);
   await assert.rejects(inspectAssets(directory), /25 MiB.*model.glb/);
 });
@@ -34,6 +34,14 @@ await test('release rejects omitted locales, wrong language markup, and a missin
   const directory = await mkdtemp(join(tmpdir(), 'bamboo-localized-release-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeLocalizedPages(directory);
+  await writeFile(join(directory, 'index.html'), '<html lang="zh-CN"></html>');
+  await assert.rejects(inspectAssets(directory), /Wrong HTML language in index.html/);
+  await writeFile(join(directory, 'index.html'), '<html lang="en"></html>');
+  await rm(join(directory, 'cn.html'));
+  await assert.rejects(inspectAssets(directory), /Missing localized page: cn.html/);
+  await writeFile(join(directory, 'cn.html'), '<html lang="en"></html>');
+  await assert.rejects(inspectAssets(directory), /Wrong HTML language in cn.html/);
+  await writeFile(join(directory, 'cn.html'), '<html lang="zh-CN"></html>');
   await rm(join(directory, 'en.html'));
   await assert.rejects(inspectAssets(directory), /Missing localized page: en.html/);
   await writeFile(join(directory, 'en.html'), '<html lang="zh-CN"></html>');
@@ -62,7 +70,7 @@ await test('upload rejects a changed commit, branch, or asset after preparation'
   );
   await writeFile(join(directory, 'release.json'), JSON.stringify(manifest));
   assert.deepEqual(await inspectAssets(directory), assets);
-  await writeFile(join(directory, 'index.html'), '<html lang="zh-CN"><h1>Changed</h1></html>');
+  await writeFile(join(directory, 'index.html'), '<html lang="en"><h1>Changed</h1></html>');
   const changedAssets = await inspectAssets(directory);
   assert.throws(
     () => verifyRelease(manifest, source, changedAssets),

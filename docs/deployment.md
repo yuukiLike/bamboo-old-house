@@ -14,15 +14,16 @@
 
 | 访问路径 | 语言 | 构建文件 |
 | --- | --- | --- |
-| `/` | 中文 | `dist/client/index.html` |
-| `/en` | English | `dist/client/en.html` |
+| `/` | English（默认） | `dist/client/index.html` |
+| `/cn` | 中文 | `dist/client/cn.html` |
 | `/ja` | 日本語 | `dist/client/ja.html` |
+| `/en` | English（兼容旧链接） | `dist/client/en.html` |
 
 Cloudflare Pages 会将路径匹配到对应 HTML，并支持省略 `.html` 的网址，因此三语使用同一个 Pages 项目即可。[Pages 路径匹配](https://developers.cloudflare.com/pages/configuration/serving-pages/)
 
-`pnpm run build` 在静态导出后自动检查三语文件、各自的 HTML `lang`、`404.html` 和单文件大小；任一不符合时构建失败。保留生成的 `404.html`，未知路径返回404。不要增加将所有路径重写到中文 `index.html` 的 SPA 回退规则。
+`pnpm run build` 在静态导出后自动检查三个语言入口及 `/en` 兼容页、各自的 HTML `lang`、`404.html` 和单文件大小；任一不符合时构建失败。保留生成的 `404.html`，未知路径返回404。不要增加将所有路径重写到英文 `index.html` 的 SPA 回退规则。
 
-Cloudflare 的构建命令仍为 `pnpm run build`，输出目录仍为 `dist/client`。若要上传本地目录，上传整个 `dist/client`，包含语言页面、`_next`、模型与音频资源。切换语言使用URL，部署后可直接分享 `/en`。
+Cloudflare 的构建命令仍为 `pnpm run build`，输出目录仍为 `dist/client`。若要上传本地目录，上传整个 `dist/client`，包含语言页面、`_next`、模型与音频资源。切换语言使用URL；部署后直接分享根域名即为英文，中文使用 `/cn`，原 `/en` 链接仍显示英文。语言链接与 `hreflang` 使用这三个正式入口。
 
 公开页面不显示语言切换按钮。个人测试时在网址后加 `?localeTest=1`（例如 `/en?localeTest=1`），即可显示三语切换入口；移除该参数后隐藏。该参数仅控制测试入口的显示。
 

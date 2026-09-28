@@ -64,7 +64,7 @@ python3 -m http.server 4180 --bind 127.0.0.1 --directory outputs/performance
 
 | 参数 | 默认值 | 含义 |
 | --- | --- | --- |
-| `--url` | `http://127.0.0.1:4175/` | 已启动的生产预览服务 |
+| `--url` | `http://127.0.0.1:4175/cn` | 已启动的生产预览服务；交互脚本使用中文控件名称 |
 | `--profile` | `desktop` | `desktop` 请求 1440×900 外窗、DPR 1；`mobile` 模拟 402×874 视口、DPR 2 |
 | `--iterations` | `3` | 独立浏览器轮次，1–30 |
 | `--mode` | `baseline` | 轻量采集；`diagnostic` 加 trace、JS 采样和截图 |
@@ -179,12 +179,12 @@ sitespeed/           原生报告、场景 JSON；诊断模式另含 trace 与�
 优化前先建基线，之后固定同一组参数，采集结束即输出对比报告：
 
 ```sh
-pnpm perf --url http://127.0.0.1:4175/ --flow views --profile desktop \
+pnpm perf --url http://127.0.0.1:4175/cn --flow views --profile desktop \
   --mode baseline --observe-ms 5000 --iterations 3 --instrumentation on \
   --adapter scripts/perf/adapters/bamboo.cjs --out outputs/performance/desktop-views-before
 
 # 修改并重新构建后，仍使用同一浏览器、驱动和预览服务配置
-pnpm perf --url http://127.0.0.1:4175/ --flow views --profile desktop \
+pnpm perf --url http://127.0.0.1:4175/cn --flow views --profile desktop \
   --mode baseline --observe-ms 5000 --iterations 3 --instrumentation on \
   --adapter scripts/perf/adapters/bamboo.cjs --out outputs/performance/desktop-views-after \
   --compare outputs/performance/desktop-views-before

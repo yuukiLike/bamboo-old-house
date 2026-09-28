@@ -41,10 +41,11 @@ export async function inspectAssets(directory) {
       'Missing dist/client/index.html; run pnpm build:release first.',
     );
   }
-  // Cloudflare serves these files directly at /, /en and /ja. A successful
+  // Cloudflare serves /, /cn and /ja, plus the legacy /en link. A successful
   // bundle alone is not enough if prerendering omitted or mistagged a locale.
   for (const [path, language] of [
-    ['index.html', 'zh-CN'],
+    ['index.html', 'en'],
+    ['cn.html', 'zh-CN'],
     ['en.html', 'en'],
     ['ja.html', 'ja'],
   ]) {
@@ -59,7 +60,7 @@ export async function inspectAssets(directory) {
   }
   // Without this file, Pages falls back to serving the root for unknown URLs.
   if (!files.some((file) => file.path === '404.html')) {
-    throw new Error('Missing 404.html; unknown paths must not fall back to Chinese.');
+    throw new Error('Missing 404.html; unknown paths must not fall back to the home page.');
   }
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return {

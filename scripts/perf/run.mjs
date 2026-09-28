@@ -8,6 +8,7 @@ const local = file => fileURLToPath(new URL(file, import.meta.url));
 export function runProject(argv = process.argv.slice(2)) {
   return run(argv, {
     usage: 'pnpm perf',
+    url: 'http://127.0.0.1:4175/cn',
     flow: 'journey',
     instrumentation: 'on',
     adapter: local('./adapters/bamboo.cjs'),

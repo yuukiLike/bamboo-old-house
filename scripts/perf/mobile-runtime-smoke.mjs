@@ -25,7 +25,7 @@ function validateWorkload(workload){
  const audioSoakSeconds=Number(process.env.PERF_AUDIO_SOAK_SECONDS??90);
  assert.ok(Number.isFinite(audioSoakSeconds)&&audioSoakSeconds>=0);
  await fs.mkdir(out,{recursive:true});
- const url=new URL(process.env.PERF_URL || 'http://127.0.0.1:4175/');
+ const url=new URL(process.env.PERF_URL || 'http://127.0.0.1:4175/cn');
  url.searchParams.set('perf','1');url.searchParams.set('perfUI','1');
  const browser=await chromium.launch({headless:false,executablePath:process.env.PERF_CHROME || '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary'});
  try{

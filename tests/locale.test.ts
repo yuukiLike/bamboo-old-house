@@ -7,20 +7,26 @@ import { ja } from '../src/content/ja.ts';
 import { WALK_CHAPTERS } from '../src/components/walk-navigation.ts';
 
 await test('published suffixes select a language, including a trailing slash', () => {
-  assert.equal(localeFromSegments(), 'zh');
-  for (const locale of LOCALES) {
-    const path = localePath(locale);
+  assert.equal(localeFromSegments(), 'en');
+  for (const [path, locale] of [['/', 'en'], ['/cn', 'zh'], ['/ja', 'ja'], ['/en', 'en']]) {
     assert.equal(localeFromPathname(path), locale);
-    assert.equal(localeFromSegments(locale === 'zh' ? [] : [locale]), locale);
-    if (locale !== 'zh') assert.equal(localeFromPathname(`${path}/`), locale);
+    assert.equal(localeFromSegments(path === '/' ? [] : [path.slice(1)]), locale);
+    if (path !== '/') assert.equal(localeFromPathname(`${path}/`), locale);
   }
 });
 
+await test('language links use the English home page and the Chinese cn path', () => {
+  assert.equal(localePath('en'), '/');
+  assert.equal(localePath('zh'), '/cn');
+  assert.equal(localePath('ja'), '/ja');
+  for (const locale of LOCALES) assert.equal(localeFromPathname(localePath(locale)), locale);
+});
+
 await test('unknown or nested suffixes cannot silently become a language page', () => {
-  for (const segments of [['zh'], ['EN'], ['fr'], ['en', 'ja'], ['ja', 'house']]) {
+  for (const segments of [['zh'], ['EN'], ['CN'], ['fr'], ['en', 'ja'], ['cn', 'house'], ['ja', 'house']]) {
     assert.equal(localeFromSegments(segments), undefined);
   }
-  for (const path of ['/english', '/enough', '/EN', '/en/house', '/ja//', '/zh']) {
+  for (const path of ['/english', '/enough', '/EN', '/CN', '/en/house', '/cn/house', '/cn//', '/ja//', '/zh']) {
     assert.equal(localeFromPathname(path), undefined);
   }
 });

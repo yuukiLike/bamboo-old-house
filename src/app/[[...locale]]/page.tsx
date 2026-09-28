@@ -4,7 +4,7 @@ import { localeFromSegments } from '@/content/locale';
 
 export const dynamicParams = false;
 export function generateStaticParams() {
-  return [{ locale: [] }, { locale: ['en'] }, { locale: ['ja'] }];
+  return [{ locale: [] }, { locale: ['cn'] }, { locale: ['en'] }, { locale: ['ja'] }];
 }
 
 export default async function Home({ params }: { params: Promise<{ locale?: string[] }> }) {
