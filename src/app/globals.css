@@ -370,6 +370,7 @@ html:lang(en) :is(.well-story,.breeze-story) h1 { font-size:31px; }
 html:lang(ja) :is(.well-story,.breeze-story) .porch-copy { max-width:370px; }
 html:lang(ja) :is(.well-story,.breeze-story) h1 { font-size:26px; }
 .site-header { align-items:flex-start; }
+.site-header[data-locale-test='true'] { --language-switch-height:43px; }
 .wordmark { min-width:0; }
 html:lang(en) .wordmark { max-width:280px; line-height:1.2; }
 .language-switch { position:absolute; top:76px; left:48px; display:flex; align-items:center; gap:16px; }
@@ -404,7 +405,7 @@ html:lang(en) .render-segments button,html:lang(ja) .render-segments button { fo
  html:lang(ja) .wordmark { font-size:16px; line-height:1.5; }
  .language-switch { left:14px; top:calc(max(12px,env(safe-area-inset-top)) + 48px); gap:18px; }
  .language-switch a { min-height:40px; font-size:11px; }
- .day-switch { top:calc(max(12px,env(safe-area-inset-top)) + 91px); }
+ .day-switch { top:calc(max(12px,env(safe-area-inset-top)) + 48px + var(--language-switch-height,0px)); }
  .chapter-copy,.is-walk .chapter-copy { top:max(178px,24svh); max-width:360px; max-height:calc(100svh - max(178px,24svh) - 170px); }
  .chapter-kicker { font-size:12px; margin-bottom:12px; }
  html:lang(en) .chapter h1 { font-size:36px; }

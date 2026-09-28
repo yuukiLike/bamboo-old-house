@@ -24,6 +24,8 @@ Cloudflare Pages 会将路径匹配到对应 HTML，并支持省略 `.html` 的�
 
 Cloudflare 的构建命令仍为 `pnpm run build`，输出目录仍为 `dist/client`。若要上传本地目录，上传整个 `dist/client`，包含语言页面、`_next`、模型与音频资源。切换语言使用URL，部署后可直接分享 `/en`。
 
+公开页面不显示语言切换按钮。个人测试时在网址后加 `?localeTest=1`（例如 `/en?localeTest=1`），即可显示三语切换入口；移除该参数后隐藏。该参数仅控制测试入口的显示。
+
 ## 为什么使用 `wrangler.static.jsonc`
 
 Vinext 会检测默认名称的 `wrangler.jsonc`、`wrangler.json` 等文件，将项目识别为 Cloudflare Workers 项目。为避免干扰 `output: 'export'` 的静态导出，提交 `33a9d0a` 专门把 `wrangler.jsonc` 改名为 `wrangler.static.jsonc`。

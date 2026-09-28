@@ -26,7 +26,7 @@ function StoryCopy({ story }: { story: Content['moon'] }) {
 }
 
 export default function Experience({ initialLocale }: { initialLocale: Locale }) {
- const { locale, changeLanguage, t } = useLanguage(initialLocale);
+ const { locale, changeLanguage, showLanguageSwitch, t } = useLanguage(initialLocale);
  const progressText = useRef(t.ui.progress);
  const progressPercent = useRef(0);
  const performancePanel = usePerformancePanel(bambooPerformanceAdapter);
@@ -323,12 +323,12 @@ export default function Experience({ initialLocale }: { initialLocale: Locale })
     <span className="scene-entry-track" aria-hidden="true"><span /></span>
    </span>
   </output>
-  <header className="site-header">
+  <header className="site-header" data-locale-test={showLanguageSwitch}>
    <a className="wordmark" href="#bamboo" onClick={(e)=>{e.preventDefault();chooseView('walk',returnHome);}} aria-label={t.ui.home}><span className="wordmark-icon" aria-hidden="true" /><span>{t.brand}</span></a>
-   <nav className="language-switch" aria-label={t.ui.language}>{LOCALES.map(next=><a key={next} href={localePath(next)} hrefLang={HTML_LANG[next]} lang={HTML_LANG[next]} aria-current={locale===next?'page':undefined} onClick={event=>{
+   {showLanguageSwitch&&<nav className="language-switch" aria-label={t.ui.language}>{LOCALES.map(next=><a key={next} href={`${localePath(next)}?localeTest=1`} hrefLang={HTML_LANG[next]} lang={HTML_LANG[next]} aria-current={locale===next?'page':undefined} onClick={event=>{
     if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
     event.preventDefault();changeLanguage(next);
-   }}>{LOCALE_NAMES[next]}</a>)}</nav>
+   }}>{LOCALE_NAMES[next]}</a>)}</nav>}
    <div className="header-aside">
    <ToggleGroup className="day-switch" value={[timeOfDay]} onValueChange={(values)=>{if(values[0]==='dawn'||values[0]==='day'||values[0]==='dusk'||values[0]==='night')chooseTime(values[0]);}} aria-label={t.ui.time} disabled={!ready||staticMode}>
     <ToggleGroupItem value="dawn" aria-label={t.ui.dawn}><Sunrise size={15} strokeWidth={1.5}/><span>{t.ui.dawn}</span></ToggleGroupItem>
