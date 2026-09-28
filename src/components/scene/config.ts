@@ -36,18 +36,18 @@ export const BREEZE_VIEW = {p:[7,1.70,26],direction:[-7,2,-28],fov:64};
 // eye 1.15 m above it. This p.y is absolute; the well and courtyard remain in view.
 export const WELL_RAIN_VIEW = {p:[-4.2,1.35,1.2],direction:[4,-2.2,10],fov:68};
 export type RoomId = 'upstairs' | 'store' | 'room-one' | 'room-two' | 'hall' | 'kitchen';
-export const ROOM_VIEWS: Record<RoomId, {label:string; p:number[]; t:number[]; fov:number}> = {
- upstairs: {label:'二层厅堂',p:[-1.3,4.85,-3.8],t:[.2,4.7,14],fov:66},
- store: {label:'仓库',p:[5.9,4.85,-5.35],t:[5,4.3,3.5],fov:74},
- 'room-one': {label:'住屋一',p:[.65,4.85,-9.35],t:[2.25,4.8,-15],fov:66},
- 'room-two': {label:'住屋二',p:[6.05,4.85,-9.35],t:[8.7,4.8,-15],fov:66},
- hall: {label:'一楼堂屋',p:[-1.65,1.75,-1.9],t:[2.2,1.4,.1],fov:74},
- kitchen: {label:'一楼厨房',p:[-4.2,1.80,-4.7],t:[-7,1.8,-12],fov:74},
+export const ROOM_VIEWS: Record<RoomId, {p:number[]; t:number[]; fov:number}> = {
+ upstairs: {p:[-1.3,4.85,-3.8],t:[.2,4.7,14],fov:66},
+ store: {p:[5.9,4.85,-5.35],t:[5,4.3,3.5],fov:74},
+ 'room-one': {p:[.65,4.85,-9.35],t:[2.25,4.8,-15],fov:66},
+ 'room-two': {p:[6.05,4.85,-9.35],t:[8.7,4.8,-15],fov:66},
+ hall: {p:[-1.65,1.75,-1.9],t:[2.2,1.4,.1],fov:74},
+ kitchen: {p:[-4.2,1.80,-4.7],t:[-7,1.8,-12],fov:74},
 };
 // Outdoor places use absolute standing eye heights on the actual courtyard surface.
 export const OUTDOOR_VIEWS = {
- courtyard: {label:'屋前空地',p:[-1.5,1.4274203222107813,11],t:[-.5,3,-.5],fov:68},
- 'yard-edge': {label:'院内竹荫',p:[7.5,1.6034467727,8.3],t:[-2.7,2.6,.7],fov:64},
+ courtyard: {p:[-1.5,1.4274203222107813,11],t:[-.5,3,-.5],fov:68},
+ 'yard-edge': {p:[7.5,1.6034467727,8.3],t:[-2.7,2.6,.7],fov:64},
 } as const;
 export const PLACE_VIEWS = {...OUTDOOR_VIEWS,...ROOM_VIEWS};
 export type PlaceId = keyof typeof PLACE_VIEWS;

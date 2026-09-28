@@ -27,8 +27,9 @@ import { beginPhase, measurePhase, phaseStatus, performanceEnabled, performanceC
 import { shadeWindowRecesses } from './window-light';
 import { stabilizeHouseSurfaces } from './house-surfaces';
 import { BUILD_ID, PORCH_VIEW, MOON_VIEW, BREEZE_VIEW, WELL_RAIN_VIEW, ROOM_VIEWS, PLACE_VIEWS, groundHeight, pathClearance, treePositions, cameraProgress, followWalkProgress, positionPath, targetPath, type ViewMode, type TimeOfDay, type PlaceId } from './config';
-export interface SceneHandle { transition:ReturnType<typeof createViewTransition>;afterNextFrame:(complete:()=>void)=>()=>void;dispose:()=>void;setRenderSettings:(value:RenderSettings)=>void;setWeather:(value:WeatherSettings)=>void;setPaused:(value:boolean)=>void;reset:()=>void;setView:(view:ViewMode)=>void;setTimeOfDay:(value:TimeOfDay)=>void;setPanorama:(value:boolean)=>void;setPlace:(value:PlaceId)=>void; }
-interface Hooks {onFailure:()=>void;onPanorama:(value:boolean)=>void;onBearing:(value:number)=>void;onGust?:(strength:number)=>void;onRunoff?:(flow:number)=>void;onStage?:(label:string)=>void;}
+export type SceneStage = 'entering' | 'waking' | 'bamboo' | 'ground' | 'wind' | 'light';
+export interface SceneHandle { setDescription:(label:string)=>void; transition:ReturnType<typeof createViewTransition>;afterNextFrame:(complete:()=>void)=>()=>void;dispose:()=>void;setRenderSettings:(value:RenderSettings)=>void;setWeather:(value:WeatherSettings)=>void;setPaused:(value:boolean)=>void;reset:()=>void;setView:(view:ViewMode)=>void;setTimeOfDay:(value:TimeOfDay)=>void;setPanorama:(value:boolean)=>void;setPlace:(value:PlaceId)=>void; }
+interface Hooks {onFailure:()=>void;onPanorama:(value:boolean)=>void;onBearing:(value:number)=>void;onGust?:(strength:number)=>void;onRunoff?:(flow:number)=>void;onStage?:(label:SceneStage)=>void;}
 interface Diagnostics {programs:number;cpuUpdateMs:number|null;cpuRenderSubmitMs:number|null;renderSettings:RenderSettings;directionalShadowRequests:number;startupMs:number;pixelRatio:number;windGust:number;weather:{wind:number;rain:number;wetness:number;mud:number;autumn:number};fallingLeaves:Record<string,number>;rainEffects:Record<string,unknown>;build:string;quality:string;gpu:string;viewport:number[];drawSize:number[];progress:number;camera:number[];target:number[];drawCalls:number;triangles:number;textures:number;geometries:number;frames:number[];windTime:number;paused:boolean;bambooCount:number;viewMode:ViewMode;place:PlaceId;timeOfDay:TimeOfDay;nightMix:number;dawnMix:number;duskMix:number;panorama:boolean;yaw:number;pitch:number;fov:number;getPoster:()=>string;reset:()=>void;}
 declare global { interface Window { __BAMBOO__?:Diagnostics; } }
 
@@ -146,7 +147,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
    const gltf=await loader.parseAsync(buffer.buffer,'/models/');if(disposed){disposeObjects(gltf.scene);releaseResources();throw new Error('SCENE_DISPOSED');}loadedGroups.push(gltf.scene);finish();return gltf.scene;
    }catch(error){finish(controller.signal.aborted?'cancelled':phaseStatus(error));throw error;}
   };
-  hooks.onStage?.('正在唤醒竹林与庭院');
+  hooks.onStage?.('waking');
   const houseIndices=loadHouseLod(controller.signal);void houseIndices.catch(()=>{});
   const models=Promise.all([fetchModel('/models/architecture.glb',0),fetchModel('/models/bamboo.glb',1),fetchModel('/models/understory.glb',2),fetchModel('/models/background-foliage.glb',3),fetchModel('/models/porch-bamboo.glb',4),fetchModel('/models/dry-fuel.glb',5)]);
   // Begin downloads before generating terrain and textures on the main thread.
@@ -157,7 +158,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   const environment=measurePhase('scene.environment-build',()=>addEnvironment(scene,renderer,mobile,time,night,dawn,dusk,weather),{mobile});cleanEnvironment=environment.dispose;
   const [house,bamboo,understory,foliage,porchBamboo,fuel]=await models;
   measurePhase('scene.house-surfaces',()=>stabilizeHouseSurfaces(house));
-  hooks.onStage?.('正在扶起一片竹海');
+  hooks.onStage?.('bamboo');
   await yieldConstruction();
   finishConstruction=beginPhase('scene.house-and-vegetation-build',{mobile});
   house.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;const materials=Array.isArray(o.material)?o.material:[o.material];for(const material of materials){if(material instanceof T.MeshStandardMaterial){material.envMapIntensity=.45;for(const tex of [material.map,material.normalMap,material.roughnessMap])if(tex)tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
@@ -183,7 +184,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   scene.add(house);addBackgroundFoliage(scene,foliage,weather);addUnderstoryAssets(scene,understory,mobile,weather);bamboo.updateMatrixWorld(true);const field=addBamboo(scene,bamboo,time,mobile,night,weather);
   addPorchBamboo(scene,porchBamboo,time,night,bamboo,weather);
   finishConstruction();
-  hooks.onStage?.('正在铺开林下草地');
+  hooks.onStage?.('ground');
   await yieldConstruction();
   finishConstruction=beginPhase('scene.forest-floor-build',{mobile});
   addDryFuel(scene,fuel);
@@ -192,7 +193,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   addWoodlandFinish(scene,mobile,groundHeight,pathClearance,treePositions());
   addPineBank(scene,mobile,weather);
   finishConstruction();
-  hooks.onStage?.('正在让风穿过竹叶');
+  hooks.onStage?.('wind');
   await yieldConstruction();
   finishConstruction=beginPhase('scene.weather-build',{mobile});
   const weatherEffects=createWeather(scene,house,camera,mobile,weather);cleanWeather=()=>weatherEffects.dispose();
@@ -326,7 +327,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
    updateHouseDetail(viewMode==='free'&&Object.hasOwn(ROOM_VIEWS,place));
   };
   updateCamera();instanceWind.update(time.value,weather.wind.value);environment.update();compiling=true;
-  hooks.onStage?.('正在把光洒进竹林');
+  hooks.onStage?.('light');
   const finishPrewarm=beginPhase('startup.prewarm',{mobile});
   let finishCompile:FinishPhase|undefined;
   // Three polls program readiness asynchronously; retain its material properties until that settles.
@@ -426,7 +427,7 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
     diagnostics.panorama=controls.active;diagnostics.yaw=controls.yaw;diagnostics.pitch=controls.pitch;diagnostics.fov=camera.fov;
    }
   };raf=requestAnimationFrame(tick);
-  return {transition:viewTransition,afterNextFrame:(complete)=>{if(disposed)return()=>{};idleRendering.invalidate();return frameReady.wait(complete);},dispose:cleanup,setRenderSettings,setWeather:(value)=>weatherState.set(value),setPaused:(value:boolean)=>{if(paused!==value){idleRendering.invalidate();shadowUpdates.invalidate();}paused=value;},reset,setView,setPlace,setPanorama,setTimeOfDay:(value:TimeOfDay)=>{timeOfDay=value;}};
+  return {setDescription:label=>controls.setDescription(label),transition:viewTransition,afterNextFrame:(complete)=>{if(disposed)return()=>{};idleRendering.invalidate();return frameReady.wait(complete);},dispose:cleanup,setRenderSettings,setWeather:(value)=>weatherState.set(value),setPaused:(value:boolean)=>{if(paused!==value){idleRendering.invalidate();shadowUpdates.invalidate();}paused=value;},reset,setView,setPlace,setPanorama,setTimeOfDay:(value:TimeOfDay)=>{timeOfDay=value;}};
  }catch(error){finishConstruction?.(phaseStatus(error));cleanup();throw error;}
 }
 

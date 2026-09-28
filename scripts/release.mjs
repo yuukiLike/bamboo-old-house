@@ -41,6 +41,26 @@ export async function inspectAssets(directory) {
       'Missing dist/client/index.html; run pnpm build:release first.',
     );
   }
+  // Cloudflare serves these files directly at /, /en and /ja. A successful
+  // bundle alone is not enough if prerendering omitted or mistagged a locale.
+  for (const [path, language] of [
+    ['index.html', 'zh-CN'],
+    ['en.html', 'en'],
+    ['ja.html', 'ja'],
+  ]) {
+    if (!files.some((file) => file.path === path)) {
+      throw new Error(`Missing localized page: ${path}; run pnpm build again.`);
+    }
+    const html = await readFile(resolve(directory, path), 'utf8');
+    const actual = html.match(/<html\b[^>]*\blang\s*=\s*["']([^"']+)["']/i)?.[1];
+    if (actual !== language) {
+      throw new Error(`Wrong HTML language in ${path}: expected ${language}, got ${actual || 'none'}.`);
+    }
+  }
+  // Without this file, Pages falls back to serving the root for unknown URLs.
+  if (!files.some((file) => file.path === '404.html')) {
+    throw new Error('Missing 404.html; unknown paths must not fall back to Chinese.');
+  }
   files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return {
     sha256: createHash('sha256').update(JSON.stringify(files)).digest('hex'),

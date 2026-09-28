@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vinext dev",
-    "build": "vinext build",
+    "build": "vinext build && node scripts/release.mjs inspect",
     "check": "pnpm typecheck && pnpm lint && pnpm test && node scripts/generate-bamboo-lod.mjs --check && node --experimental-strip-types scripts/generate-house-lod.mjs --check",
     "build:release": "pnpm check && pnpm build && node scripts/release.mjs prepare",
     "deploy:preview": "node scripts/release.mjs upload",

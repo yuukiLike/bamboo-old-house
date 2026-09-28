@@ -8,10 +8,10 @@ export interface WeatherUniforms {
  autumn: {value:number};
 }
 export const WEATHER_PRESETS = {
- breeze: {label:'晴风',wind:.28,rain:0},
- autumn: {label:'大风',wind:.9,rain:0,autumn:1},
- drizzle: {label:'细雨',wind:.34,rain:.42},
- storm: {label:'暴雨',wind:.86,rain:1},
+ breeze: {wind:.28,rain:0},
+ autumn: {wind:.9,rain:0,autumn:1},
+ drizzle: {wind:.34,rain:.42},
+ storm: {wind:.86,rain:1},
 } as const;
 export const DEFAULT_WEATHER: WeatherSettings = {wind:WEATHER_PRESETS.breeze.wind,rain:0};
 

@@ -10,6 +10,20 @@
 | Node.js 要求 | `>=22.13.0`，与 `package.json` 一致 |
 | pnpm | `11.14.0`，构建变量可设 `PNPM_VERSION=11.14.0` |
 
+## 三语页面
+
+| 访问路径 | 语言 | 构建文件 |
+| --- | --- | --- |
+| `/` | 中文 | `dist/client/index.html` |
+| `/en` | English | `dist/client/en.html` |
+| `/ja` | 日本語 | `dist/client/ja.html` |
+
+Cloudflare Pages 会将路径匹配到对应 HTML，并支持省略 `.html` 的网址，因此三语使用同一个 Pages 项目即可。[Pages 路径匹配](https://developers.cloudflare.com/pages/configuration/serving-pages/)
+
+`pnpm run build` 在静态导出后自动检查三语文件、各自的 HTML `lang`、`404.html` 和单文件大小；任一不符合时构建失败。保留生成的 `404.html`，未知路径返回404。不要增加将所有路径重写到中文 `index.html` 的 SPA 回退规则。
+
+Cloudflare 的构建命令仍为 `pnpm run build`，输出目录仍为 `dist/client`。若要上传本地目录，上传整个 `dist/client`，包含语言页面、`_next`、模型与音频资源。切换语言使用URL，部署后可直接分享 `/en`。
+
 ## 为什么使用 `wrangler.static.jsonc`
 
 Vinext 会检测默认名称的 `wrangler.jsonc`、`wrangler.json` 等文件，将项目识别为 Cloudflare Workers 项目。为避免干扰 `output: 'export'` 的静态导出，提交 `33a9d0a` 专门把 `wrangler.jsonc` 改名为 `wrangler.static.jsonc`。

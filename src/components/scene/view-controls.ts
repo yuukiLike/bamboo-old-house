@@ -142,6 +142,8 @@ export class ViewControls {
     this.pitch = T.MathUtils.clamp(this.pitch + pitch, -Math.PI * .42, Math.PI * .42);
   }
 
+  setDescription(label: string) { this.canvas.setAttribute('aria-label', label); }
+
   setActive(active: boolean) {
     this.active = active;
     this.setGestureEvents(active);
@@ -149,7 +151,6 @@ export class ViewControls {
     this.canvas.style.touchAction = active ? 'none' : 'pan-y';
     this.canvas.style.cursor = active ? 'grab' : '';
     this.canvas.tabIndex = active ? 0 : -1;
-    this.canvas.setAttribute('aria-label', '360 度庭院与竹林视角，双指滑动或拖动环顾，捏合缩放，方向键环顾，加减号缩放，Home 复位，Escape 退出');
     if (active) this.canvas.focus({ preventScroll: true });
   }
 

@@ -1,13 +1,13 @@
 # 截图模式、多语言、3D 性能与发布流程
 
-状态：四个本地 issue 已建立，保存于 `docs/issues` 问题集合分支，尚未创建 GitHub Issues。问题集合推送后，另开分支实施 LOCAL-004；其他功能与性能测量尚未开始。
+状态：本页保留初期工作顺序。2026-09-28 多语言已实现并验收，部署方式见 `docs/deployment.md`；各项实际进度以对应 issue 为准。
 
 参考版本：`v0.1.0` / `dbd8e74`。准备阶段已创建 `feat/photo-mode`；其他开发分支在对应工作开始时创建。
 
 ## 已确认的需求
 
 1. 支持专门用于截图的模式，提供截图按钮，保持极简实现。
-2. 支持中文、英文、日语；三种语言的文案各自独立编写，不要求逐句对应，由用户稍后提供，助手暂不代拟。
+2. 支持中文、英文、日语。2026-09-28 最终决定：中文保留现有叙事，英文采用莎士比亚式创作，日文以物哀为方向；网址 `/`、`/en`、`/ja` 决定语言。已完成实现与本地验收，详见[三语实现说明](./three-language-experience.md)与[场景文稿](../content/three-language-narrative.md)。
 3. 四个本地 issue 和计划先推送到独立问题集合分支，再开始实现预览、发布与回退流程。
 4. 使用 Chrome DevTools、stats-gl、Three.js 原生统计等工具建立当前 3D 性能基线，再据此优化。
 5. 每次优化前记录拟优化的具体过程、细节和证据，完成后补充实际改动、复测与回退结论。
@@ -20,7 +20,7 @@
 | 1 | [LOCAL-004：预览环境、正式发布与回退流程](../issues/004-preview-release.md) | `chore/preview-release`，待创建 |
 | 2 | [LOCAL-003：3D 性能基线与优化证据记录流程](../issues/003-3d-performance-baseline.md) | `perf/3d-baseline`，待创建 |
 | 3 | [LOCAL-001：极简截图模式与 PNG 截图按钮](../issues/001-photo-mode.md) | `feat/photo-mode`，已创建 |
-| 4 | [LOCAL-002：中英日切换及各语言独立文案](../issues/002-localized-content.md) | `feat/localized-content`，待创建 |
+| 4 | [LOCAL-002：中英日切换及各语言独立文案](../issues/002-localized-content.md) | `main`，已实现并验收 |
 
 详细范围、待确认问题、实现约束和验收标准已移入对应 issue 文件，本计划不再重复维护完整规格。统一入口为 [本地 Issues 索引](../issues/README.md)。
 

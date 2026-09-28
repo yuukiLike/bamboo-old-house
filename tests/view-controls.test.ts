@@ -13,7 +13,8 @@ class Canvas extends EventTarget {
   setPointerCapture() {}
   hasPointerCapture() { return false; }
   releasePointerCapture() {}
-  setAttribute() {}
+  attributes = new Map<string, string>();
+  setAttribute(name: string, value: string) { this.attributes.set(name, value); }
 }
 // Exercise the real gesture handlers; trusted input is checked in the browser.
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -38,6 +39,18 @@ afterEach(() => {
   controls.dispose();
   if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
   else Reflect.deleteProperty(globalThis, 'window');
+});
+
+await test('changing the accessible language keeps the current panorama and zoom', () => {
+  controls.setActive(true);
+  controls.rotate(.8, -.2);
+  wheel({ deltaY: -10, ctrlKey: true });
+  const orientation = [controls.yaw, controls.pitch, controls.zoom];
+  controls.setDescription('矢印キーで見回す');
+  assert.equal(canvas.attributes.get('aria-label'), '矢印キーで見回す');
+  assert.deepEqual([controls.yaw, controls.pitch, controls.zoom], orientation);
+  assert.equal(controls.active, true);
+  assert.equal(canvas.tabIndex, 0);
 });
 
 await test('trackpad scrolling pans and reverses without zoom or an inertia tail; walking keeps native scrolling', () => {
