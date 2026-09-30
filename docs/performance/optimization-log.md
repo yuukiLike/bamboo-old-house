@@ -19,21 +19,18 @@
 
 ## 在线复测节点
 
-2026-09-30，九个节点均构建、部署成功，页面与主要资源返回 HTTP 200；保留各提交原样，本次未重新采集性能。链接固定到本次部署，并开启检测面板。
+四个节点统一使用完整的 Scene Perf 面板、采集器、交互脚本和可视化对比报告；旧版仅补检测接口。新的分支正在构建和部署。
 
-| 节点 | preview 分支 | 提交 | 在线检测 |
+| 节点 | preview 分支 | 场景基点 | 在线检测 |
 | --- | --- | --- | --- |
-| 00 · 原始基线 | [preview/perf-00-baseline](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-00-baseline) | [3f382ac](https://github.com/yuukiLike/bamboo-old-house/commit/3f382ac0fb84e35ca52593e2630c660c078d723d) | [打开](https://42c0795f.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
-| 01 · [空间索引与植被裁剪](./optimizations/001-tidewater-transfer.md) | [preview/perf-01-spatial](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-01-spatial) | [83baa2e](https://github.com/yuukiLike/bamboo-old-house/commit/83baa2e119b40d0c76a69da874d83f2088f4ff5f) | [打开](https://a0c33984.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
-| 02 · [雨效索引容量](./optimizations/002-rain-index.md) | [preview/perf-02-rain](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-02-rain) | [0be5bec](https://github.com/yuukiLike/bamboo-old-house/commit/0be5bec68d9e9ac505c9c15026802c6009670fe3) | [打开](https://27dba498.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
-| 03 · [共用渲染与阴影调度](./optimizations/003-global-rendering.md) | [preview/perf-03-render](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-03-render) | [8a9033d](https://github.com/yuukiLike/bamboo-old-house/commit/8a9033d5e2f704580e391840aed85bc65975bb62) | [打开](https://b3e2772b.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
-| 04 · [检测生命周期与画质配置](./optimizations/004-mobile-runtime.md) | [preview/perf-04-runtime](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-04-runtime) | [c24ca12](https://github.com/yuukiLike/bamboo-old-house/commit/c24ca123b308a7e5f94db56a7af97f81638d3c3a) | [打开](https://f9311cb7.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
-| 05 · [音频、竹叶缓存与 resize](./optimizations/005-mobile-load.md) | [preview/perf-05-audio](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-05-audio) | [e23daec](https://github.com/yuukiLike/bamboo-old-house/commit/e23daec77945c4b70d07f0956a9bcdc12232fe45) | [打开](https://dc885de0.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
-| 06 · [闲置资源与静止绘制](./optimizations/006-mobile-gpu-residency.md) | [preview/perf-06-idle](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-06-idle) | [71917cc](https://github.com/yuukiLike/bamboo-old-house/commit/71917cc7ca68a7dcd57d044968cf153ddd0bf70c) | [打开](https://10e6f01f.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
-| 07 · 远景 LOD 与移动游览 | [preview/perf-07-lod](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-07-lod) | [01b0727](https://github.com/yuukiLike/bamboo-old-house/commit/01b0727f92b0435686cfad059af794f4943af43a) | [打开](https://38b3022e.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
-| 08 · 当前 main | [preview/perf-08-current](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-08-current) | [00e1cfb](https://github.com/yuukiLike/bamboo-old-house/commit/00e1cfbd1920261bb45297934bd4cc9dfbab4815) | [打开](https://c775d210.page-bamboo-old-house.pages.dev/cn?perf=1&perfUI=1) |
+| 原始基线 | `preview/001` | `3f382ac` | 待部署 |
+| CPU 优化完成 | `preview/002` | `0be5bec` | 待部署 |
+| 渲染与闲置资源优化完成 | `preview/003` | `71917cc` | 待部署 |
+| 当前版本 | `preview/004` | `00e1cfb` | 待部署 |
 
-各版默认画质不同；统一设备、浏览器、实际绘制尺寸、阴影、帧率、视角、天气、声音、面板状态、缓存与时长后比较。
+每个分支均有 `tools/scene-perf/`、`scripts/perf/`、检测接入与工具回归测试。使用同一套 `pnpm perf` / `pnpm perf:report` 生成可视化报告。
+
+各版默认画质不同；统一设备、浏览器、实际绘制尺寸、阴影、帧率、视角、天气、声音、面板状态、缓存与时长后比较。旧版未提供的诊断显示为未测量。
 
 ## 新测试记录
 

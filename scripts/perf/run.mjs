@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { run } from '../../tools/scene-perf/cli/run.mjs';
 
 const local = file => fileURLToPath(new URL(file, import.meta.url));
@@ -8,7 +9,7 @@ const local = file => fileURLToPath(new URL(file, import.meta.url));
 export function runProject(argv = process.argv.slice(2)) {
   return run(argv, {
     usage: 'pnpm perf',
-    url: 'http://127.0.0.1:4175/cn',
+    url: `http://127.0.0.1:4175${existsSync(new URL('../../src/app/cn/page.tsx', import.meta.url)) ? '/cn' : '/'}`,
     flow: 'journey',
     instrumentation: 'on',
     adapter: local('./adapters/bamboo.cjs'),

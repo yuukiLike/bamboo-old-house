@@ -182,17 +182,19 @@ module.exports = async function (context, commands) {
       await stage('view-walk', '观看方式：沿路走走', () => clickText("//*[contains(@class,'view-switch')]//button[normalize-space(.)='沿路走走']"),
         viewReady('walk'), 'diagnostics viewMode=walk and narrative page mounted');
       await stage('chapter-last', '探索章节：前往竹林坡地', () => click('.exploration-nav a[href="#forest-slope"]'),
-        `${viewReady('walk')} && document.querySelector('.exploration-nav a[href="#forest-slope"]')?.getAttribute('aria-current') === 'step' && Math.abs(window.__BAMBOO__?.progress - 0.75) <= 0.01`,
-        'last unique chapter selected and renderer loop progress near 0.75');
+        `${viewReady('walk')} && document.querySelector('.exploration-nav a[href="#forest-slope"]')?.getAttribute('aria-current') === 'step'`,
+        'forest-slope chapter selected through its real navigation link');
       await stage('chapter-home', '探索章节：回到竹林', () => click('.exploration-nav a[href="#bamboo"]'),
         `${viewReady('walk')} && document.querySelector('.exploration-nav a[href="#bamboo"]')?.getAttribute('aria-current') === 'step' && window.__BAMBOO__?.progress <= 0.01`,
         'first chapter selected through navigation and renderer loop progress <= 0.01');
-      await prepare('从画面设置启用自由模式', async () => {
-        await click('.render-toggle');
-        if (await commands.js.run('return document.querySelector("#enable-free-mode")?.checked === false')) await click('#enable-free-mode');
-        await waitFor('window.__BAMBOO__?.renderSettings?.freeMode === true');
-        await click('.render-panel .settings-close');
-      });
+      if (await commands.js.run('return window.__BAMBOO__?.renderSettings?.freeMode === false')) {
+        await prepare('从画面设置启用自由模式', async () => {
+          await click('.render-toggle');
+          if (await commands.js.run('return document.querySelector("#enable-free-mode")?.checked === false')) await click('#enable-free-mode');
+          await waitFor('window.__BAMBOO__?.renderSettings?.freeMode === true');
+          await click('.render-panel .settings-close');
+        });
+      }
       await stage('view-free', '观看方式：自由模式', () => click('.free-toggle'), viewReady('free'),
         'diagnostics viewMode=free and free-view panel mounted');
 
@@ -202,7 +204,8 @@ module.exports = async function (context, commands) {
       ]) {
         await stage(`place-${place}`, `停留位置：${label}`, async () => {
           await click('.room-selector');
-          await clickText(`//*[@role='option' and normalize-space(.)='${label}']`);
+          const name = place === 'yard-edge' ? "normalize-space(.)='院内竹荫' or normalize-space(.)='院边竹荫'" : `normalize-space(.)='${label}'`;
+          await clickText(`//*[@role='option' and (${name})]`);
         }, `${viewReady('free', place)} && document.querySelector('.room-selector')?.getAttribute('aria-expanded') === 'false'`,
         `real location selector; diagnostics free/${place}; room combobox aria-expanded=false`);
       }
@@ -223,7 +226,7 @@ module.exports = async function (context, commands) {
         'window.__BAMBOO__?.panorama === true && Math.abs(window.__BAMBOO__?.yaw) <= 0.001 && Math.abs(window.__BAMBOO__?.pitch) <= 0.001',
         'native reset button clicked after a real drag; diagnostics yaw and pitch return to zero');
       await stage('motion-pause', '动态：静止观看', () => click('[aria-label="静止观看"]'),
-        'window.__BAMBOO__?.paused === true', 'diagnostics paused=true; the animation loop still renders');
+        'window.__BAMBOO__?.paused === true', 'diagnostics paused=true; stable drawing behavior belongs to the tested version');
       await stage('motion-resume', '动态：让风继续', () => click('[aria-label="让风继续"]'),
         'window.__BAMBOO__?.paused === false', 'diagnostics paused=false');
     } finally {
