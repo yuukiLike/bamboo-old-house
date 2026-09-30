@@ -1,57 +1,36 @@
-# 3D 性能优化记录
+# 性能记录
 
-这是本项目后续性能优化的固定记录入口。每一阶段先写具体假设与验收方式，再补充实际改动、同条件数据、失败尝试和验证边界。详细过程与小型证据保存在 `optimizations/`，不只留在聊天记录中。
+每轮采集追加一行，记录提交、设备/浏览器、视角/天气、画质/声音、时长、读数及截图。原图与数据保存在 `optimizations/evidence/`，缺失项写“未记录”；前后对比固定上述条件。采集方法见[指南](./pipeline.md)。
 
-**2026-09-26 调查检查点：[iPhone 持续掉帧的当前结论、证据与下一步](./iphone-investigation-status.md)。动态画面约 20–30 秒后降到 10–13 Hz 的问题仍未解决；原生内存与图形采集已完成，本次交付改动和待真机验证项分别记录。**
+## 截图与数据
 
-本系列来源：[Tidewater 源码分析](../research/tidewater-performance-analysis.md)。系列分支统一使用 `perf/tidewater-scene-optimizations` 前缀；后续阶段在上一阶段提交上创建，使用阶段编号及主题后缀。第五阶段起按用户直接合入并推送 `main` 的授权，在已合并的第四阶段之后继续；关联仍以阶段编号及父提交记录。
-
-| 阶段 | 分支 | 内容与结果 | 详细记录 |
+| 日期 / 轮次 | 条件 | 读数 | 图与原始记录 |
 | --- | --- | --- | --- |
-| 01 | `perf/tidewater-scene-optimizations` | 已实现并验证：固定雨向索引、植被空间裁剪与差量上传。纯 CPU 三轮中位数：建筑遮雨与湿润属性合计 −33.72%，植被夹具裁剪 −36.82%；输出哈希一致。 | [第一阶段](./optimizations/001-tidewater-transfer.md) |
-| 02 | `perf/tidewater-scene-optimizations-02-rain-index` | 实现提交 `0be5bec`。相对父阶段，遮雨相关 CPU 中位数 −21.51%，候选引用 −30.94%，索引数组容量 84.01 → 71.11 MiB；雨水属性哈希一致。用户实看反馈“有显著提升”，原始截图与读数已归档。 | [第二阶段](./optimizations/002-rain-index.md) |
-| 03 | `perf/tidewater-scene-optimizations-03-global-rendering` | 跳过零贡献点光源计算、复用输入未变的方向光阴影；真实模型夹具覆盖 2,720 个组合。用户认可后，默认改为性能设置（稍柔和＋隔帧阴影），保留一键恢复完整效果。30 次提交中，动态阴影完整档为 30 次、性能档为 15 次；静止输入均为 1 次。这些是工作量计数，不是 FPS 提升。 | [第三阶段](./optimizations/003-global-rendering.md) |
-| 04 | `perf/tidewater-scene-optimizations-04-mobile-runtime` | 从合并后的 `main@8a9033d` 排查移动端约 30 秒后发热、掉帧。记录原已有限额，未发现无限增长证据；新增完全停止检测、降低面板刷新开销。移动端默认 DPR 提升至 1.5，保留 1.0625 与完整 2.0；增加明确的 30 / 60 / 跟随屏幕选项。真机热状态尚待复测。 | [第四阶段](./optimizations/004-mobile-runtime.md) |
-| 05 | `main`（承接已合入的 04） | 移动端仍约 10 秒后发热、11–13 Hz，停止检测无恢复。补齐采集清空重启；音频串行解码和静音停调度；释放植被常量雨水属性，缓存枝条共有风动；合并和跳过重复 resize。保留画质及默认配置，真机温控与长期帧率仍待复测。 | [第五阶段](./optimizations/005-mobile-load.md) |
-| 06 | `main`（父提交 `e23daec`） | 用户确认声音开关、现有配置均不能避免切换后的 10–13 Hz。移除室内全屏处理中无用的 MSAA/深度附件，移动端离开室内释放目标存储，转场快照按需分配；雨效烘焙后释放约 71.11 MiB 无用索引容量；增加有界起始/末端历史。主体画质和默认配置保持，加入静止按需绘制后 61 项测试通过；两套浏览器往返及静止绘制验证通过，真机户外低频仍未解决。临时截短实际绘制恢复约 60 Hz，全 framebuffer 限制为 1 像素仍约 15 Hz；均为诊断。热缓解开启晚于掉帧、关闭也未恢复。非阻塞 fence 观察延迟中位数随退化从 35 增至 85 ms，但不是纯 GPU 时间；尚无原生时钟证据。 | [第六阶段](./optimizations/006-mobile-gpu-residency.md)、[雨效内存附录](./optimizations/007-rain-bake-memory.md)、[静止按需绘制](./optimizations/008-idle-rendering.md) |
+| 2026-09-26 / 02 | 用户雨景；`0be5bec`；设备未记录 | RAF 26.7 Hz；p95 50 ms | [截图](./optimizations/evidence/tidewater-02-user-feedback.png) · [记录](./optimizations/002-rain-index.md) |
+| 2026-09-26 / 03 | 用户夜晚、大风、林间视角；版本与设备未记录 | RAF 8.3 Hz；p95 134 ms | [截图](./optimizations/evidence/tidewater-03-night-wind-user-feedback.png) · [记录](./optimizations/003-global-rendering.md) |
+| 2026-09-26 / 04 | Canary 移动视口；一楼堂屋；停止检测功能验收 | 停止前 RAF 60.0 Hz；p95 19 ms | [截图](./optimizations/evidence/tidewater-04-stopped-mobile.png) · [构建与条件](./optimizations/evidence/tidewater-04-manifest.json) |
+| 2026-09-26 / 05 | Canary 移动视口；一楼堂屋；清空重启功能验收 | RAF 60.0 Hz；p95 未显示 | [截图](./optimizations/evidence/tidewater-05-restarted-mobile.png) · [构建与条件](./optimizations/evidence/tidewater-05-manifest.json) |
+| 2026-09-26 / 06-fence | iPhone 16 Pro；同轮初期 → 退化后 | RAF 32.66 → 11.43 Hz；fence 观察延迟中位数 35 → 85 ms | [曲线](./optimizations/evidence/tidewater-06-fence-timeline.png) · [数据](./optimizations/evidence/tidewater-06-iphone-probes.json) |
+| 2026-09-26 / 06-native | iPhone 16 Pro；同轮三个窗口 | RAF 25.87 → 11.63 → 11.62 Hz；进程内存未持续增长 | [曲线](./optimizations/evidence/tidewater-06-native-process-timeline.png) · [数据](./optimizations/evidence/tidewater-06-iphone-probes.json) |
 
-阶段 01 的基线是 `3f382ac0fb84e35ca52593e2630c660c078d723d`。测量未使用 computer-use，不代表浏览器 FPS 或 GPU 帧时；画质、模型、DPR 与阴影设置保持原配置。方向索引在阶段 01 占约 84.01 MiB 数组容量，阶段 02 收紧为约 71.11 MiB。
+RAF 是浏览器回调频率；fence 观察延迟包含排队与调度。旧截图条件不全，04/05 为桌面功能验收，均不能据此计算真机优化收益。
 
-阶段 01 已提交为 [`83baa2e`](https://github.com/yuukiLike/bamboo-old-house/commit/83baa2e119b40d0c76a69da874d83f2088f4ff5f) 并推送；阶段 02 从该提交创建。每个阶段只与自己的直接父版本比较，原始版本至第一阶段的结果仍保留在第一阶段记录中。
+截至 2026-09-26，iPhone 16 Pro 持续播放约 20–30 秒后降至 10–13 Hz 的问题仍未解决，见[调查结论](./iphone-investigation-status.md)。
 
-阶段 02 的用户反馈与截图已提交为 `b0cb10b`，阶段 03 从该提交创建。新的“夜晚＋大风＋林间的风”截图仍只有 **8.3 Hz RAF、p95 134 ms**，已作为第三阶段的问题证据归档；不能与前一张不同视角的 26.7 Hz 直接比较，也不能据此宣布整个体验已流畅。
+## 资产检测 · 2026-09-30
 
-## 第六阶段调查补充
+静态盘点：[architecture.glb](../../public/models/architecture.glb)，SHA-256 前缀 `009a3e159d5a`。文件 25.46 MB，其中 116 张 PNG/JPEG 占 17.37 MB；111 个网格、104 个材质，几何已用 meshopt 压缩。MB 按十进制计。
 
-- 用户提供的 [Babylon.js #62697](https://forum.babylonjs.com/t/potential-memory-leak-in-webgpucachebindgroups/62697) 有反复创建/销毁 GreasedLine、约 2 分钟增加 7 MB 的 heap 对照，维护者确认 WebGPU bind group 缓存未清理未使用条目，作者的 WebGL2 对照未发现该泄漏。本项目使用 Three WebGL、没有该缓存类；借鉴缓存强引用和生命周期审计方法，不套用其根因。
-- [#54541](https://forum.babylonjs.com/t/2x-fps-drop-after-spending-20-seconds-ios-18/54541) 与 [#56952](https://forum.babylonjs.com/t/webgpu-ios-framerate-drop/56952) 有 iPhone 16 Pro 约 15–20 秒掉帧的第一手报告，后者作者确认实际启用 WebGPU 后约 30 分钟保持 60 FPS，但另一台 16 Pro Max 未复现。iOS 更新曾导致作者的 WebGPU 测试回退到 WebGL，提醒后端对照必须核实实际后端。目前本轮外部对照未完成有效采样，没有迁移后端的验证结果。
-- iOS Chrome 的网页路径使用 WKWebView；Safari、Chrome 均卡顿不能排除共有的 WebKit/GPU 路径。早期只读查询得到 Developer Mode `false`、开发者镜像列表 `[]`；后续已改用 `--userspace` 成功采集原生进程 CPU 和内存，没有下载或挂载镜像。此前 `--native` 的 137 来自 Mac 端 Python/XPC teardown，并非手机页面进程崩溃；仍未取得 GPU/CPU 时钟或温度采样。
-- 普通 syslog 后续成功：同轮页面约 23–27 秒已从约 32 降至 11 Hz，纹理 / 几何体 / 程序保持 136 / 264 / 81；约 33.704 秒才收到热缓解开启，且 aggressive=0。约 128.703 秒信号关闭时仍约 11 Hz，后续恢复原属性运行 35 秒也只有 11.61 Hz。当前 WebKit 源码只将 aggressive 热缓解纳入半速条件，尚未对应手机确切构建；不能写成已证实的 10 Hz 热锁。原始系统日志留在本地，提交 0–80 秒脱敏样本与后续关闭信号摘要。源链接、采样边界及未确认部分见[第六阶段报告](./optimizations/006-mobile-gpu-residency.md)。
-- 雨效烘焙后解除约 71.11 MiB 精确索引数组的强引用，实际模型雨水属性哈希、碰撞与模拟结果保持一致，属于第六阶段的[内存释放附录](./optimizations/007-rain-bake-memory.md)。这不是 iPhone 实测 RSS 降幅；新版真机依旧于约 23–27 秒从 32 降至 11 Hz，运行约 80 秒仍为 11.61 Hz，不能将它写成移动端持续掉帧的修复。该轮全套检查为 56 项测试及构建通过；后续静止按需绘制加入后的完整检查为 61 项测试及构建通过。
-- 启动阶段临时 fence 探针完成 600 个样本：10–20 秒与 35–65 秒窗口的 RAF 为 32.66 / 11.43 Hz，观察完成延迟中位数为 35 / 85 ms、p95 为 36 / 101 ms；两窗实际 poll 间隔中位数均为 9 ms，单次 API 最多 1 ms。后窗多次返回 TIMEOUT，显示绘制命令完成等待增加；该延迟包含排队、IPC、GPU 工作和 JS 观察，不是 GPU 帧时，也未证明队列无限增长或硬件降频。完整边界与[同轮时间线图](./optimizations/evidence/tidewater-06-fence-timeline.svg)已归档，正式采集器不包含这些探针。
-- 临时模型索引 LOD／整片叶子子集对照已恢复，未加入产品。初始相机与画布后来改变，不能用原 11.42 Hz 跨视角做 A/B；核对后段稳定视角，模型简化、模型＋叶子、恢复原几何的末端 RAF 分别为 13.03 / 14.66 / 11.50 Hz。按同视角最后完整窗口计数，主画面三角形减少约 31.86% / 45.79%，仍未恢复流畅。这是会改变可见几何的定位实验，不能写成已实现的默认优化或已找到系统根因；窗口、相机审计与限制均记录于[第六阶段报告](./optimizations/006-mobile-gpu-residency.md)。
-- 150 秒原生进程采样正常完成，与新导航共同覆盖到约 107 秒；该构建包含雨效索引释放，但没有后续静止画面跳过提交。同轮 RAF 的 10–20 / 35–65 / 80–100 秒窗口为 25.87 / 11.63 / 11.62 Hz。页面 WebContent 候选的 RSS 约 976.3–976.8 MiB，footprint 约 667.7–676.8 MiB；共享 GPU 进程 RSS 约 529.7 MiB，footprint 约 222.0–231.6 MiB，没有测到伴随掉帧的持续内存爬升，CPU 使用量反而随低帧率下降。这不证明所有泄漏都被排除，也不是 GPU 功耗/时钟；页面进程归属仍标为有证据支持的候选。提交限定角色、0–105 秒的脱敏数据与[同轮 native 时间线图](./optimizations/evidence/tidewater-06-native-process-timeline.svg)，全应用原始日志不提交。
+粗糙度贴图已使用 metallicRoughness 通道，暂无独立 AO 贴图；ORM 打包不列为新增任务。本轮未采集运行数据或截图。
 
-## 后续记录规则
+## 可行方向 · 尚未实施
 
-- 新阶段保留上一阶段独立分支，写明父提交和新分支名，以便逐阶段比较。
-- 每次优化前记录实际瓶颈、待验证假设和保持边界，完成后更新本页结果与详细文档。
-- 与直接父阶段使用同一夹具重新采集，旧数据保留；不把不同环境、不同夹具或单次最好结果混为收益。
-- 明确区分 CPU 数据、GPU/浏览器实测和待用户查看的视觉结果。
-- 优化面向整个体验的共用路径；验收覆盖步行、全部定点/室内外地点、环顾、各时段和天气。单一视角改善不能代表整体改善，各视角不承诺相同收益。
-- 记录当前清晰度和阴影配置。完整效果与性能设置分别比较，禁止将降档收益混入无损优化。
+| 顺序 | 方向与依据 | 画质与验收 |
+| --- | --- | --- |
+| 1 | 贴图去重：9 组内容完全相同，16 张冗余图片，编码载荷可减少约 3.30 MB | 可无损；保留像素、采样与材质参数，确认运行时共享纹理。 |
+| 2 | [KTX2](https://gltf-transform.dev/modules/extensions/classes/KHRTextureBasisu)：法线先试 UASTC，颜色先做 ETC1S 小样；需接入 KTX2Loader | 有损；近景核对木纹、墙面、春联和法线，再实测下载量、纹理内存及加载耗时。 |
+| 3 | 局部同材质合批：7 组各含两个基元，理论上限减少 7 个基元 | 条件满足可保留画质；需重验名称依赖、雨效和 LOD，按实际 draw calls 决定是否采用。 |
 
-## 画质与配置约定
+下一步先验证贴图去重；同条件真机前后采集保留截图与数据，检查近景、雨效和 LOD。涉及画质取舍时保留完整效果，提供可选配置。
 
-2026-09-26 用户补充：雨效需要特别留意；如果优化有降低画质的风险，可以将其作为配置项，其他优化也采用同一原则。
-
-同日再次强调：**最棒的呈现效果必须保留，性能优化不能以降低用户呈现效果为代价；确有代价时，由用户自行配置和选择。**
-
-第三阶段实现 `3ea7d29` 后，用户明确认可并授权：“可以将性能版作为默认选项先。该版本可以进行 push，很棒。” 据此将当时默认改为“稍柔和＋隔帧更新”，完整效果路径及一键恢复入口继续保留。此次只改变默认选择，不改变已经验证的两种渲染策略。
-
-第四阶段用户反馈移动端模糊并要求提高画质。**当前默认更新为“均衡清晰＋隔帧阴影＋60 帧上限”**，移动端 DPR 为最高 1.5；旧“稍柔和”与完整效果均保留。省电 30 帧由用户主动选择；界面明确说明运动连贯性与功耗取舍，不自动切换。
-
-- 涉及雨滴密度、碰撞/遮雨精度、湿润细节、阴影、分辨率或更新频率等视觉取舍时，保留原画质路径，提供可切换的配置并说明代价，不默默覆盖原配置。
-- 默认选择遵循用户最新授权：当前为性能设置，原画质仍可随时恢复。其它有视觉取舍的选项仍需明确说明，不按帧时自动切换。配置项按实际出现的取舍增加，不预先建立空的通用配置框架。
-- 无损计算优化以输出一致性和边界测试验收；不能证明等价的试验不得冒充无损优化，应修复、回退或作为明确的可选档位。
-- 每个阶段写明是否影响画质、默认行为、可用配置及相应证据。雨效的雨量、屋檐遮挡、薄墙/缝隙和室内湿润范围要分别核对。
+历次实现：[01](./optimizations/001-tidewater-transfer.md) · [02](./optimizations/002-rain-index.md) · [03](./optimizations/003-global-rendering.md) · [04](./optimizations/004-mobile-runtime.md) · [05](./optimizations/005-mobile-load.md) · [06](./optimizations/006-mobile-gpu-residency.md) · [07](./optimizations/007-rain-bake-memory.md) · [08](./optimizations/008-idle-rendering.md)。

@@ -6,6 +6,8 @@
 
 在竹屋中运行采集、阅读报告和比较改动前后的结果，见[竹屋采集与对比指南](../../docs/performance/pipeline.md)；项目参数和操作脚本见 [`scripts/perf/README.md`](../../scripts/perf/README.md)。
 
+检测截图、数据与可行优化方向统一记在[性能记录](../../docs/performance/optimization-log.md)。
+
 ## 选择接入程度
 
 | 需要什么 | 使用哪层 | 需要提供什么 |
