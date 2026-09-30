@@ -2,7 +2,7 @@
 
 这是竹屋的项目入口：`run.mjs` 注入项目适配器、业务计时来源和操作流程；通用实现已移入可整体复制的 [`tools/scene-perf/`](../../tools/scene-perf/README.md)。`pnpm perf` / `pnpm perf:report` 命令保持不变。
 
-持续优化的分支关系、阶段结果和详细证据统一记录在 [3D 性能优化记录](../../docs/performance/optimization-log.md)。
+性能数据的前后对比、截图与待选方向统一记录在[性能记录](../../docs/performance/optimization-log.md)。
 
 移动端清晰度、绘制上限与完全停止采集的功能回归可运行 `mobile-runtime-smoke.mjs`。它在独立的可见 Canary 会话中操作真实控件，检查停止后雨景、室内、声音仍可用，以及采集 RAF / 定时器 / 观察器已经释放；反复清空重启后只创建一组采集器，旧记录不回填；检查移动端音频串行解码、静音与复用、连续播放 90 秒和真实横竖屏尺寸变化；**不用于测量 iPhone 发热或 FPS 收益**。先启动 4175 端口的生产预览，然后从仓库根目录运行：
 

@@ -1,79 +1,52 @@
 # 性能记录
 
-**2026-09-30 · 用户确认：当前性能已满足需要。** 本次复核已有 JSON 与原图，未新增真机采集。
+2026-09-30：用户确认当前性能满足需要。iOS 26 真机曾发热掉帧，用户判断大概率为热降频，旧测试日志已清理。
 
-## 已验证的增减 · 2026-09-26
+## 历史参考 · 待 preview 复测
 
-CPU 为 Apple M4 / Node v24.18.0 / Three r185 的三轮中位数。01：`3f382ac → 83baa2e`（[前](./optimizations/evidence/tidewater-before.json) / [后](./optimizations/evidence/tidewater-after.json)）；02：`83baa2e → 0be5bec`（[前](./optimizations/evidence/tidewater-02-before.json) / [后](./optimizations/evidence/tidewater-02-after.json)）。
+2026-09-26，Apple M4，CPU 三轮中位数。01：`3f382ac → 83baa2e`；02：`83baa2e → 0be5bec`。各阶段独立比较，差值按原始值计算。
 
 | 阶段 / 指标 | 前 | 后 | 增减 |
 | --- | ---: | ---: | ---: |
 | 01 · 建筑遮雨与湿润属性 CPU | 5,763.08 ms | 3,819.58 ms | −1,943.50 ms（−33.72%） |
-| 01 · 其中：遮雨索引与体素构建 | 731.25 ms | 1,219.96 ms | +488.72 ms（+66.83%） |
+| 01 · 其中索引与体素构建 CPU | 731.25 ms | 1,219.96 ms | +488.72 ms（+66.83%） |
 | 01 · 植被 180 帧裁剪 CPU | 62.41 ms | 39.42 ms | −22.98 ms（−36.82%） |
-| 01 · 植被空间结构初始化 | 2.90 ms | 5.41 ms | +2.50 ms（+86.23%） |
+| 01 · 植被初始化 CPU | 2.90 ms | 5.41 ms | +2.50 ms（+86.23%） |
 | 02 · 建筑遮雨与湿润属性 CPU | 3,757.77 ms | 2,949.59 ms | −808.18 ms（−21.51%） |
 | 02 · 索引数组容量 | 84.01 MiB | 71.11 MiB | −12.89 MiB（−15.35%） |
-| 02 · 索引候选引用 | 10,926,248 个 | 7,546,211 个 | −3,380,037 个（−30.94%） |
 
-各阶段独立比较；差值按原始值计算，显示四舍五入。CPU 数据未包含下载、贴图解码或 GPU 渲染；数组容量未包含进程其他内存。前后被测雨水属性与植被输出哈希一致。
+原始数据：[01 前](./optimizations/evidence/tidewater-before.json) / [后](./optimizations/evidence/tidewater-after.json) · [02 前](./optimizations/evidence/tidewater-02-before.json) / [后](./optimizations/evidence/tidewater-02-after.json)。这些是局部 CPU 耗时与数组容量。
 
-03 为每组 30 次场景提交的阴影刷新计数，覆盖全部视角、时段与天气（[前](./optimizations/evidence/tidewater-03-before.json) / [完整效果](./optimizations/evidence/tidewater-03-after-full.json) / [性能档](./optimizations/evidence/tidewater-03-after-combined.json)）：
+## 在线复测节点
 
-| 条件 | 前 | 后 | 增减 |
-| --- | ---: | ---: | ---: |
-| 动态 · 完整效果 | 30 | 30 | 0（0%） |
-| 静止 · 完整效果 | 30 | 1 | −29（−96.67%） |
-| 动态 · 隔帧阴影，有画质取舍 | 30 | 15 | −15（−50.00%） |
+2026-09-30，九个节点均构建、部署成功，页面与主要资源返回 HTTP 200；保留各提交原样，本次未重新采集性能。链接固定到本次部署，并开启检测面板。
 
-刷新次数变化不等于整体帧率变化。
-
-## 每轮截图 · 未配对
-
-| 日期 / 轮次 | 条件 | 读数 | 图与原始记录 |
+| 节点 | preview 分支 | 提交 | 在线检测 |
 | --- | --- | --- | --- |
-| 2026-09-26 / 02 | 用户雨景；`0be5bec`；设备未记录 | RAF 26.7 Hz；p95 50 ms | [截图](./optimizations/evidence/tidewater-02-user-feedback.png) · [记录](./optimizations/002-rain-index.md) |
-| 2026-09-26 / 03 | 用户夜晚、大风、林间视角；版本与设备未记录 | RAF 8.3 Hz；p95 134 ms | [截图](./optimizations/evidence/tidewater-03-night-wind-user-feedback.png) · [记录](./optimizations/003-global-rendering.md) |
-| 2026-09-26 / 04 | Canary 移动视口；一楼堂屋；停止检测功能验收 | 停止前 RAF 60.0 Hz；p95 19 ms | [截图](./optimizations/evidence/tidewater-04-stopped-mobile.png) · [构建与条件](./optimizations/evidence/tidewater-04-manifest.json) |
-| 2026-09-26 / 05 | Canary 移动视口；一楼堂屋；清空重启功能验收 | RAF 60.0 Hz；p95 未显示 | [截图](./optimizations/evidence/tidewater-05-restarted-mobile.png) · [构建与条件](./optimizations/evidence/tidewater-05-manifest.json) |
+| 00 · 原始基线 | [preview/perf-00-baseline](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-00-baseline) | [3f382ac](https://github.com/yuukiLike/bamboo-old-house/commit/3f382ac0fb84e35ca52593e2630c660c078d723d) | [打开](https://42c0795f.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
+| 01 · [空间索引与植被裁剪](./optimizations/001-tidewater-transfer.md) | [preview/perf-01-spatial](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-01-spatial) | [83baa2e](https://github.com/yuukiLike/bamboo-old-house/commit/83baa2e119b40d0c76a69da874d83f2088f4ff5f) | [打开](https://a0c33984.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
+| 02 · [雨效索引容量](./optimizations/002-rain-index.md) | [preview/perf-02-rain](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-02-rain) | [0be5bec](https://github.com/yuukiLike/bamboo-old-house/commit/0be5bec68d9e9ac505c9c15026802c6009670fe3) | [打开](https://27dba498.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
+| 03 · [共用渲染与阴影调度](./optimizations/003-global-rendering.md) | [preview/perf-03-render](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-03-render) | [8a9033d](https://github.com/yuukiLike/bamboo-old-house/commit/8a9033d5e2f704580e391840aed85bc65975bb62) | [打开](https://b3e2772b.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
+| 04 · [检测生命周期与画质配置](./optimizations/004-mobile-runtime.md) | [preview/perf-04-runtime](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-04-runtime) | [c24ca12](https://github.com/yuukiLike/bamboo-old-house/commit/c24ca123b308a7e5f94db56a7af97f81638d3c3a) | [打开](https://f9311cb7.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
+| 05 · [音频、竹叶缓存与 resize](./optimizations/005-mobile-load.md) | [preview/perf-05-audio](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-05-audio) | [e23daec](https://github.com/yuukiLike/bamboo-old-house/commit/e23daec77945c4b70d07f0956a9bcdc12232fe45) | [打开](https://dc885de0.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
+| 06 · [闲置资源与静止绘制](./optimizations/006-mobile-gpu-residency.md) | [preview/perf-06-idle](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-06-idle) | [71917cc](https://github.com/yuukiLike/bamboo-old-house/commit/71917cc7ca68a7dcd57d044968cf153ddd0bf70c) | [打开](https://10e6f01f.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
+| 07 · 远景 LOD 与移动游览 | [preview/perf-07-lod](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-07-lod) | [01b0727](https://github.com/yuukiLike/bamboo-old-house/commit/01b0727f92b0435686cfad059af794f4943af43a) | [打开](https://38b3022e.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
+| 08 · 当前 main | [preview/perf-08-current](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2Fperf-08-current) | [00e1cfb](https://github.com/yuukiLike/bamboo-old-house/commit/00e1cfbd1920261bb45297934bd4cc9dfbab4815) | [打开](https://c775d210.page-bamboo-old-house.pages.dev/cn?perf=1&perfUI=1) |
 
-RAF 为浏览器回调频率。02/03 场景不同；04/05 为桌面功能验收，截图不能计算真机前后收益。
+各版默认画质不同；统一设备、浏览器、实际绘制尺寸、阴影、帧率、视角、天气、声音、面板状态、缓存与时长后比较。
 
-<details>
-<summary>2026-09-26 · 真机历史观察</summary>
+## 新测试记录
 
-iPhone 16 Pro 同轮初期与后期的变化，属于持续运行过程；本轮未验证动态掉帧恢复，详见[当时调查](./iphone-investigation-status.md)。
+每组保存：日期、提交、设备/浏览器、场景/画质/声音、时长、前值、后值、绝对差与百分比；前后截图和原始数据存入 `optimizations/evidence/` 并在本页链接。固定条件比较，RAF Hz 与实际绘制次数分别记录。
 
-| 轮次 / 窗口 | 初期 | 后期 | 增减 |
-| --- | ---: | ---: | ---: |
-| fence 轮 RAF：10–20 s → 35–65 s | 32.66 Hz | 11.43 Hz | −21.22 Hz（−65.00%） |
-| fence 观察延迟中位数：同上 | 35.00 ms | 85.00 ms | +50.00 ms（+142.86%） |
-| native 轮 RAF：10–20 s → 80–100 s | 25.87 Hz | 11.62 Hz | −14.26 Hz（−55.10%） |
+## 按需优化
 
-[RAF 与 fence 曲线](./optimizations/evidence/tidewater-06-fence-timeline.png) · [原生内存与 CPU 曲线](./optimizations/evidence/tidewater-06-native-process-timeline.png) · [原始数据](./optimizations/evidence/tidewater-06-iphone-probes.json)。fence 延迟包含排队与调度。
+2026-09-30，资产盘点：[建筑模型](../../public/models/architecture.glb) 25.46 MB，116 张贴图共 17.37 MB，几何已有 meshopt；以下方向尚未实施。
 
-</details>
-
-## 资产检测 · 2026-09-30
-
-静态盘点：[architecture.glb](../../public/models/architecture.glb)，SHA-256 前缀 `009a3e159d5a`。文件 25.46 MB，其中 116 张 PNG/JPEG 占 17.37 MB；111 个网格、104 个材质，几何已用 meshopt 压缩。MB 按十进制计。
-
-粗糙度贴图已使用 metallicRoughness 通道，暂无独立 AO 贴图；ORM 打包不列为新增任务。本轮为静态盘点。
-
-## 可行方向 · 按需，尚未实施
-
-| 顺序 | 方向与依据 | 画质与验收 |
-| --- | --- | --- |
-| 1 | 贴图去重：9 组内容完全相同，16 张冗余图片，编码载荷可减少约 3.30 MB | 可无损；保留像素、采样与材质参数，确认运行时共享纹理。 |
-| 2 | [KTX2](https://gltf-transform.dev/modules/extensions/classes/KHRTextureBasisu)：法线先试 UASTC，颜色先做 ETC1S 小样；需接入 KTX2Loader | 有损；近景核对木纹、墙面、春联和法线，再实测下载量、纹理内存及加载耗时。 |
-| 3 | 局部同材质合批：7 组各含两个基元，理论上限减少 7 个基元 | 条件满足可保留画质；需重验名称依赖、雨效和 LOD，按实际 draw calls 决定是否采用。 |
-
-## 记录与画质约定
-
-每轮追加前值、后值、绝对差及百分比；固定提交、设备/浏览器、视角/天气、画质/声音与时长，原图和数据存入 `optimizations/evidence/`，缺失项写“未记录”。方法见[采集指南](./pipeline.md)。
+- 贴图去重：编码载荷可减少约 3.30 MB，可无损；实际效果待测。
+- KTX2：需接入加载器；有损，先核对近景画质。
+- 局部同材质合批：需验证名称依赖、雨效与 LOD；收益待测。
 
 ### 画质与配置约定
 
-有画质取舍时保留完整效果并提供可选配置，不自动降档。
-
-历次实现：[01](./optimizations/001-tidewater-transfer.md) · [02](./optimizations/002-rain-index.md) · [03](./optimizations/003-global-rendering.md) · [04](./optimizations/004-mobile-runtime.md) · [05](./optimizations/005-mobile-load.md) · [06](./optimizations/006-mobile-gpu-residency.md) · [07](./optimizations/007-rain-bake-memory.md) · [08](./optimizations/008-idle-rendering.md)。
+保留完整效果，有取舍时提供可选配置，不自动降档。采集方法见[指南](./pipeline.md)。
