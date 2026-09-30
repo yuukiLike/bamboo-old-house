@@ -129,7 +129,7 @@ HTTP 缓存另有独立的 `--flow cache`，在同一浏览器会话正常导航
 
 业务标记使用唯一操作 ID，按 `entry.detail.phase` 聚合；不能直接按带 `#ID` 的 entry.name 分组。业务记录最多保留 500 条，浏览器 RAF 内部最多 12,000 条，输出每段最多 2,000 条帧样本，同时保留完整保留窗口的汇总与截断说明。没有逐帧写 User Timing，也没有全局替换 `fetch` 或 renderer。
 
-移植到另一个项目时，复制独立工具目录，通过 `--adapter` 提供项目的就绪、诊断与状态读取，通过 `--scenario` 提供真实控件流程；通用采集与报告无需修改。`tools/scene-perf/examples/three-adapter.cjs` 和[接入说明](../../docs/performance/adapter.md)给出最小契约，示例尚未在第二个项目验证。需要精确归因时，在该项目加载/视图切换边界加入小型 User Timing helper；不必安装监控 SDK。
+移植到另一个项目时，复制独立工具目录，通过 `--adapter` 提供项目的就绪、诊断与状态读取，通过 `--scenario` 提供真实控件流程；通用采集与报告无需修改。`tools/scene-perf/examples/three-adapter.cjs` 和[接入说明](../../docs/performance/adapter.md)给出最小契约。工具已在独立的最小 Three.js 立方体页面验证基础接入与生命周期；第二个完整生产项目的全部交互仍未验证，详见[当前验证范围](../../tools/scene-perf/README.md#当前验证范围)。需要精确归因时，在该项目加载/视图切换边界加入小型 User Timing helper；不必安装监控 SDK。
 
 ## 自定义流程契约
 

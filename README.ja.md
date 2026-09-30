@@ -32,4 +32,4 @@ pnpm dev
 
 `pnpm check` で検証し、`pnpm build && pnpm preview` で本番用ビルドをプレビューできます。Three.js、React、TypeScript、Vinext/Vite を使用しています。
 
-[開発・保守](docs/development.md) · [パフォーマンス計測](docs/performance/pipeline.md) · [デプロイ](docs/deployment.md) — 詳しい技術文書は中国語です。
+[開発・保守](docs/development.md) · [パフォーマンス計測ツール](tools/scene-perf/README.md) · [デプロイ](docs/deployment.md) — 詳しい技術文書は中国語です。

@@ -32,4 +32,4 @@ pnpm dev
 
 `pnpm check` 运行项目检查；`pnpm build && pnpm preview` 构建并预览生产版本。使用 Three.js、React、TypeScript 与 Vinext/Vite。
 
-[开发与维护](docs/development.md) · [性能采集](docs/performance/pipeline.md) · [部署说明](docs/deployment.md)
+[开发与维护](docs/development.md) · [性能工具](tools/scene-perf/README.md) · [部署说明](docs/deployment.md)

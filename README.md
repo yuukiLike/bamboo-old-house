@@ -30,4 +30,4 @@ pnpm dev
 
 `pnpm check` runs validation; `pnpm build && pnpm preview` serves the production build. Built with Three.js, React, TypeScript and Vinext/Vite.
 
-[Development](docs/development.md) · [Performance](docs/performance/pipeline.md) · [Deployment](docs/deployment.md) — detailed guides are in Chinese.
+[Development](docs/development.md) · [Performance tools](tools/scene-perf/README.md) · [Deployment](docs/deployment.md) — detailed guides are in Chinese.
