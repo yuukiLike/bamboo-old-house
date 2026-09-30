@@ -19,16 +19,18 @@
 
 ## 在线复测节点
 
-四个节点统一使用完整的 Scene Perf 面板、采集器、交互脚本和可视化对比报告；旧版仅补检测接口。新的分支正在构建和部署。
+四个节点统一使用完整的 Scene Perf 面板、采集器、交互脚本和可视化对比报告；旧版仅补检测接口。
 
 | 节点 | preview 分支 | 场景基点 | 在线检测 |
 | --- | --- | --- | --- |
-| 原始基线 | `preview/001` | `3f382ac` | 待部署 |
-| CPU 优化完成 | `preview/002` | `0be5bec` | 待部署 |
-| 渲染与闲置资源优化完成 | `preview/003` | `71917cc` | 待部署 |
-| 当前版本 | `preview/004` | `00e1cfb` | 待部署 |
+| 原始基线 | [preview/001](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2F001) | [3f382ac](https://github.com/yuukiLike/bamboo-old-house/commit/3f382ac0fb84e35ca52593e2630c660c078d723d) | [打开](https://46c4a2c6.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
+| CPU 优化完成 | [preview/002](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2F002) | [0be5bec](https://github.com/yuukiLike/bamboo-old-house/commit/0be5bec68d9e9ac505c9c15026802c6009670fe3) | [打开](https://45057930.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
+| 渲染与闲置资源优化完成 | [preview/003](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2F003) | [71917cc](https://github.com/yuukiLike/bamboo-old-house/commit/71917cc7ca68a7dcd57d044968cf153ddd0bf70c) | [打开](https://9ccde821.page-bamboo-old-house.pages.dev/?perf=1&perfUI=1) |
+| 当前版本 | [preview/004](https://github.com/yuukiLike/bamboo-old-house/tree/preview%2F004) | [00e1cfb](https://github.com/yuukiLike/bamboo-old-house/commit/00e1cfbd1920261bb45297934bd4cc9dfbab4815) | [打开](https://dc3daa62.page-bamboo-old-house.pages.dev/cn?perf=1&perfUI=1) |
 
-每个分支均有 `tools/scene-perf/`、`scripts/perf/`、检测接入与工具回归测试。使用同一套 `pnpm perf` / `pnpm perf:report` 生成可视化报告。
+每个分支均有 `tools/scene-perf/`、`scripts/perf/`、检测接入与工具回归测试，统一为工具版本 [`355ecd1`](https://github.com/yuukiLike/bamboo-old-house/commit/355ecd1a2b550e79eb61169493bff4b69b6d2ad0)。使用 `pnpm perf` / `pnpm perf:report` 生成可视化报告。
+
+2026-09-30：四个节点的项目检查、构建与 Cloudflare 部署均通过；在线版本标识、页面及主要静态资源已核对。性能数据待同条件复测。
 
 各版默认画质不同；统一设备、浏览器、实际绘制尺寸、阴影、帧率、视角、天气、声音、面板状态、缓存与时长后比较。旧版未提供的诊断显示为未测量。
 
