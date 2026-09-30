@@ -87,7 +87,10 @@ for(const mobile of [false,true]){
  let environment;
  try{
   T.PMREMGenerator.prototype.fromScene=()=>new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType});
-  environment=addEnvironment(scene,renderer,mobile,time,night,noon,dawn,dusk,weather.uniforms);
+  // Retain the older signature for --ref comparisons before noon was merged.
+  environment=Object.hasOwn(config.SUN_PRESETS,'noon')
+   ?addEnvironment(scene,renderer,mobile,time,night,noon,dawn,dusk,weather.uniforms)
+   :addEnvironment(scene,renderer,mobile,time,night,dawn,dusk,weather.uniforms);
  }finally{Object.defineProperty(T.PMREMGenerator.prototype,'fromScene',originalPMREM);}
  const [house,bamboo,understory,foliage,porch,fuel]=await Promise.all(['architecture','bamboo','understory','background-foliage','porch-bamboo','dry-fuel'].map(model));
  stabilizeHouseSurfaces(house);
@@ -139,7 +142,7 @@ for(const mobile of [false,true]){
   if(object instanceof T.Mesh||object instanceof T.Points){object.geometry.dispose();for(const m of Array.isArray(object.material)?object.material:[object.material])m.dispose();}
   if(object instanceof T.Light&&object.shadow)object.shadow.dispose();
  });
- console.error(`${mobile?'mobile':'desktop'}: ${views.length} viewpoints × 5 times × 4 weathers × 2 orientations × 2 motion states`);
+ console.error(`${mobile?'mobile':'desktop'}: ${views.length} viewpoints × ${Object.keys(config.SUN_PRESETS).length} times × ${Object.keys(WEATHER_PRESETS).length} weathers × 2 orientations × 2 motion states`);
 }
 const resolutions=[{device:'desktop',width:1920,height:1080,mobile:false},{device:'mobile',width:390,height:844,mobile:true}].map(({mobile,...size})=>{
  const ratio=policy?policy.scenePixelRatio(2,mobile,settings):Math.min(2,mobile?1.25:1.6);

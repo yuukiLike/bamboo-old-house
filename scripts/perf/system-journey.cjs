@@ -8,7 +8,7 @@ const expectedScenes = [
   'initial-3d', 'sound-first-on', 'sound-off', 'sound-repeat-on',
   'volume-panel-first', 'volume-panel-repeat-adjust', 'weather-panel-first',
   'weather-panel-repeat-drizzle', 'weather-storm', 'weather-wind', 'weather-clear',
-  'night-first', 'day-return', 'night-repeat', 'daylight-dawn', 'daylight-noon', 'daylight-dusk',
+  'night-first', 'day-return', 'night-repeat', 'daylight-dawn', 'daylight-dusk',
   'view-moon', 'view-breeze-auto-audio', 'view-well-auto-audio', 'view-porch', 'view-walk',
   'chapter-last', 'chapter-home', 'view-free',
   'place-yard-edge', 'place-upstairs', 'place-store', 'place-room-one', 'place-room-two',
@@ -160,10 +160,10 @@ module.exports = async function (context, commands) {
       for (const [alias, label, time, mix] of [
         ['night-first', '首次夜晚', 'night', 'nightMix'], ['day-return', '返回白天', 'day', null],
         ['night-repeat', '再次夜晚', 'night', 'nightMix'], ['daylight-dawn', '切换清晨', 'dawn', 'dawnMix'],
-        ['daylight-noon', '切换正午', 'noon', 'noonMix'], ['daylight-dusk', '切换傍晚', 'dusk', 'duskMix'],
+        ['daylight-dusk', '切换傍晚', 'dusk', 'duskMix'],
       ]) {
-        const buttonLabel = { night: '夜晚', day: '白天', dawn: '清晨', noon: '正午', dusk: '傍晚' }[time];
-        const mixed = mix ? `window.__BAMBOO__?.${mix} >= 0.99` : "['nightMix','dawnMix','noonMix','duskMix'].every(key => window.__BAMBOO__?.[key] <= 0.01)";
+        const buttonLabel = { night: '夜晚', day: '白天', dawn: '清晨', dusk: '傍晚' }[time];
+        const mixed = mix ? `window.__BAMBOO__?.${mix} >= 0.99` : "['nightMix','dawnMix','duskMix'].every(key => window.__BAMBOO__?.[key] <= 0.01)";
         await stage(alias, `日照：${label}`, () => click(`.day-switch button[aria-label="${buttonLabel}"]`),
           `window.__BAMBOO__?.timeOfDay === '${time}' && ${mixed}`,
           `diagnostics timeOfDay=${time}; daylight blend within 1% of target`);
@@ -181,22 +181,31 @@ module.exports = async function (context, commands) {
         viewReady('porch'), 'diagnostics viewMode=porch and porch page mounted');
       await stage('view-walk', '观看方式：沿路走走', () => clickText("//*[contains(@class,'view-switch')]//button[normalize-space(.)='沿路走走']"),
         viewReady('walk'), 'diagnostics viewMode=walk and narrative page mounted');
-      await stage('chapter-last', '探索章节：前往回望', () => click('.exploration-nav a[href="#return"]'),
-        `${viewReady('walk')} && document.querySelector('.exploration-nav a[href="#return"]')?.getAttribute('aria-current') === 'step' && window.__BAMBOO__?.progress >= 0.99`,
-        'last chapter selected and renderer scroll progress >= 0.99');
-      await stage('chapter-home', '探索章节：回到竹林', () => click('#return .return-button'),
+      await stage('chapter-last', '探索章节：前往竹林坡地', () => click('.exploration-nav a[href="#forest-slope"]'),
+        `${viewReady('walk')} && document.querySelector('.exploration-nav a[href="#forest-slope"]')?.getAttribute('aria-current') === 'step'`,
+        'forest-slope chapter selected through its real navigation link');
+      await stage('chapter-home', '探索章节：回到竹林', () => click('.exploration-nav a[href="#bamboo"]'),
         `${viewReady('walk')} && document.querySelector('.exploration-nav a[href="#bamboo"]')?.getAttribute('aria-current') === 'step' && window.__BAMBOO__?.progress <= 0.01`,
-        'return button used; first chapter selected and renderer scroll progress <= 0.01');
-      await stage('view-free', '观看方式：自由看看', () => click('.free-toggle'), viewReady('free'),
+        'first chapter selected through navigation and renderer loop progress <= 0.01');
+      if (await commands.js.run('return window.__BAMBOO__?.renderSettings?.freeMode === false')) {
+        await prepare('从画面设置启用自由模式', async () => {
+          await click('.render-toggle');
+          if (await commands.js.run('return document.querySelector("#enable-free-mode")?.checked === false')) await click('#enable-free-mode');
+          await waitFor('window.__BAMBOO__?.renderSettings?.freeMode === true');
+          await click('.render-panel .settings-close');
+        });
+      }
+      await stage('view-free', '观看方式：自由模式', () => click('.free-toggle'), viewReady('free'),
         'diagnostics viewMode=free and free-view panel mounted');
 
       for (const [place, label] of [
-        ['yard-edge', '院边竹荫'], ['upstairs', '二层厅堂'], ['store', '仓库'], ['room-one', '住屋一'],
+        ['yard-edge', '院内竹荫'], ['upstairs', '二层厅堂'], ['store', '仓库'], ['room-one', '住屋一'],
         ['room-two', '住屋二'], ['hall', '一楼堂屋'], ['kitchen', '一楼厨房'], ['courtyard', '屋前空地'],
       ]) {
         await stage(`place-${place}`, `停留位置：${label}`, async () => {
           await click('.room-selector');
-          await clickText(`//*[@role='option' and normalize-space(.)='${label}']`);
+          const name = place === 'yard-edge' ? "normalize-space(.)='院内竹荫' or normalize-space(.)='院边竹荫'" : `normalize-space(.)='${label}'`;
+          await clickText(`//*[@role='option' and (${name})]`);
         }, `${viewReady('free', place)} && document.querySelector('.room-selector')?.getAttribute('aria-expanded') === 'false'`,
         `real location selector; diagnostics free/${place}; room combobox aria-expanded=false`);
       }
@@ -217,7 +226,7 @@ module.exports = async function (context, commands) {
         'window.__BAMBOO__?.panorama === true && Math.abs(window.__BAMBOO__?.yaw) <= 0.001 && Math.abs(window.__BAMBOO__?.pitch) <= 0.001',
         'native reset button clicked after a real drag; diagnostics yaw and pitch return to zero');
       await stage('motion-pause', '动态：静止观看', () => click('[aria-label="静止观看"]'),
-        'window.__BAMBOO__?.paused === true', 'diagnostics paused=true; the animation loop still renders');
+        'window.__BAMBOO__?.paused === true', 'diagnostics paused=true; stable drawing behavior belongs to the tested version');
       await stage('motion-resume', '动态：让风继续', () => click('[aria-label="让风继续"]'),
         'window.__BAMBOO__?.paused === false', 'diagnostics paused=false');
     } finally {

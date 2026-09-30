@@ -25,7 +25,7 @@ function validateWorkload(workload){
  const audioSoakSeconds=Number(process.env.PERF_AUDIO_SOAK_SECONDS??90);
  assert.ok(Number.isFinite(audioSoakSeconds)&&audioSoakSeconds>=0);
  await fs.mkdir(out,{recursive:true});
- const url=new URL(process.env.PERF_URL || 'http://127.0.0.1:4175/');
+ const url=new URL(process.env.PERF_URL || 'http://127.0.0.1:4175/cn');
  url.searchParams.set('perf','1');url.searchParams.set('perfUI','1');
  const browser=await chromium.launch({headless:false,executablePath:process.env.PERF_CHROME || '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary'});
  try{
@@ -68,8 +68,8 @@ function validateWorkload(workload){
   await page.goto(url.href);
   await page.waitForFunction(()=>window.__BAMBOO__?.frames.length>30,{},{timeout:120000});
   const defaults=await page.evaluate(()=>({settings:window.__BAMBOO__.renderSettings,ratio:window.__BAMBOO__.pixelRatio,size:window.__BAMBOO__.drawSize}));
-  assert.equal(defaults.ratio,1.5);assert.deepEqual(defaults.settings,{resolution:'balanced',shadows:'alternate',frameRate:'60'});
-  assert.deepEqual(defaults.size,[603,1311]);
+  assert.equal(defaults.ratio,1.0625);assert.deepEqual(defaults.settings,{resolution:'reduced',shadows:'off',frameRate:'30',houseDetail:'lean',freeMode:false});
+  assert.deepEqual(defaults.size,[427,928]);
   const resizeWrites=await page.evaluate(async()=>{
    const canvas=document.querySelector('.scene-mount canvas')??document.querySelector('canvas');
    let writes=0;
@@ -81,9 +81,9 @@ function validateWorkload(workload){
   });
   assert.equal(resizeWrites,0,'same-size browser events must not reset the drawing buffer');
   await page.setViewportSize({width:874,height:402});
-  await page.waitForFunction(()=>document.querySelector('canvas')?.width===1311&&document.querySelector('canvas')?.height===603);
+  await page.waitForFunction(()=>document.querySelector('canvas')?.width===928&&document.querySelector('canvas')?.height===427);
   await page.setViewportSize({width:402,height:874});
-  await page.waitForFunction(()=>document.querySelector('canvas')?.width===603&&document.querySelector('canvas')?.height===1311);
+  await page.waitForFunction(()=>document.querySelector('canvas')?.width===427&&document.querySelector('canvas')?.height===928);
   await page.getByRole('button',{name:'画面设置',exact:true}).click();
   await page.getByRole('button',{name:'省电 30 帧',exact:true}).click();
   await page.getByRole('button',{name:'收起画面设置',exact:true}).click();
@@ -91,16 +91,16 @@ function validateWorkload(workload){
   await page.waitForTimeout(4000);
   const later=await page.evaluate(()=>({frames:window.__BAMBOO__.frames.length,now:performance.now(),ratio:window.__BAMBOO__.pixelRatio}));
   const submissions=(later.frames-first.frames)*1000/(later.now-first.now);
-  assert.ok(submissions>20&&submissions<31,`30-frame submission rate ${submissions}`);assert.equal(later.ratio,1.5);
+  assert.ok(submissions>20&&submissions<31,`30-frame submission rate ${submissions}`);assert.equal(later.ratio,1.0625);
   await page.getByRole('button',{name:'画面设置',exact:true}).click();
-  await page.getByRole('button',{name:'恢复完整效果',exact:true}).click();
+  await page.getByRole('button',{name:'完整',exact:true}).click();
   const full=await page.evaluate(()=>({settings:window.__BAMBOO__.renderSettings,ratio:window.__BAMBOO__.pixelRatio,size:window.__BAMBOO__.drawSize}));
-  assert.deepEqual(full.settings,{resolution:'full',shadows:'full',frameRate:'display'});assert.equal(full.ratio,2);assert.deepEqual(full.size,[804,1748]);
+  assert.deepEqual(full.settings,{resolution:'full',shadows:'full',frameRate:'display',houseDetail:'full',freeMode:false});assert.equal(full.ratio,2);assert.deepEqual(full.size,[804,1748]);
   await page.getByRole('button',{name:'稍柔和',exact:true}).click();
   const reduced=await page.evaluate(()=>window.__BAMBOO__.pixelRatio);assert.equal(reduced,1.0625);
-  await page.getByRole('button',{name:'均衡清晰（默认）',exact:true}).click();
-  await page.getByRole('button',{name:'隔帧更新（默认）',exact:true}).click();
-  await page.getByRole('button',{name:'60 帧（默认）',exact:true}).click();
+  await page.getByRole('button',{name:'均衡清晰',exact:true}).click();
+  await page.getByRole('button',{name:'隔帧更新',exact:true}).click();
+  await page.getByRole('button',{name:'60 帧',exact:true}).click();
   await page.waitForFunction(()=>window.__BAMBOO__.renderSettings.frameRate==='60');
   await page.waitForTimeout(400);
   await page.screenshot({path:`${out}/settings.png`});
@@ -123,6 +123,9 @@ function validateWorkload(workload){
   await page.getByRole('button',{name:'廊下望竹',exact:true}).click();
   await page.locator('.well-toggle').click();
   await page.waitForTimeout(5000);
+  await page.getByRole('button',{name:'画面设置',exact:true}).click();
+  await page.getByRole('switch',{name:'自由模式',exact:true}).check();
+  await page.getByRole('button',{name:'收起画面设置',exact:true}).click();
   await page.locator('.free-toggle').click();
   await page.locator('.room-selector').click();
   await page.getByRole('option',{name:'一楼堂屋',exact:true}).click();
@@ -130,7 +133,7 @@ function validateWorkload(workload){
   await page.getByRole('button',{name:'画面设置',exact:true}).click();
   await page.getByRole('button',{name:'完整清晰',exact:true}).click();
   await page.waitForTimeout(1000);
-  await page.getByRole('button',{name:'均衡清晰（默认）',exact:true}).click();
+  await page.getByRole('button',{name:'均衡清晰',exact:true}).click();
   await page.getByRole('button',{name:'收起画面设置',exact:true}).click();
   await page.waitForTimeout(1000);
   assert.equal(await page.locator('.experience.is-static').count(),0);

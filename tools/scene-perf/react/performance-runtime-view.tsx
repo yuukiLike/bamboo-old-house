@@ -30,7 +30,9 @@ export function getRuntimeHealth(snapshot: RuntimeSnapshot | null, failed = fals
  if (snapshot.now - snapshot.segmentStartedAt < snapshot.windowMs) {
   // A short pause can leave old samples in the five-second window. Only a
   // completed long gap from this new segment may bypass the warmup state.
-  const currentStall = snapshot.history.some(frame => frame.startTime >= snapshot.segmentStartedAt && frame.duration >= 100);
+  const currentStall = snapshot.window.segmentMaxMs !== undefined
+   ? (snapshot.window.segmentMaxMs ?? 0) >= 100
+   : snapshot.history.some(frame => frame.startTime >= snapshot.segmentStartedAt && frame.duration >= 100);
   return currentStall
    ? { level: 'slow', label: '卡顿', reason: '本次连续采样已出现 ≥ 100 ms 的停顿。' }
    : { level: 'unknown', label: '采样中', reason: '积累约 5 秒连续前台样本后判断；明显停顿会提前提示。' };
