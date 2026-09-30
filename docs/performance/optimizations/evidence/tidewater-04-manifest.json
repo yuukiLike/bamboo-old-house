@@ -1,0 +1,74 @@
+{
+  "recordedAt": "2026-09-26T06:44:21.068132+00:00",
+  "branch": "perf/tidewater-scene-optimizations-04-mobile-runtime",
+  "baseCommit": "8a9033d5e2f704580e391840aed85bc65975bb62",
+  "environment": {
+    "browser": "Chrome Canary 156.0.8074.0",
+    "mode": "headed desktop, isolated temporary profile",
+    "viewport": {
+      "width": 402,
+      "height": 874,
+      "deviceScaleFactor": 3,
+      "isMobile": true,
+      "hasTouch": true
+    }
+  },
+  "build": {
+    "sha256": "2d95f00690a753a4ca4c7e67ae09ca29001a71e9d2253f8093d72f5c79910855",
+    "files": 41,
+    "bytes": 45200961
+  },
+  "validation": {
+    "check": "typecheck, lint, 38 tests and generated LOD validation passed",
+    "build": "passed; existing chunk size advisory remains",
+    "mobileSmoke": "passed; raw acceptance JSON and script include exact checks",
+    "physicalIPhone": "not performed"
+  },
+  "sourceSha256": {
+    "src/app/globals.css": "5ad6e0385aec71098f65ad1d6ea8056d59dfdd6c3a97b9fbbf0b393400696174",
+    "src/components/experience.tsx": "aa415547392a2844f2cf318fe3414902a8dd18cfb97044cfcdfd0e1aa59bcff4",
+    "src/components/scene/render-settings.ts": "2ac997535a0c96656acdf014d69e563865e267de51aac131cbe351f0fb693b60",
+    "src/components/scene/scene.ts": "731b199926c510d6a4f5d52974e5ed8981331cb99b32e080670f98020901b8c0",
+    "src/components/scene/weather.ts": "b71fed19da61d25421101f1b1864279d18d96f57624f5242037395a9502ea5d6",
+    "src/lib/performance.ts": "c35996849dc7a493985844fbe1fe498907d533216993ccd93ac1d84d727da103",
+    "src/performance/bamboo-adapter.ts": "e6007a90bc1a548b06f76d85309022138f02c104c993354462fcb0168054403a",
+    "tools/scene-perf/core/timings.ts": "c2330588613d1cdd4f5cff6049ff481418cbf8cda0099dff32f113f6319c0cba",
+    "tools/scene-perf/core/runtime.ts": "59458d8a1890fcc089ce474e12506d18c1e5fb711cd1eaa46882fb5a00c31667",
+    "tools/scene-perf/react/performance-panel.tsx": "b54ed90cec0b5947ec51334454ee5280c0606a4176dec7ee377ed34000d9dfec",
+    "tools/scene-perf/react/performance-panel.css": "953edd23b29cab33da34c1dcb260c0f5e710909ec3914770fe57f90e676c061d",
+    "tools/scene-perf/react/performance-runtime-view.tsx": "ee54cab81cd3caa35374fed7d98170624fcc2634480a19c91b078b97bf146597",
+    "tools/scene-perf/react/types.ts": "d98ca6447c0e845a86bd5b1a55933c794c04b62e93565dee98e1c706a7c7d3a2",
+    "tests/performance-collection.test.ts": "c38b586e7c7863dfe6c983079619cb3f3fc6e688bb36780383ef64c6c92b9583",
+    "tests/render-settings.test.ts": "177b4f8127cd0430832616a82a36a92a42bb8556cad98e2a77db278d96e90119",
+    "scripts/perf/mobile-runtime-smoke.mjs": "be3e48f1e45c25f572313952f5caf4465584cf5dc07addd9d3da679d48c5a5df",
+    "scripts/perf/adapters/bamboo.cjs": "7422d1a0266036af120396acdfb99d1ef910d9670e5ba5b5e843849f13f06546"
+  },
+  "evidence": [
+    {
+      "path": "tidewater-04-before-observation.json",
+      "scope": "Observation of main@8a9033d before production edits; audio source lifetimes, bounded resources, GC heap snapshot. Not a cold/warm controlled performance baseline.",
+      "sha256": "2372d34134260d19b9932491b28eff1b5d0d2ad99e7a58b46a64aead634537b5"
+    },
+    {
+      "path": "tidewater-04-intermediate-observation.json",
+      "scope": "Intermediate implementation before final frame-pacer jitter handling and panel layout; bounded audio/resource observations only, not an exact final-source benchmark. WebGL slow-call instrumentation was added for this run; absence in the before file is not evidence of improvement.",
+      "sha256": "ce841906a43a18ee2b25ad5f96e7f18fce4ba23993b3d79700f305f649cbd9f6"
+    },
+    {
+      "path": "tidewater-04-acceptance.json",
+      "scope": "Final production build functional checks; diagnostics API and draw-call instrumentation perturb timings. Validates lifecycle cleanup, visible controls, render dimensions and optional frame cap. Not iPhone FPS or thermal evidence.",
+      "sha256": "d2272d7b0cd238e50c567a77889341b60b63a2c0231dc516b2804089354c43a0"
+    },
+    {
+      "path": "tidewater-04-stopped-mobile.png",
+      "scope": "Final mobile viewport showing stopped diagnostics and unobstructed room selector.",
+      "sha256": "c1894b00d1de5ffa99a31e3ca559392f46d4b5cab92bfcbcde4d326fd830d270"
+    }
+  ],
+  "limitations": [
+    "No iPhone 16 Pro hardware, Safari GPU or thermal validation.",
+    "Before and intermediate runs used different DPR; shader/driver caches were not reset. No FPS improvement percentage can be derived.",
+    "PCM decoded bytes are not total process memory, and short observation cannot rule out every native-resource leak.",
+    "30-frame cap is an upper bound; browser RAF frequency remains separate from scene submissions."
+  ]
+}

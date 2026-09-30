@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-09-26",
+  "topic": "idle-rendering",
+  "status": "local-browser-validated; physical-iPhone-energy-validation-pending",
+  "environment": {
+    "host": "macOS",
+    "mobileEmulation": true,
+    "initialCssViewport": [
+      402,
+      758
+    ],
+    "deviceScaleFactor": 3,
+    "afterResizeCssViewport": [
+      402,
+      728
+    ],
+    "source": "local-development-server"
+  },
+  "method": {
+    "drawCommands": [
+      "drawArrays",
+      "drawElements",
+      "drawArraysInstanced",
+      "drawElementsInstanced"
+    ],
+    "allFramebuffersCounted": true,
+    "idleSettleWithoutDrawMs": 450,
+    "nominalIdleObservationMs": 1000,
+    "nominalResumeObservationMs": 1200,
+    "resumeFrameMeaning": "main-scene renderer.render submissions, not presented frames or FPS",
+    "idleCheckIds": [
+      "reduced-opening",
+      "reduced-day",
+      "complete-resolution",
+      "reduced-porch",
+      "reduced-moon",
+      "reduced-breeze",
+      "reduced-well-rain",
+      "reduced-walk",
+      "reduced-upstairs",
+      "reduced-hall",
+      "reduced-kitchen",
+      "reduced-room-one",
+      "reduced-room-two",
+      "reduced-store",
+      "reduced-yard-edge",
+      "reduced-courtyard",
+      "reduced-weather-晴风",
+      "reduced-weather-细雨",
+      "reduced-weather-暴雨",
+      "reduced-resize",
+      "poster-returns-idle",
+      "dry-reduced",
+      "paused-outdoor",
+      "paused-night-easing",
+      "paused-room-transition",
+      "paused-room-pan",
+      "paused-room-zoom",
+      "paused-reset",
+      "final-paused"
+    ],
+    "privacy": "No device identifiers, host URLs, absolute user paths or per-frame timestamps retained."
+  },
+  "browsers": [
+    {
+      "engine": "canary",
+      "version": "156.0.8075.0",
+      "headless": false,
+      "checksPassed": 31,
+      "checksFailed": 0,
+      "idle": {
+        "checks": 29,
+        "drawCommandDeltas": [
+          0
+        ],
+        "mainSceneSubmissionDeltas": [
+          0
+        ],
+        "allDiagnosticsDrawCallsZero": true,
+        "allDiagnosticsTrianglesZero": true,
+        "allCpuSubmissionAveragesZero": true,
+        "fullDetailInteriorChecks": 11,
+        "allCheckedInteriorsFinishedFullDetail": true
+      },
+      "resume": [
+        {
+          "id": "animated-resume",
+          "drawDelta": 21147,
+          "frameDelta": 53
+        },
+        {
+          "id": "paused-resume",
+          "drawDelta": 10788,
+          "frameDelta": 29
+        }
+      ],
+      "drawingBufferSizes": {
+        "reduced-opening": [
+          603,
+          1137
+        ],
+        "complete-resolution": [
+          804,
+          1516
+        ],
+        "reduced-resize": [
+          804,
+          1456
+        ]
+      },
+      "poster": {
+        "forcedRenderObserved": true,
+        "validImageReturned": true,
+        "mimeType": "image/webp"
+      },
+      "visualInspection": {
+        "canvasImageRetainedAfterIdle": true,
+        "blackFrameObserved": false
+      },
+      "consoleOrPageErrors": [],
+      "sourceReport": {
+        "relativePath": "outputs/performance/mobile-runtime-06/idle-rendering-canary.json",
+        "sha256": "ba574ab99a3dc7f0409b35dc61c4305440555fe1ac3e5e828bf09398a72e8ed6"
+      }
+    },
+    {
+      "engine": "webkit",
+      "version": "26.5",
+      "headless": true,
+      "checksPassed": 31,
+      "checksFailed": 0,
+      "idle": {
+        "checks": 29,
+        "drawCommandDeltas": [
+          0
+        ],
+        "mainSceneSubmissionDeltas": [
+          0
+        ],
+        "allDiagnosticsDrawCallsZero": true,
+        "allDiagnosticsTrianglesZero": true,
+        "allCpuSubmissionAveragesZero": true,
+        "fullDetailInteriorChecks": 11,
+        "allCheckedInteriorsFinishedFullDetail": true
+      },
+      "resume": [
+        {
+          "id": "animated-resume",
+          "drawDelta": 27132,
+          "frameDelta": 68
+        },
+        {
+          "id": "paused-resume",
+          "drawDelta": 12648,
+          "frameDelta": 34
+        }
+      ],
+      "drawingBufferSizes": {
+        "reduced-opening": [
+          603,
+          1137
+        ],
+        "complete-resolution": [
+          804,
+          1516
+        ],
+        "reduced-resize": [
+          804,
+          1456
+        ]
+      },
+      "poster": {
+        "forcedRenderObserved": true,
+        "validImageReturned": true,
+        "mimeType": "image/png"
+      },
+      "visualInspection": {
+        "canvasImageRetainedAfterIdle": true,
+        "blackFrameObserved": false
+      },
+      "consoleOrPageErrors": [],
+      "sourceReport": {
+        "relativePath": "outputs/performance/mobile-runtime-06/idle-rendering-webkit.json",
+        "sha256": "d183ce4c2a610cfd1fc1275f3c23cd00418c5bb6b1bd75ba7a9c56194e3fa919"
+      }
+    }
+  ],
+  "otherCompletedVerification": {
+    "typecheck": "passed",
+    "lint": "passed",
+    "diffWhitespace": "passed",
+    "focusedTests": {
+      "passed": 21,
+      "failed": 0,
+      "files": [
+        "tests/rendering-idle.test.ts",
+        "tests/scene-rendering.test.ts",
+        "tests/interior-resource.test.ts",
+        "tests/rain-shelter-lifecycle.test.ts"
+      ]
+    },
+    "weatherFrozenState": {
+      "combinations": 24,
+      "frozenUpdatesPerCombination": 60,
+      "dimensions": [
+        "mobile/desktop",
+        "paused/reduced-motion",
+        "rain 0/0.42/1",
+        "initial/after 120 animated updates"
+      ],
+      "checked": [
+        "geometry attributes",
+        "visibility",
+        "drawRange/instanceCount",
+        "actual shader uniforms",
+        "surface weather uniforms",
+        "visualRevision"
+      ],
+      "result": "unchanged after the first frozen update"
+    }
+  },
+  "limits": {
+    "physicalIPhoneTestForThisChange": false,
+    "gpuUtilizationMeasured": false,
+    "gpuTimeMeasured": false,
+    "energyOrBatteryMeasured": false,
+    "thermalImprovementMeasured": false,
+    "pixelPerfectImageDiffPerformed": false,
+    "claimsAnimation1013HzFixed": false,
+    "cpuUpdatesAndRafContinue": true,
+    "inProgressDaylightAndWetnessStillRender": true
+  }
+}

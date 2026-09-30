@@ -1,0 +1,131 @@
+{
+  "kind": "CPU only; not browser startup or GPU/FPS",
+  "createdAt": "2026-09-26T03:22:34.169Z",
+  "ref": "83baa2e119b40d0c76a69da874d83f2088f4ff5f",
+  "head": "83baa2e119b40d0c76a69da874d83f2088f4ff5f",
+  "environment": {
+    "node": "v24.18.0",
+    "three": "185",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "cpu": "Apple M4"
+  },
+  "assetHash": "009a3e159d5a165f93bde5ee6f7c572cc8edd275045a31e4435fc7c55e6675bc",
+  "sourceHashes": {
+    "src/components/scene/weather.ts": "7485844c725cd47262e1d556ed66e9fcd9f80ffffb5996583812df0ef562fc5a",
+    "src/components/scene/rain-shelter.ts": "dacb98f2d152468c2605540da4afb8c228bc0b674e2631e1246e5233d26a2aab",
+    "src/components/scene/rain-occlusion.ts": "9458ff24e871a1075ef98457c69ac363ad2e91d4b32c049605089065fc5a2826",
+    "src/components/scene/footpath.ts": "fc055434c9b1fdaf701ef7942c517f011a38e5641448d06bd783624bb5631643",
+    "src/components/scene/config.ts": "77ee45213a8a56a0110a36bd1b8e9ed1f4a92993ec334d61de251bb77cffedd8",
+    "src/components/scene/wind.ts": "e3abfc8b0e0343aed93383c460a56c8984912914d102850ec037d20ee18424a1",
+    "src/components/scene/vegetation-visibility.ts": "021396ce8111334ab054097d1cee93d93704687d3f2bd987c3a340a40f9297bf",
+    "src/components/scene/house-surfaces.ts": "8e4323a3f81700b4b5a6b7a8312c21245fd904c6c094d1e899c962b8b56632d5"
+  },
+  "iterations": 3,
+  "weather": [
+    {
+      "totalMs": 4600.579624999999,
+      "shelterMs": 1388.475417,
+      "surfaceMs": 3212.1042079999997,
+      "stats": {
+        "step": 0.2,
+        "triangles": 996363,
+        "solidCells": 89048,
+        "cells": 759460,
+        "triangleBuildMs": 1173.849667,
+        "voxelBuildMs": 214.1438330000001,
+        "occlusion": {
+          "cellSize": 0.125,
+          "cellCount": 79920,
+          "references": 10926248,
+          "bufferBytes": 88085980
+        }
+      },
+      "sourceTriangles": 996363,
+      "vertices": 1131197,
+      "exposedVertices": 114408,
+      "attributeHash": "e6ba8b5d34a2b118264bb8725b2ab7189100647e330bee155d7602623c7af212"
+    },
+    {
+      "totalMs": 3757.770291,
+      "shelterMs": 1388.3255000000008,
+      "surfaceMs": 2369.444790999999,
+      "stats": {
+        "step": 0.2,
+        "triangles": 996363,
+        "solidCells": 89048,
+        "cells": 759460,
+        "triangleBuildMs": 1219.3135000000002,
+        "voxelBuildMs": 168.71220799999992,
+        "occlusion": {
+          "cellSize": 0.125,
+          "cellCount": 79920,
+          "references": 10926248,
+          "bufferBytes": 88085980
+        }
+      },
+      "sourceTriangles": 996363,
+      "vertices": 1131197,
+      "exposedVertices": 114408,
+      "attributeHash": "e6ba8b5d34a2b118264bb8725b2ab7189100647e330bee155d7602623c7af212"
+    },
+    {
+      "totalMs": 3528.0064170000005,
+      "shelterMs": 1281.2157079999997,
+      "surfaceMs": 2246.790709000001,
+      "stats": {
+        "step": 0.2,
+        "triangles": 996363,
+        "solidCells": 89048,
+        "cells": 759460,
+        "triangleBuildMs": 1117.1527499999993,
+        "voxelBuildMs": 163.84079199999906,
+        "occlusion": {
+          "cellSize": 0.125,
+          "cellCount": 79920,
+          "references": 10926248,
+          "bufferBytes": 88085980
+        }
+      },
+      "sourceTriangles": 996363,
+      "vertices": 1131197,
+      "exposedVertices": 114408,
+      "attributeHash": "e6ba8b5d34a2b118264bb8725b2ab7189100647e330bee155d7602623c7af212"
+    }
+  ],
+  "vegetation": [
+    {
+      "instances": 30000,
+      "frames": 180,
+      "buildMs": 6.665874999999687,
+      "totalMs": 41.07737199999701,
+      "meanMs": 0.22820762222220561,
+      "p95Ms": 0.3892909999995027,
+      "uploadBytes": 73015100,
+      "visibleInstances": 1657769,
+      "outputHash": "bf170f3080507c6ce72fc83a76a4247dfd684a49586c45708c49b17c355a62b1"
+    },
+    {
+      "instances": 30000,
+      "frames": 180,
+      "buildMs": 5.734875000000102,
+      "totalMs": 49.98854899999969,
+      "meanMs": 0.2777141611111094,
+      "p95Ms": 0.6231669999997393,
+      "uploadBytes": 73015100,
+      "visibleInstances": 1657769,
+      "outputHash": "bf170f3080507c6ce72fc83a76a4247dfd684a49586c45708c49b17c355a62b1"
+    },
+    {
+      "instances": 30000,
+      "frames": 180,
+      "buildMs": 5.959124999999403,
+      "totalMs": 41.87274699999034,
+      "meanMs": 0.23262637222216856,
+      "p95Ms": 0.39874999999847205,
+      "uploadBytes": 73015100,
+      "visibleInstances": 1657769,
+      "outputHash": "bf170f3080507c6ce72fc83a76a4247dfd684a49586c45708c49b17c355a62b1"
+    }
+  ]
+}

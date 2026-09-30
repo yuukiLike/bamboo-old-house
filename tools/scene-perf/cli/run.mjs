@@ -25,7 +25,7 @@ const CORE_FLOWS = {
 function help(defaults, flows) {
   return `Usage: ${defaults.usage || 'node tools/scene-perf/cli/run.mjs'} [options]
 
-  --url URL                 Default http://127.0.0.1:4175/
+  --url URL                 Default ${defaults.url || 'http://127.0.0.1:4175/'}
   --profile desktop|mobile  Default desktop; mobile emulates 402x874 at DPR 2
   --iterations N            Default 3; integer 1..30
   --mode baseline|diagnostic Default baseline; diagnostic adds Chrome trace
@@ -53,7 +53,7 @@ for scene readiness and renderer/state evidence. Missing conditions block compar
 
 function parse(argv, defaults, flows) {
   const options = {
-    url: 'http://127.0.0.1:4175/', profile: 'desktop', iterations: 3,
+    url: defaults.url || 'http://127.0.0.1:4175/', profile: 'desktop', iterations: 3,
     mode: 'baseline', flow: defaults.flow || 'load', observeMs: 5000,
     instrumentation: defaults.instrumentation || 'off',
     instrumentationSources: [...(defaults.instrumentationSources || [])],
