@@ -2,11 +2,18 @@
 import type { PerformanceAdapter } from '../../tools/scene-perf/react/types';
 import type { RendererSnapshot, RuntimeCollector, RuntimeState } from '../../tools/scene-perf/core/runtime';
 import type { ActivePhase, Phase } from '../../tools/scene-perf/core/timings';
-import { bambooTimings, stopPerformanceCollection, restartPerformanceCollection } from '../lib/performance';
+import { bambooTimings, stopPerformanceCollection, restartPerformanceCollection } from '../lib/performance.ts';
 
 declare global { interface Window { __BAMBOO_RUNTIME__?: RuntimeCollector; } }
 
 const numberOrNull = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+// The same readers also serve previews made before these diagnostics existed.
+type SceneDiagnostics = NonNullable<Window['__BAMBOO__']> & Partial<{
+ renderSettings: { resolution?: string; shadows?: string; frameRate?: string; houseDetail?: string; freeMode?: boolean };
+ programs: number; cpuUpdateMs: number | null; cpuRenderSubmitMs: number | null;
+}>;
+const readScene = () => window.__BAMBOO__ as SceneDiagnostics | undefined;
 
 const phaseLabels: Record<string, string> = {
  'startup.experience': '进入 3D 体验', 'startup.scene-import': '加载 3D 模块',
@@ -37,7 +44,7 @@ const VIEW_LABELS: Record<string, string> = {
 };
 
 function readState(): RuntimeState {
- const scene = window.__BAMBOO__;
+ const scene = readScene();
  const root = document.querySelector('.experience');
  const classes = root?.classList;
  const view = classes ? [...classes].find(name => name.startsWith('is-') && !['is-static', 'is-listening', 'is-panorama'].includes(name))?.slice(3) : undefined;
@@ -50,10 +57,10 @@ function readState(): RuntimeState {
   place: scene?.place ?? null,
   timeOfDay: root?.getAttribute('data-time') ?? scene?.timeOfDay ?? null,
   weatherPreset: document.querySelector('.weather-toggle span')?.textContent?.trim() || null,
-  resolution: root?.getAttribute('data-resolution') ?? scene?.renderSettings?.resolution ?? null,
-  shadows: root?.getAttribute('data-shadows') ?? scene?.renderSettings?.shadows ?? null,
-  frameRate: root?.getAttribute('data-frame-rate') ?? scene?.renderSettings?.frameRate ?? null,
-  houseDetail: root?.getAttribute('data-house-detail') ?? scene?.renderSettings?.houseDetail ?? null,
+  resolution: root?.getAttribute('data-resolution') ?? scene?.renderSettings?.resolution ?? (scene ? 'full' : null),
+  shadows: root?.getAttribute('data-shadows') ?? scene?.renderSettings?.shadows ?? (scene ? 'full' : null),
+  frameRate: root?.getAttribute('data-frame-rate') ?? scene?.renderSettings?.frameRate ?? (scene ? 'display' : null),
+  houseDetail: root?.getAttribute('data-house-detail') ?? scene?.renderSettings?.houseDetail ?? (scene ? 'full' : null),
   freeMode: root?.hasAttribute('data-free-mode') ? root.getAttribute('data-free-mode')==='true' : scene?.renderSettings?.freeMode ?? null,
   soundEnabled: sound?.hasAttribute('aria-pressed') ? sound.getAttribute('aria-pressed') === 'true' : null,
   paused: pause?.hasAttribute('aria-pressed') ? pause.getAttribute('aria-pressed') === 'true' : scene?.paused ?? null,
@@ -62,7 +69,7 @@ function readState(): RuntimeState {
 }
 
 function readRenderer(): RendererSnapshot | null {
- const scene = window.__BAMBOO__;
+ const scene = readScene();
  if (!scene) return null;
  return {
   drawCalls: numberOrNull(scene.drawCalls), triangles: numberOrNull(scene.triangles),

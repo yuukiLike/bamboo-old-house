@@ -2,7 +2,9 @@
 
 这是竹屋的项目入口：`run.mjs` 注入项目适配器、业务计时来源和操作流程；通用实现已移入可整体复制的 [`tools/scene-perf/`](../../tools/scene-perf/README.md)。`pnpm perf` / `pnpm perf:report` 命令保持不变。
 
-持续优化的分支关系、阶段结果和详细证据统一记录在 [3D 性能优化记录](../../docs/performance/optimization-log.md)。
+性能数据的前后对比、截图与待选方向统一记录在[性能记录](../../docs/performance/optimization-log.md)。
+
+`preview/001`–`004` 使用同一完整工具版本，支持实时面板、JSON 导出、采集与 `report.html` 可视化对比。旧版中文入口为 `/`，当前版为 `/cn`；本地命令自动选择，线上地址见性能记录。旧版缺少的 CPU 诊断显示为未测量。`mobile-runtime-smoke.mjs` 验收当前版本的画质与音频配置，不作为旧版功能要求。
 
 移动端清晰度、绘制上限与完全停止采集的功能回归可运行 `mobile-runtime-smoke.mjs`。它在独立的可见 Canary 会话中操作真实控件，检查停止后雨景、室内、声音仍可用，以及采集 RAF / 定时器 / 观察器已经释放；反复清空重启后只创建一组采集器，旧记录不回填；检查移动端音频串行解码、静音与复用、连续播放 90 秒和真实横竖屏尺寸变化；**不用于测量 iPhone 发热或 FPS 收益**。先启动 4175 端口的生产预览，然后从仓库根目录运行：
 
@@ -129,7 +131,7 @@ HTTP 缓存另有独立的 `--flow cache`，在同一浏览器会话正常导航
 
 业务标记使用唯一操作 ID，按 `entry.detail.phase` 聚合；不能直接按带 `#ID` 的 entry.name 分组。业务记录最多保留 500 条，浏览器 RAF 内部最多 12,000 条，输出每段最多 2,000 条帧样本，同时保留完整保留窗口的汇总与截断说明。没有逐帧写 User Timing，也没有全局替换 `fetch` 或 renderer。
 
-移植到另一个项目时，复制独立工具目录，通过 `--adapter` 提供项目的就绪、诊断与状态读取，通过 `--scenario` 提供真实控件流程；通用采集与报告无需修改。`tools/scene-perf/examples/three-adapter.cjs` 和[接入说明](../../docs/performance/adapter.md)给出最小契约，示例尚未在第二个项目验证。需要精确归因时，在该项目加载/视图切换边界加入小型 User Timing helper；不必安装监控 SDK。
+移植到另一个项目时，复制独立工具目录，通过 `--adapter` 提供项目的就绪、诊断与状态读取，通过 `--scenario` 提供真实控件流程；通用采集与报告无需修改。`tools/scene-perf/examples/three-adapter.cjs` 和[接入说明](../../docs/performance/adapter.md)给出最小契约。工具已在独立的最小 Three.js 立方体页面验证基础接入与生命周期；第二个完整生产项目的全部交互仍未验证，详见[当前验证范围](../../tools/scene-perf/README.md#当前验证范围)。需要精确归因时，在该项目加载/视图切换边界加入小型 User Timing helper；不必安装监控 SDK。
 
 ## 自定义流程契约
 
