@@ -1,0 +1,715 @@
+{
+  "scope": "Desktop Mac with mobile viewport/coarse pointer emulation; not an iPhone FPS result. Seeded Math.random and reduced motion freeze geometry and wind.",
+  "checks": {
+    "places": 8,
+    "times": [
+      "day",
+      "night"
+    ],
+    "rounds": 2,
+    "samplesPerBrowser": 36,
+    "canaryCameraStateMismatches": [],
+    "canaryErrors": [],
+    "webkitErrors": []
+  },
+  "beforeCanary": {
+    "version": "156.0.8075.0",
+    "samples": [
+      {
+        "id": "opening",
+        "textures": 136,
+        "programs": 81,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 140,
+          "Buffer": 1338,
+          "Framebuffer": 5,
+          "Renderbuffer": 1,
+          "Program": 81,
+          "VertexArray": 446
+        }
+      },
+      {
+        "id": "1-night-upstairs",
+        "textures": 153,
+        "programs": 190,
+        "draws": 160,
+        "triangles": 5115523,
+        "liveGL": {
+          "Texture": 166,
+          "Buffer": 1342,
+          "Framebuffer": 66,
+          "Renderbuffer": 9,
+          "Program": 190,
+          "VertexArray": 1226
+        }
+      },
+      {
+        "id": "return-1",
+        "textures": 153,
+        "programs": 267,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 166,
+          "Buffer": 1348,
+          "Framebuffer": 66,
+          "Renderbuffer": 9,
+          "Program": 267,
+          "VertexArray": 1548
+        }
+      },
+      {
+        "id": "return-2",
+        "textures": 153,
+        "programs": 267,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 166,
+          "Buffer": 1348,
+          "Framebuffer": 66,
+          "Renderbuffer": 9,
+          "Program": 267,
+          "VertexArray": 1548
+        }
+      },
+      {
+        "id": "outdoor-resize",
+        "textures": 147,
+        "programs": 267,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 160,
+          "Buffer": 1348,
+          "Framebuffer": 59,
+          "Renderbuffer": 1,
+          "Program": 267,
+          "VertexArray": 1548
+        }
+      }
+    ]
+  },
+  "afterCanary": {
+    "version": "156.0.8075.0",
+    "samples": [
+      {
+        "id": "opening",
+        "textures": 135,
+        "programs": 81,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 139,
+          "Buffer": 1338,
+          "Framebuffer": 5,
+          "Renderbuffer": 1,
+          "Program": 81,
+          "VertexArray": 446
+        }
+      },
+      {
+        "id": "1-night-upstairs",
+        "textures": 152,
+        "programs": 190,
+        "draws": 160,
+        "triangles": 5115523,
+        "liveGL": {
+          "Texture": 165,
+          "Buffer": 1342,
+          "Framebuffer": 65,
+          "Renderbuffer": 4,
+          "Program": 190,
+          "VertexArray": 1226
+        }
+      },
+      {
+        "id": "return-1",
+        "textures": 146,
+        "programs": 267,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 159,
+          "Buffer": 1348,
+          "Framebuffer": 59,
+          "Renderbuffer": 1,
+          "Program": 267,
+          "VertexArray": 1548
+        }
+      },
+      {
+        "id": "return-2",
+        "textures": 146,
+        "programs": 267,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 159,
+          "Buffer": 1348,
+          "Framebuffer": 59,
+          "Renderbuffer": 1,
+          "Program": 267,
+          "VertexArray": 1548
+        }
+      },
+      {
+        "id": "outdoor-resize",
+        "textures": 146,
+        "programs": 267,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 159,
+          "Buffer": 1348,
+          "Framebuffer": 59,
+          "Renderbuffer": 1,
+          "Program": 267,
+          "VertexArray": 1548
+        }
+      }
+    ]
+  },
+  "afterWebKit": {
+    "version": "26.5",
+    "samples": [
+      {
+        "id": "opening",
+        "textures": 135,
+        "programs": 81,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 139,
+          "Buffer": 1338,
+          "Framebuffer": 5,
+          "Renderbuffer": 1,
+          "Program": 81,
+          "VertexArray": 446
+        }
+      },
+      {
+        "id": "1-night-upstairs",
+        "textures": 152,
+        "programs": 190,
+        "draws": 160,
+        "triangles": 5115523,
+        "liveGL": {
+          "Texture": 165,
+          "Buffer": 1342,
+          "Framebuffer": 65,
+          "Renderbuffer": 4,
+          "Program": 190,
+          "VertexArray": 1226
+        }
+      },
+      {
+        "id": "return-1",
+        "textures": 146,
+        "programs": 267,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 159,
+          "Buffer": 1348,
+          "Framebuffer": 59,
+          "Renderbuffer": 1,
+          "Program": 267,
+          "VertexArray": 1548
+        }
+      },
+      {
+        "id": "return-2",
+        "textures": 146,
+        "programs": 267,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 159,
+          "Buffer": 1348,
+          "Framebuffer": 59,
+          "Renderbuffer": 1,
+          "Program": 267,
+          "VertexArray": 1548
+        }
+      },
+      {
+        "id": "outdoor-resize",
+        "textures": 146,
+        "programs": 267,
+        "draws": 229,
+        "triangles": 5086118,
+        "liveGL": {
+          "Texture": 159,
+          "Buffer": 1348,
+          "Framebuffer": 59,
+          "Renderbuffer": 1,
+          "Program": 267,
+          "VertexArray": 1548
+        }
+      }
+    ]
+  },
+  "canaryImages": [
+    {
+      "id": "1-day-hall",
+      "size": [
+        804,
+        1516
+      ],
+      "changedPixels": 75432,
+      "changedFraction": 0.06188713424959635,
+      "maxDifference": 7,
+      "meanAbsoluteChannelDifference": 0.03419905748303338,
+      "pixelsDifferenceOver2": 626,
+      "pixelsDifferenceOver8": 0,
+      "beforeMean": [
+        68.45674907126636,
+        68.19803193793565,
+        60.90082404599693
+      ],
+      "afterMean": [
+        68.45636756849001,
+        68.19751588364247,
+        60.90048930807703
+      ]
+    },
+    {
+      "id": "1-day-kitchen",
+      "size": [
+        804,
+        1516
+      ],
+      "changedPixels": 52719,
+      "changedFraction": 0.043252569605796876,
+      "maxDifference": 5,
+      "meanAbsoluteChannelDifference": 0.02090853997383356,
+      "pixelsDifferenceOver2": 265,
+      "pixelsDifferenceOver8": 0,
+      "beforeMean": [
+        29.35299836569133,
+        28.82375146037622,
+        24.510159459956157
+      ],
+      "afterMean": [
+        29.353036926187006,
+        28.823508611297076,
+        24.51007659591226
+      ]
+    },
+    {
+      "id": "1-day-upstairs",
+      "size": [
+        804,
+        1516
+      ],
+      "changedPixels": 30503,
+      "changedFraction": 0.025025761692854986,
+      "maxDifference": 6,
+      "meanAbsoluteChannelDifference": 0.011618468781860269,
+      "pixelsDifferenceOver2": 154,
+      "pixelsDifferenceOver8": 0,
+      "beforeMean": [
+        45.71176685832054,
+        46.44637875923811,
+        36.97531636015175
+      ],
+      "afterMean": [
+        45.71234690662781,
+        46.44680210425445,
+        36.97566340461282
+      ]
+    },
+    {
+      "id": "1-night-hall",
+      "size": [
+        804,
+        1516
+      ],
+      "changedPixels": 46105,
+      "changedFraction": 0.03782620538468607,
+      "maxDifference": 6,
+      "meanAbsoluteChannelDifference": 0.01852435273063005,
+      "pixelsDifferenceOver2": 201,
+      "pixelsDifferenceOver8": 0,
+      "beforeMean": [
+        35.23990043187755,
+        24.91543519211331,
+        15.639376501398024
+      ],
+      "afterMean": [
+        35.23944919203455,
+        24.91513901468909,
+        15.639004843854606
+      ]
+    },
+    {
+      "id": "1-night-kitchen",
+      "size": [
+        804,
+        1516
+      ],
+      "changedPixels": 33129,
+      "changedFraction": 0.027180226834166897,
+      "maxDifference": 7,
+      "meanAbsoluteChannelDifference": 0.011344990089132175,
+      "pixelsDifferenceOver2": 91,
+      "pixelsDifferenceOver8": 0,
+      "beforeMean": [
+        43.12176337967156,
+        29.97588492235393,
+        17.324653940062223
+      ],
+      "afterMean": [
+        43.121550066291235,
+        29.975775804355532,
+        17.324498877643446
+      ]
+    },
+    {
+      "id": "1-night-upstairs",
+      "size": [
+        804,
+        1516
+      ],
+      "changedPixels": 49881,
+      "changedFraction": 0.04092417201590989,
+      "maxDifference": 7,
+      "meanAbsoluteChannelDifference": 0.02124765355281639,
+      "pixelsDifferenceOver2": 785,
+      "pixelsDifferenceOver8": 0,
+      "beforeMean": [
+        72.89826264456083,
+        46.89362882159125,
+        21.173381935966606
+      ],
+      "afterMean": [
+        72.89882218196615,
+        46.89403165570564,
+        21.17369944472886
+      ]
+    },
+    {
+      "id": "opening",
+      "size": [
+        804,
+        1516
+      ],
+      "changedPixels": 0,
+      "changedFraction": 0.0,
+      "maxDifference": 0,
+      "meanAbsoluteChannelDifference": 0.0,
+      "pixelsDifferenceOver2": 0,
+      "pixelsDifferenceOver8": 0,
+      "beforeMean": [
+        78.38359734966329,
+        95.61853988632038,
+        97.61974018430276
+      ],
+      "afterMean": [
+        78.38359734966329,
+        95.61853988632038,
+        97.61974018430276
+      ]
+    },
+    {
+      "id": "return-1",
+      "size": [
+        804,
+        1516
+      ],
+      "changedPixels": 0,
+      "changedFraction": 0.0,
+      "maxDifference": 0,
+      "meanAbsoluteChannelDifference": 0.0,
+      "pixelsDifferenceOver2": 0,
+      "pixelsDifferenceOver8": 0,
+      "beforeMean": [
+        78.38359734966329,
+        95.61853988632038,
+        97.61974018430276
+      ],
+      "afterMean": [
+        78.38359734966329,
+        95.61853988632038,
+        97.61974018430276
+      ]
+    },
+    {
+      "id": "return-2",
+      "size": [
+        804,
+        1516
+      ],
+      "changedPixels": 0,
+      "changedFraction": 0.0,
+      "maxDifference": 0,
+      "meanAbsoluteChannelDifference": 0.0,
+      "pixelsDifferenceOver2": 0,
+      "pixelsDifferenceOver8": 0,
+      "beforeMean": [
+        78.38359734966329,
+        95.61853988632038,
+        97.61974018430276
+      ],
+      "afterMean": [
+        78.38359734966329,
+        95.61853988632038,
+        97.61974018430276
+      ]
+    }
+  ],
+  "webkitImages": [
+    {
+      "name": "after-webkit-1-day-hall.png",
+      "size": [
+        804,
+        1516
+      ],
+      "channelExtrema": [
+        [
+          0,
+          255
+        ],
+        [
+          0,
+          255
+        ],
+        [
+          0,
+          255
+        ]
+      ],
+      "meanChannels": [
+        68.4717753580383,
+        68.21218610115649,
+        60.913616285327976
+      ],
+      "nonBlackFraction": 0.99999097520314
+    },
+    {
+      "name": "after-webkit-1-day-kitchen.png",
+      "size": [
+        804,
+        1516
+      ],
+      "channelExtrema": [
+        [
+          0,
+          240
+        ],
+        [
+          0,
+          244
+        ],
+        [
+          0,
+          245
+        ]
+      ],
+      "meanChannels": [
+        29.361804106118484,
+        28.832165032358,
+        24.51869363604143
+      ],
+      "nonBlackFraction": 0.9999983591278436
+    },
+    {
+      "name": "after-webkit-1-day-upstairs.png",
+      "size": [
+        804,
+        1516
+      ],
+      "channelExtrema": [
+        [
+          0,
+          255
+        ],
+        [
+          0,
+          255
+        ],
+        [
+          0,
+          255
+        ]
+      ],
+      "meanChannels": [
+        45.71648928838656,
+        46.452166935769704,
+        36.97604490738917
+      ],
+      "nonBlackFraction": 0.9991508486590793
+    },
+    {
+      "name": "after-webkit-1-night-hall.png",
+      "size": [
+        804,
+        1516
+      ],
+      "channelExtrema": [
+        [
+          0,
+          252
+        ],
+        [
+          0,
+          244
+        ],
+        [
+          0,
+          228
+        ]
+      ],
+      "meanChannels": [
+        35.24974156263537,
+        24.92258447209861,
+        15.642403910526523
+      ],
+      "nonBlackFraction": 0.9764050788274984
+    },
+    {
+      "name": "after-webkit-1-night-kitchen.png",
+      "size": [
+        804,
+        1516
+      ],
+      "channelExtrema": [
+        [
+          0,
+          250
+        ],
+        [
+          0,
+          240
+        ],
+        [
+          0,
+          219
+        ]
+      ],
+      "meanChannels": [
+        43.13117624279657,
+        29.98334022499639,
+        17.330259159348376
+      ],
+      "nonBlackFraction": 0.8449810643353155
+    },
+    {
+      "name": "after-webkit-1-night-upstairs.png",
+      "size": [
+        804,
+        1516
+      ],
+      "channelExtrema": [
+        [
+          0,
+          255
+        ],
+        [
+          0,
+          255
+        ],
+        [
+          0,
+          255
+        ]
+      ],
+      "meanChannels": [
+        72.90775591042151,
+        46.902362363643526,
+        21.175947439583087
+      ],
+      "nonBlackFraction": 0.9117522545583429
+    },
+    {
+      "name": "after-webkit-opening.png",
+      "size": [
+        804,
+        1516
+      ],
+      "channelExtrema": [
+        [
+          1,
+          250
+        ],
+        [
+          2,
+          251
+        ],
+        [
+          1,
+          251
+        ]
+      ],
+      "meanChannels": [
+        78.3852332992032,
+        95.62006343611756,
+        97.62037356095512
+      ],
+      "nonBlackFraction": 1.0
+    },
+    {
+      "name": "after-webkit-return-1.png",
+      "size": [
+        804,
+        1516
+      ],
+      "channelExtrema": [
+        [
+          1,
+          250
+        ],
+        [
+          2,
+          251
+        ],
+        [
+          1,
+          251
+        ]
+      ],
+      "meanChannels": [
+        78.3852332992032,
+        95.62006343611756,
+        97.62037356095512
+      ],
+      "nonBlackFraction": 1.0
+    },
+    {
+      "name": "after-webkit-return-2.png",
+      "size": [
+        804,
+        1516
+      ],
+      "channelExtrema": [
+        [
+          1,
+          250
+        ],
+        [
+          2,
+          251
+        ],
+        [
+          1,
+          251
+        ]
+      ],
+      "meanChannels": [
+        78.3852332992032,
+        95.62006343611756,
+        97.62037356095512
+      ],
+      "nonBlackFraction": 1.0
+    }
+  ],
+  "interpretation": {
+    "outdoorImages": "Opening plus both return images are pixel-identical in Canary.",
+    "indoorImages": "Six indoor images preserve geometry/MSAA, resolution and AO settings; small numeric differences remain after removing MSAA from the fullscreen composite. Max single-channel difference is 7/255; max mean absolute channel difference is 0.0342/255. Not bit-exact.",
+    "residency": "Both modified browser engines return to 146 Three textures, 59 live framebuffers and 1 live renderbuffer outdoors; repeated round resources plateau. Before Canary retained 153 textures, 66 framebuffers and 9 renderbuffers before a resize.",
+    "rootCause": "Resource waste is confirmed and reduced. This does not establish the cause of the physical iPhone falling to 10-13 Hz."
+  }
+}

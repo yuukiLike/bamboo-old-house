@@ -2,11 +2,18 @@
 import type { PerformanceAdapter } from '../../tools/scene-perf/react/types';
 import type { RendererSnapshot, RuntimeCollector, RuntimeState } from '../../tools/scene-perf/core/runtime';
 import type { ActivePhase, Phase } from '../../tools/scene-perf/core/timings';
-import { bambooTimings } from '../lib/performance';
+import { bambooTimings, stopPerformanceCollection, restartPerformanceCollection } from '../lib/performance.ts';
 
 declare global { interface Window { __BAMBOO_RUNTIME__?: RuntimeCollector; } }
 
 const numberOrNull = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+// The same readers also serve previews made before these diagnostics existed.
+type SceneDiagnostics = NonNullable<Window['__BAMBOO__']> & Partial<{
+ renderSettings: { resolution?: string; shadows?: string; frameRate?: string; houseDetail?: string; freeMode?: boolean };
+ programs: number; cpuUpdateMs: number | null; cpuRenderSubmitMs: number | null;
+}>;
+const readScene = () => window.__BAMBOO__ as SceneDiagnostics | undefined;
 
 const phaseLabels: Record<string, string> = {
  'startup.experience': '进入 3D 体验', 'startup.scene-import': '加载 3D 模块',
@@ -16,7 +23,7 @@ const phaseLabels: Record<string, string> = {
  'startup.interior-warmup-submit': '室内预热提交', 'startup.initial-frame-submit': '首帧渲染提交',
  'model.download': '下载模型', 'model.buffer-assembly': '拼接模型缓冲', 'model.parse': '解析模型与纹理',
  'scene.environment-build': '生成环境', 'scene.house-surfaces': '整理房屋表面',
- 'scene.house-and-vegetation-build': '装配老屋与竹林', 'scene.forest-floor-build': '构建林下地表',
+ 'scene.house-and-vegetation-build': '装配建筑与竹林', 'scene.forest-floor-build': '构建林下地表',
  'scene.weather-build': '构建风雨与雨水遮挡', 'scene.falling-leaves-build': '构建落叶',
  'scene.render-setup': '准备场景渲染', 'interior.pipeline-build': '创建室内后处理',
  'interior.render-targets-prepare': '准备室内渲染目标', 'interior.shader-compile': '编译室内着色器',
@@ -31,13 +38,13 @@ const phaseLabels: Record<string, string> = {
 };
 const VIEW_LABELS: Record<string, string> = {
  moon: '竹林望月', breeze: '林间的风', well: '井边', 'well-rain': '井旁听雨', porch: '木廊',
- walk: '步行', free: '自由看看', outdoor: '院坝', interior: '楼上',
- courtyard: '屋前空地', 'yard-edge': '院边竹荫', upstairs: '二层厅堂', store: '仓库',
+ walk: '步行', yard:'院内竹荫', free: '自由模式', outdoor: '院坝', interior: '楼上',
+ courtyard: '屋前空地', 'yard-edge': '院内竹荫', upstairs: '二层厅堂', store: '仓库',
  'room-one': '住屋一', 'room-two': '住屋二', hall: '一楼堂屋', kitchen: '一楼厨房',
 };
 
 function readState(): RuntimeState {
- const scene = window.__BAMBOO__;
+ const scene = readScene();
  const root = document.querySelector('.experience');
  const classes = root?.classList;
  const view = classes ? [...classes].find(name => name.startsWith('is-') && !['is-static', 'is-listening', 'is-panorama'].includes(name))?.slice(3) : undefined;
@@ -50,6 +57,11 @@ function readState(): RuntimeState {
   place: scene?.place ?? null,
   timeOfDay: root?.getAttribute('data-time') ?? scene?.timeOfDay ?? null,
   weatherPreset: document.querySelector('.weather-toggle span')?.textContent?.trim() || null,
+  resolution: root?.getAttribute('data-resolution') ?? scene?.renderSettings?.resolution ?? (scene ? 'full' : null),
+  shadows: root?.getAttribute('data-shadows') ?? scene?.renderSettings?.shadows ?? (scene ? 'full' : null),
+  frameRate: root?.getAttribute('data-frame-rate') ?? scene?.renderSettings?.frameRate ?? (scene ? 'display' : null),
+  houseDetail: root?.getAttribute('data-house-detail') ?? scene?.renderSettings?.houseDetail ?? (scene ? 'full' : null),
+  freeMode: root?.hasAttribute('data-free-mode') ? root.getAttribute('data-free-mode')==='true' : scene?.renderSettings?.freeMode ?? null,
   soundEnabled: sound?.hasAttribute('aria-pressed') ? sound.getAttribute('aria-pressed') === 'true' : null,
   paused: pause?.hasAttribute('aria-pressed') ? pause.getAttribute('aria-pressed') === 'true' : scene?.paused ?? null,
   panorama: root ? classes?.contains('is-panorama') ?? null : scene?.panorama ?? null,
@@ -57,13 +69,14 @@ function readState(): RuntimeState {
 }
 
 function readRenderer(): RendererSnapshot | null {
- const scene = window.__BAMBOO__;
+ const scene = readScene();
  if (!scene) return null;
  return {
   drawCalls: numberOrNull(scene.drawCalls), triangles: numberOrNull(scene.triangles),
   textures: numberOrNull(scene.textures), geometries: numberOrNull(scene.geometries),
+  programs: numberOrNull(scene.programs), cpuUpdateMs: numberOrNull(scene.cpuUpdateMs), cpuRenderSubmitMs: numberOrNull(scene.cpuRenderSubmitMs),
   pixelRatio: numberOrNull(scene.pixelRatio), drawSize: [...scene.drawSize],
-  quality: scene.quality || null, gpu: scene.gpu || null,
+  quality: scene.quality ? `${scene.quality}/${scene.renderSettings?.resolution??'full'}/${scene.renderSettings?.shadows??'full'}/${scene.renderSettings?.frameRate??'display'}` : null, gpu: scene.gpu || null,
  };
 }
 
@@ -80,7 +93,13 @@ function stateDescription(state: RuntimeState) {
  const view = state.view ? VIEW_LABELS[String(state.view)] ?? state.view : '视图未知';
  const place = state.place ? VIEW_LABELS[String(state.place)] ?? state.place : '位置未知';
  const sound = state.soundEnabled === true ? '声音开' : state.soundEnabled === false ? '声音关' : '声音未知';
- return [view, place !== view ? place : null, sound, state.weatherPreset ?? '天气未知', state.paused ? '动态暂停' : null].filter(Boolean).join(' · ');
+ return [view, place !== view ? place : null, sound, state.weatherPreset ?? '天气未知',
+  state.resolution==='reduced'?'画面稍柔和':state.resolution==='balanced'?'均衡清晰':state.resolution==='full'?'完整清晰':null,
+  state.shadows==='off'?'实时阴影关闭':state.shadows==='alternate'?'阴影隔帧':state.shadows==='full'?'阴影每帧':null,
+  state.frameRate==='display'?'绘制跟随屏幕':state.frameRate?`绘制上限 ${state.frameRate} 帧`:null,
+  state.houseDetail==='lean'?'建筑远景精简':state.houseDetail==='balanced'?'建筑远景均衡':state.houseDetail==='full'?'建筑原始细节':null,
+  state.freeMode===true?'自由模式开启':null,
+  state.paused ? '动态暂停' : null].filter(Boolean).join(' · ');
 }
 
 export const bambooPerformanceAdapter: PerformanceAdapter = {
@@ -88,12 +107,14 @@ export const bambooPerformanceAdapter: PerformanceAdapter = {
  readState,
  readRenderer,
  readBusinessPhases: () => bambooTimings.read(),
+ stopCollection: stopPerformanceCollection,
+ restartCollection: restartPerformanceCollection,
  phaseLabels,
  startupPhase: 'startup.experience',
  readyLabel: '首屏控件已就绪',
  formatPhaseDetail: detail,
  describeState: stateDescription,
- rendererDescription: '来自应用已有诊断，每 15 个应用帧更新。纹理与几何体是数量，不是显存字节。',
+ rendererDescription: '来自应用已有诊断，每 15 个受帧率设置调度的场景更新周期采样。纹理与几何体是数量，不是显存字节。CPU 更新与提交耗时取这 15 个周期的平均值；未绘制周期的提交耗时计 0。提交耗时可能包含驱动等待，不是 GPU 执行时间。',
  onCollector(collector) {
   // Compatibility for local inspection; ownership and disposal stay in the panel.
   window.__BAMBOO_RUNTIME__ = collector;

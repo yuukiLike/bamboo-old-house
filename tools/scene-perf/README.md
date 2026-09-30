@@ -4,6 +4,10 @@
 
 浏览器核心使用标准 Performance API、RAF 和 DOM；React 面板可选；CLI 使用 sitespeed.io / Browsertime 与 Chrome。工具不接管 `renderer.render()`，不改写 `fetch`，不自动降低画质。
 
+在竹屋中运行采集、阅读报告和比较改动前后的结果，见[竹屋采集与对比指南](../../docs/performance/pipeline.md)；项目参数和操作脚本见 [`scripts/perf/README.md`](../../scripts/perf/README.md)。
+
+检测截图、数据与可行优化方向统一记在[性能记录](../../docs/performance/optimization-log.md)。
+
 ## 选择接入程度
 
 | 需要什么 | 使用哪层 | 需要提供什么 |
@@ -73,7 +77,13 @@ export function App() {
 
 宿主已有设置开关时可以传 `{ enabled: diagnosticsOpen }`。从 `false` 变为 `true` 挂载新面板；变回 `false` 卸载。卸载清理 RAF、PerformanceObserver、监听器、刷新定时器和下载对象 URL；重新打开的运行时窗口从挂载时开始，不能补录关闭期间的帧。折叠面板仍继续采集。
 
+面板前台每秒刷新；折叠时只生成指标摘要，不复制帧历史、卡顿列表或工作量历史，展开和导出仍能取得保留的完整记录。后台取消刷新定时器，核心同时暂停 RAF。状态常规读取降至约每秒一次，操作、暂停及完整快照可额外读取；卡顿上下文因此是采样状态，不保证对应间隔末尾的瞬时状态。业务阶段关联在快照或暂停时批量处理，不在每个慢帧内重复扫描阶段历史。
+
+竹屋普通地址不再持续写入帧历史或场景诊断快照；需要这些数据时使用 `?perf=1`，显示面板再加 `&perfUI=1`。检测仍有开销，正式性能对比应同时保留不启用检测的基线。
+
 **这个开关只控制面板及其采集资源，不控制独立的业务 recorder。** 如果要从导航开始记录完整加载过程，仍推荐通过诊断 URL 重新加载；中途开启无法恢复此前没有记录的业务阶段或 RAF。
+
+面板另提供「停止检测」按钮，停止面板所有采集、定时刷新并收起，保留最终数据可导出。宿主通过 `stopCollection()` 一并停止独立 recorder、诊断计数等，例如调用 `timings.stop()`；停止后 `timings.read()` 返回冻结的数据，`enabled` 为 `false`，迟到的异步完成回调不会再写入。宿主接入 `restartCollection()` 后，停止按钮变为“清空并重启”：调用 `timings.restart()`，重置宿主诊断计数和全局桥接，再创建新的运行时采集器。旧完成回调按会话隔离，不会写回；只有 `dispose()` 是不可重开的终态。新一轮资源按开始时间过滤，导出的 `collectionStartedAt` 标注边界，不重新导出早期导航。纯浏览器适配器无需业务回调即可重启；有业务读取器却未接入重启回调时，重启按钮不可用，需刷新页面。宿主仍在采集业务阶段但没有接入此回调时，面板会明确提示业务采集未关闭。
 
 `PerformanceAdapter` 的变化点：
 
@@ -88,6 +98,8 @@ export function App() {
 | `startupPhase` / `readyLabel` | 初始化失败判定所用父阶段与就绪说明；就绪时间来自 recorder 的 `readyPhase` |
 | `describeState()` / `rendererDescription` | 状态与渲染器计数口径的展示 |
 | `onCollector(collector)` | 可选宿主绑定，返回自己的清理函数；不需要额外创建 collector |
+| `stopCollection()` | 停止宿主拥有的业务计时与诊断；必须为启用业务 recorder 的项目接入，已有记录可保留供导出 |
+| `restartCollection()` | 清空宿主业务 recorder、诊断计数和桥接并重开；配合 `timings.restart()`，不得重载产品场景 |
 
 `onCollector` 若在部分完成宿主绑定后抛错，宿主需自行回滚；工具会销毁 collector，但无法取得尚未返回的清理函数。
 
@@ -104,7 +116,7 @@ const collector = createRuntimeCollector({
 });
 const timer = setInterval(() => {
   renderYourOwnMetrics(collector.snapshot());
-}, 250);
+}, 1000);
 
 // 临时停止／继续；clear 不会清 HTTP 缓存或业务阶段。
 collector.pause();
@@ -120,7 +132,15 @@ function disposeDiagnostics() {
 
 没有适配器时也可以 `createRuntimeCollector()`，仍可采 RAF 和支持的主线程长任务。每个实例由创建者负责销毁；核心不会写 `window` 全局，也不会偷偷销毁另一个实例。
 
+仅展示指标时可用 `collector.snapshot({ details: false })`，其 `history`、`stutters`、`workload.samples` 和 `longTasks.events` 为空，但不会清除内部记录；默认 `snapshot()` 仍返回完整快照。`window.segmentMaxMs` 保留当前连续前台段的最大间隔，折叠时也能提示启动或恢复后的明显停顿。建议约每秒取得一次快照，使卡顿关联及时读取尚未被宿主淘汰的业务阶段。
+
 保持 5 秒读数窗口、30 秒帧历史和有界事件。RAF Hz 不是屏幕 FPS；主线程阻塞会同时阻塞面板，完整间隔在恢复回调后才出现。页面隐藏／暂停的边界不拼成假卡顿。
+
+导出的 `runtime.workload` 还保留低频工作负载历史，用于对照“刚打开时”和“多次切换场景后”的变化。采集器复用自己的 RAF，连续前台观察满约 1 秒后读取一次状态和 renderer；不会新增定时器或同步查询 GPU。每条样本包含 `startTime`、`timestamp`（相对导航的毫秒时间）、`count`、`observedMs`、`rafHz`、`state` 和 `renderer`。`rafHz` 按这段实际完成的回调间隔计算，遇到长卡顿不会补造每秒样本；暂停／隐藏时舍弃尚未满 1 秒的段，恢复后重新累计。
+
+`workload.samples` 固定保留开头最多 60 条，以及其后最近最多 120 条，总数最多 180，两个区间不会重复。`sampleIntervalMs`、`initialLimit`、`recentLimit` 和 `dropped` 标注采样间隔、保留上限与中段被移除的条数。它不替代 30 秒的逐帧历史；停止后冻结，`clear()` 或新建采集器后清空，导出对象与内部记录相互独立。
+
+renderer 可选提供 `programs`（已编译着色程序数）、`cpuUpdateMs` 和 `cpuRenderSubmitMs`，未知值填 `null`，旧适配器也可完全省略。这两个耗时字段来自适配器最近一次 CPU 更新和提交采样，统计口径由适配器定义；竹林项目提供最近一组 15 个通过帧率调度的场景更新 tick 的均值，未提交绘制的 tick 将提交耗时记为 0。它们不是上述 1 秒工作负载区间的均值，也不是 GPU 执行时间；提交耗时可能包含驱动等待。适配器应返回已经缓存的读数，不能为采集而调用 `gl.finish()`、等待 GPU 查询或扫描完整场景。
 
 ## 业务计时：独立 recorder
 
@@ -217,7 +237,7 @@ node tools/scene-perf/cli/report.mjs outputs/performance/project-after \
 
 ## 拆卸边界
 
-1. **暂停观察**：collector.pause，或面板「暂停采集」；保留证据，业务 recorder 独立运行。
+1. **暂停观察**：collector.pause，或面板「暂停实时采样」；保留证据，业务 recorder 独立运行。
 2. **移除实时工具**：卸载 hook 所在组件，或将 enabled 设为 false；普通 JS 调用 collector.dispose，并清理宿主自己的订阅和定时器。
 3. **移除业务记录**：停止创建 recorder，或 dispose 并解除宿主全局桥接；可暂时保留禁用的计时调用。业务函数不会因禁用而跳过。
 4. **完全删除源码**：移除 hook/import、宿主 adapter、业务计时调用、CLI npm scripts，再删除工具目录。对于竹屋，业务入口集中引用 `src/lib/performance.ts`，先搜索其调用点；不要直接删掉场景既有的 `__BAMBOO__`，它还承载原有诊断和业务更新。

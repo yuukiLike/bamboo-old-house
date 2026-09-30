@@ -2,7 +2,19 @@
 
 这是竹屋的项目入口：`run.mjs` 注入项目适配器、业务计时来源和操作流程；通用实现已移入可整体复制的 [`tools/scene-perf/`](../../tools/scene-perf/README.md)。`pnpm perf` / `pnpm perf:report` 命令保持不变。
 
-持续优化的分支关系、阶段结果和详细证据统一记录在 [3D 性能优化记录](../../docs/performance/optimization-log.md)。
+性能数据的前后对比、截图与待选方向统一记录在[性能记录](../../docs/performance/optimization-log.md)。
+
+`preview/001`–`004` 使用同一完整工具版本，支持实时面板、JSON 导出、采集与 `report.html` 可视化对比。旧版中文入口为 `/`，当前版为 `/cn`；本地命令自动选择，线上地址见性能记录。旧版缺少的 CPU 诊断显示为未测量。`mobile-runtime-smoke.mjs` 验收当前版本的画质与音频配置，不作为旧版功能要求。
+
+移动端清晰度、绘制上限与完全停止采集的功能回归可运行 `mobile-runtime-smoke.mjs`。它在独立的可见 Canary 会话中操作真实控件，检查停止后雨景、室内、声音仍可用，以及采集 RAF / 定时器 / 观察器已经释放；反复清空重启后只创建一组采集器，旧记录不回填；检查移动端音频串行解码、静音与复用、连续播放 90 秒和真实横竖屏尺寸变化；**不用于测量 iPhone 发热或 FPS 收益**。先启动 4175 端口的生产预览，然后从仓库根目录运行：
+
+```sh
+# 使用已有 Playwright 安装，不增加应用依赖；填入口文件的绝对路径。
+PERF_PLAYWRIGHT=/absolute/path/to/node_modules/playwright/index.mjs \
+  node scripts/perf/mobile-runtime-smoke.mjs
+```
+
+可通过 `PERF_CHROME`、`PERF_URL`、`PERF_OUT` 指定浏览器、地址和输出目录，默认输出到 `outputs/performance/mobile-runtime-smoke/`。同一输出目录会覆盖上次结果；需要保留对照时指定新目录。它包装浏览器计时、音频与 WebGL API 来核对生命周期，读数会受探针影响。默认额外持续播放 90 秒；仅改布局/尺寸时可设 `PERF_AUDIO_SOAK_SECONDS=0` 跳过这段，验收 JSON 会记录等待时长，不能将跳过后的结果当作持续播放证据。
 
 仅验证遮雨计算与植被裁剪时，可以运行 `node scripts/perf/optimization-bench.mjs --out outputs/performance/cpu-check.json`。它默认执行三轮真实建筑几何 / 确定性植被测试，支持 `--ref <commit>` 读取旧源码，输出耗时和一致性哈希，不需要浏览器。其结果不代表整页启动时间或 GPU 帧率；口径、基线及复现命令见 [Tidewater 策略迁移记录](../../docs/performance/optimizations/001-tidewater-transfer.md)。
 
@@ -54,7 +66,7 @@ python3 -m http.server 4180 --bind 127.0.0.1 --directory outputs/performance
 
 | 参数 | 默认值 | 含义 |
 | --- | --- | --- |
-| `--url` | `http://127.0.0.1:4175/` | 已启动的生产预览服务 |
+| `--url` | `http://127.0.0.1:4175/cn` | 已启动的生产预览服务；交互脚本使用中文控件名称 |
 | `--profile` | `desktop` | `desktop` 请求 1440×900 外窗、DPR 1；`mobile` 模拟 402×874 视口、DPR 2 |
 | `--iterations` | `3` | 独立浏览器轮次，1–30 |
 | `--mode` | `baseline` | 轻量采集；`diagnostic` 加 trace、JS 采样和截图 |
@@ -119,7 +131,7 @@ HTTP 缓存另有独立的 `--flow cache`，在同一浏览器会话正常导航
 
 业务标记使用唯一操作 ID，按 `entry.detail.phase` 聚合；不能直接按带 `#ID` 的 entry.name 分组。业务记录最多保留 500 条，浏览器 RAF 内部最多 12,000 条，输出每段最多 2,000 条帧样本，同时保留完整保留窗口的汇总与截断说明。没有逐帧写 User Timing，也没有全局替换 `fetch` 或 renderer。
 
-移植到另一个项目时，复制独立工具目录，通过 `--adapter` 提供项目的就绪、诊断与状态读取，通过 `--scenario` 提供真实控件流程；通用采集与报告无需修改。`tools/scene-perf/examples/three-adapter.cjs` 和[接入说明](../../docs/performance/adapter.md)给出最小契约，示例尚未在第二个项目验证。需要精确归因时，在该项目加载/视图切换边界加入小型 User Timing helper；不必安装监控 SDK。
+移植到另一个项目时，复制独立工具目录，通过 `--adapter` 提供项目的就绪、诊断与状态读取，通过 `--scenario` 提供真实控件流程；通用采集与报告无需修改。`tools/scene-perf/examples/three-adapter.cjs` 和[接入说明](../../docs/performance/adapter.md)给出最小契约。工具已在独立的最小 Three.js 立方体页面验证基础接入与生命周期；第二个完整生产项目的全部交互仍未验证，详见[当前验证范围](../../tools/scene-perf/README.md#当前验证范围)。需要精确归因时，在该项目加载/视图切换边界加入小型 User Timing helper；不必安装监控 SDK。
 
 ## 自定义流程契约
 
@@ -169,12 +181,12 @@ sitespeed/           原生报告、场景 JSON；诊断模式另含 trace 与�
 优化前先建基线，之后固定同一组参数，采集结束即输出对比报告：
 
 ```sh
-pnpm perf --url http://127.0.0.1:4175/ --flow views --profile desktop \
+pnpm perf --url http://127.0.0.1:4175/cn --flow views --profile desktop \
   --mode baseline --observe-ms 5000 --iterations 3 --instrumentation on \
   --adapter scripts/perf/adapters/bamboo.cjs --out outputs/performance/desktop-views-before
 
 # 修改并重新构建后，仍使用同一浏览器、驱动和预览服务配置
-pnpm perf --url http://127.0.0.1:4175/ --flow views --profile desktop \
+pnpm perf --url http://127.0.0.1:4175/cn --flow views --profile desktop \
   --mode baseline --observe-ms 5000 --iterations 3 --instrumentation on \
   --adapter scripts/perf/adapters/bamboo.cjs --out outputs/performance/desktop-views-after \
   --compare outputs/performance/desktop-views-before

@@ -11,6 +11,10 @@ export interface PerformanceAdapter extends RuntimeAdapter {
  formatPhaseDetail?: (phase: Phase | ActivePhase) => string;
  describeState?: (state: RuntimeState) => string;
  rendererDescription?: string;
+ /** Stop host-owned markers/diagnostics too; retained data may still be read. */
+ stopCollection?: () => void;
+ /** Clear host history and reopen collection without remounting the scene. */
+ restartCollection?: () => void;
  /** Optional host integration. Return a disposer for any host-owned binding. */
  onCollector?: (collector: RuntimeCollector) => void | (() => void);
 }

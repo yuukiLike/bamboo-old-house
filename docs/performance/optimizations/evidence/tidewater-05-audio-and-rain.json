@@ -1,0 +1,106 @@
+{
+  "baseCommit": "c24ca123b308a7e5f94db56a7af97f81638d3c3a",
+  "audioBefore": {
+    "scope": "Decoded PCM and decoder overlap only. View-changing ablation timings discarded.",
+    "browser": "156.0.8074.0",
+    "decodedPCMBytes": 172466312,
+    "peakDecodeConcurrency": 8,
+    "decodes": [
+      {
+        "start": 5303.699999999953,
+        "end": 5364.800000000047,
+        "duration": 43.01167800453515,
+        "channels": 2,
+        "rate": 44100
+      },
+      {
+        "start": 5303.699999999953,
+        "end": 5375.400000000023,
+        "duration": 56,
+        "channels": 2,
+        "rate": 44100
+      },
+      {
+        "start": 5303.699999999953,
+        "end": 5387.199999999953,
+        "duration": 58,
+        "channels": 1,
+        "rate": 44100
+      },
+      {
+        "start": 5308,
+        "end": 5419.400000000023,
+        "duration": 74,
+        "channels": 2,
+        "rate": 44100
+      },
+      {
+        "start": 5303.699999999953,
+        "end": 5440.300000000047,
+        "duration": 82.01249433106575,
+        "channels": 2,
+        "rate": 44100
+      },
+      {
+        "start": 5303.699999999953,
+        "end": 5445.900000000023,
+        "duration": 58.020975056689345,
+        "channels": 2,
+        "rate": 44100
+      },
+      {
+        "start": 5303.699999999953,
+        "end": 5460.5,
+        "duration": 71.99997732426304,
+        "channels": 2,
+        "rate": 44100
+      },
+      {
+        "start": 5303.199999999953,
+        "end": 5468.199999999953,
+        "duration": 74.00496598639455,
+        "channels": 2,
+        "rate": 44100
+      },
+      {
+        "start": 5468.599999999977,
+        "end": 5470,
+        "duration": 1.6,
+        "channels": 1,
+        "rate": 44100
+      }
+    ]
+  },
+  "rainGeometry": {
+    "before": {
+      "sourceSha256": {
+        "src/components/scene/weather.ts": "b71fed19da61d25421101f1b1864279d18d96f57624f5242037395a9502ea5d6",
+        "src/components/scene/rain-shelter.ts": "dacb98f2d152468c2605540da4afb8c228bc0b674e2631e1246e5233d26a2aab",
+        "src/components/scene/rain-occlusion.ts": "ec18eef9b5568ac153fd412fffd15754cf070eb9a42edaef67ef509bf1701cb0",
+        "src/components/scene/footpath.ts": "fc055434c9b1fdaf701ef7942c517f011a38e5641448d06bd783624bb5631643",
+        "src/components/scene/config.ts": "77ee45213a8a56a0110a36bd1b8e9ed1f4a92993ec334d61de251bb77cffedd8",
+        "src/components/scene/wind.ts": "e3abfc8b0e0343aed93383c460a56c8984912914d102850ec037d20ee18424a1",
+        "src/components/scene/vegetation-visibility.ts": "021396ce8111334ab054097d1cee93d93704687d3f2bd987c3a340a40f9297bf",
+        "src/components/scene/house-surfaces.ts": "8e4323a3f81700b4b5a6b7a8312c21245fd904c6c094d1e899c962b8b56632d5"
+      },
+      "vertices": 1131197,
+      "exposedVertices": 114408,
+      "attributeHash": "e6ba8b5d34a2b118264bb8725b2ab7189100647e330bee155d7602623c7af212"
+    },
+    "after": {
+      "sourceSha256": {
+        "src/components/scene/weather.ts": "3373d4cfa065261c4a840b462bd2d5a0e6e9d6213740905e25cc4dcfd80b30e6",
+        "src/components/scene/rain-shelter.ts": "dacb98f2d152468c2605540da4afb8c228bc0b674e2631e1246e5233d26a2aab",
+        "src/components/scene/rain-occlusion.ts": "ec18eef9b5568ac153fd412fffd15754cf070eb9a42edaef67ef509bf1701cb0",
+        "src/components/scene/footpath.ts": "fc055434c9b1fdaf701ef7942c517f011a38e5641448d06bd783624bb5631643",
+        "src/components/scene/config.ts": "77ee45213a8a56a0110a36bd1b8e9ed1f4a92993ec334d61de251bb77cffedd8",
+        "src/components/scene/wind.ts": "fe3b2c653299a1b7ae568fe622677c2902ddd4d62b85f93bc6b01ded4abcebb4",
+        "src/components/scene/vegetation-visibility.ts": "021396ce8111334ab054097d1cee93d93704687d3f2bd987c3a340a40f9297bf",
+        "src/components/scene/house-surfaces.ts": "8e4323a3f81700b4b5a6b7a8312c21245fd904c6c094d1e899c962b8b56632d5"
+      },
+      "vertices": 1131197,
+      "exposedVertices": 114408,
+      "attributeHash": "e6ba8b5d34a2b118264bb8725b2ab7189100647e330bee155d7602623c7af212"
+    }
+  }
+}

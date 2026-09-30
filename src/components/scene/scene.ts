@@ -17,7 +17,7 @@ import { createVegetationVisibility } from './vegetation-visibility';
 import { ViewControls } from './view-controls';
 import { createInteriorContact } from './interior-contact';
 import { createViewTransition } from './view-transition';
-import { beginPhase, measurePhase, phaseStatus, type FinishPhase } from '@/lib/performance';
+import { beginPhase, measurePhase, phaseStatus, performanceCollectionStopped, performanceCollectionGeneration, type FinishPhase } from '@/lib/performance';
 import { shadeWindowRecesses } from './window-light';
 import { stabilizeHouseSurfaces } from './house-surfaces';
 import { BUILD_ID, PORCH_VIEW, MOON_VIEW, BREEZE_VIEW, WELL_RAIN_VIEW, ROOM_VIEWS, PLACE_VIEWS, groundHeight, pathClearance, treePositions, cameraProgress, followWalkProgress, positionPath, targetPath, type ViewMode, type TimeOfDay, type PlaceId } from './config';
@@ -292,11 +292,15 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
   if(disposed)throw new Error('SCENE_DISPOSED');
   measurePhase('startup.initial-frame-submit',()=>renderFrame(),{mobile,view:viewMode,place,boundary:'cpu-submitted'});
   diagnostics.startupMs=performance.now()-started;last=performance.now();
-  let frame=0;
+  let frame=0, collectionGeneration=performanceCollectionGeneration();
   const tick=(now:number)=>{
    if(disposed)return;raf=requestAnimationFrame(tick);if(hidden)return;
+   if(collectionGeneration!==performanceCollectionGeneration()){
+    collectionGeneration=performanceCollectionGeneration();diagnostics.frames.length=0;frame=0;
+   }
+   const collecting=!performanceCollectionStopped();
    const delta=Math.min((now-last)/1000,.075);const actual=now-last;last=now;
-   diagnostics.pixelRatio=renderer.getPixelRatio();
+   if(collecting)diagnostics.pixelRatio=renderer.getPixelRatio();
    if(!paused&&!reduced)time.value+=delta;
    if(!dragging){const decay=Math.exp(-delta*(now-lastScroll<180?9:2));dragX*=decay;dragY*=decay;}
    const mud=mudResistance(camera.position.x,camera.position.z,weather.wetness.value,pathClearance(camera.position.x,camera.position.z));
@@ -315,8 +319,11 @@ export async function createScene(mount:HTMLDivElement,hooks:Hooks,signal?:Abort
     if(Math.abs(mix.value-goal)<.001)mix.value=goal;
    }
    weatherState.update(delta,reduced);controls.update(delta);environment.update();updateCamera();instanceWind.update(time.value,weather.wind.value);weatherEffects.update(delta,reduced);fallingLeaves.update(delta);hooks.onGust?.(paused||reduced?0:forestWindGust(time.value,camera.position.x,camera.position.z));renderFrame(delta);frame++;
-   if(frame>30){diagnostics.frames.push(actual);if(diagnostics.frames.length>15000)diagnostics.frames.shift();}
-   if(frame%15===0){diagnostics.windGust=forestWindGust(time.value,camera.position.x,camera.position.z);diagnostics.weather={wind:weather.wind.value,rain:weather.rain.value,wetness:weather.wetness.value,mud,autumn:weather.autumn.value};diagnostics.fallingLeaves={...fallingLeaves.stats};const rainInfo=weatherEffects.diagnostics();hooks.onRunoff?.(rainInfo.runoffFlow);diagnostics.rainEffects={...Object.fromEntries(Object.entries(rainInfo).filter(([,value])=>typeof value==='number')),sheltered:weatherEffects.isSheltered(camera.position.x,camera.position.y,camera.position.z)};diagnostics.viewport=[innerWidth,innerHeight];diagnostics.drawSize=[renderer.domElement.width,renderer.domElement.height];diagnostics.progress=progress;diagnostics.camera=camera.position.toArray();diagnostics.target=target.toArray();diagnostics.drawCalls=renderer.info.render.calls;diagnostics.triangles=renderer.info.render.triangles;diagnostics.textures=renderer.info.memory.textures;diagnostics.geometries=renderer.info.memory.geometries;diagnostics.windTime=time.value;diagnostics.paused=paused||reduced;diagnostics.viewMode=viewMode;diagnostics.place=place;diagnostics.timeOfDay=timeOfDay;diagnostics.nightMix=night.value;diagnostics.noonMix=noon.value;diagnostics.dawnMix=dawn.value;diagnostics.duskMix=dusk.value;diagnostics.panorama=controls.active;diagnostics.yaw=controls.yaw;diagnostics.pitch=controls.pitch;diagnostics.fov=camera.fov;hooks.onBearing(Math.round(controls.bearing)%360);}
+   if(collecting&&frame>30){diagnostics.frames.push(actual);if(diagnostics.frames.length>15000)diagnostics.frames.shift();}
+   if(frame%15===0){
+    const rainInfo=weatherEffects.diagnostics();hooks.onRunoff?.(rainInfo.runoffFlow);hooks.onBearing(Math.round(controls.bearing)%360);
+    if(collecting){diagnostics.windGust=forestWindGust(time.value,camera.position.x,camera.position.z);diagnostics.weather={wind:weather.wind.value,rain:weather.rain.value,wetness:weather.wetness.value,mud,autumn:weather.autumn.value};diagnostics.fallingLeaves={...fallingLeaves.stats};diagnostics.rainEffects={...Object.fromEntries(Object.entries(rainInfo).filter(([,value])=>typeof value==='number')),sheltered:weatherEffects.isSheltered(camera.position.x,camera.position.y,camera.position.z)};diagnostics.viewport=[innerWidth,innerHeight];diagnostics.drawSize=[renderer.domElement.width,renderer.domElement.height];diagnostics.progress=progress;diagnostics.camera=camera.position.toArray();diagnostics.target=target.toArray();diagnostics.drawCalls=renderer.info.render.calls;diagnostics.triangles=renderer.info.render.triangles;diagnostics.textures=renderer.info.memory.textures;diagnostics.geometries=renderer.info.memory.geometries;diagnostics.windTime=time.value;diagnostics.paused=paused||reduced;diagnostics.viewMode=viewMode;diagnostics.place=place;diagnostics.timeOfDay=timeOfDay;diagnostics.nightMix=night.value;diagnostics.noonMix=noon.value;diagnostics.dawnMix=dawn.value;diagnostics.duskMix=dusk.value;diagnostics.panorama=controls.active;diagnostics.yaw=controls.yaw;diagnostics.pitch=controls.pitch;diagnostics.fov=camera.fov;}
+   }
   };raf=requestAnimationFrame(tick);
   return {transition:viewTransition,dispose:cleanup,setWeather:(value)=>weatherState.set(value),setPaused:(value:boolean)=>{paused=value;},reset,setView,setPlace,setPanorama,setTimeOfDay:(value:TimeOfDay)=>{timeOfDay=value;}};
  }catch(error){finishConstruction?.(phaseStatus(error));cleanup();throw error;}
